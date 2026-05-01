@@ -4,8 +4,10 @@ import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createPerson, deletePerson, setPersonCoverPhoto, updatePerson } from '@/app/actions/people'
+import { proposePeopleUpdate } from '@/app/actions/proposals'
 import { uploadMedia, deleteMedia } from '@/app/actions/media'
-import type { MediaItem, PersonEditorPayload, PersonFormData } from '@/lib/content-types'
+import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF } from '@/lib/content-types'
+import type { ClaimedRelation, MediaItem, PersonEditorPayload, PersonFormData } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
 
 const shellStyle: React.CSSProperties = {
@@ -57,6 +59,14 @@ const inputStyle: React.CSSProperties = {
   background: '#FFFCF8',
 }
 
+const disabledInputStyle: React.CSSProperties = {
+  ...inputStyle,
+  background: '#F4F1EC',
+  color: '#8B9490',
+  cursor: 'not-allowed',
+  opacity: 0.8,
+}
+
 function emptyForm(): PersonFormData {
   return {
     id: '',
@@ -74,6 +84,9 @@ function emptyForm(): PersonFormData {
     motherId: '',
     coverPhoto: '',
     isCore: false,
+    unitAffiliationId: '',
+    claimedRelation: '',
+    claimedRelationOfId: '',
   }
 }
 
@@ -90,6 +103,13 @@ export function PersonEditor({
   const [media, setMedia] = useState<MediaItem[]>(payload.media)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const isMember = payload.viewerMode === 'MEMBER'
+  const isAdmin = payload.viewerMode === 'ADMIN'
+  const canChangeRel = payload.canChangeRelationships
+
+  const isFloating = !form.fatherId && !form.motherId
+  const showAffiliation = canChangeRel && payload.managedUnits.length > 0 && isFloating
 
   const title = mode === 'create' ? 'Nueva persona' : 'Editar persona'
   const personPath = form.id ? `/${payload.familySlug}/person/${form.id}` : `/${payload.familySlug}/tree`
@@ -111,6 +131,37 @@ export function PersonEditor({
     setMessage(null)
 
     startTransition(async () => {
+      if (mode === 'edit' && isMember && form.id) {
+        const original = payload.person!
+        type ProposableFields = {
+          firstName?: string
+          middleName?: string | null
+          lastName?: string
+          gender?: PersonFormData['gender']
+          birthDate?: string | null
+          deathDate?: string | null
+          birthPlace?: string | null
+          bio?: string | null
+        }
+        const fields: ProposableFields = {}
+        if (form.firstName !== original.firstName) fields.firstName = form.firstName
+        if (form.middleName !== original.middleName) fields.middleName = form.middleName || null
+        if (form.lastName !== original.lastName) fields.lastName = form.lastName
+        if (form.gender !== original.gender) fields.gender = form.gender
+        if (form.birthDate !== original.birthDate) fields.birthDate = form.birthDate || null
+        if (form.deathDate !== original.deathDate) fields.deathDate = form.deathDate || null
+        if (form.birthPlace !== original.birthPlace) fields.birthPlace = form.birthPlace || null
+        if (form.bio !== original.bio) fields.bio = form.bio || null
+
+        const result = await proposePeopleUpdate({ personId: form.id, fields })
+        if (!result.ok) {
+          setError(result.error)
+          return
+        }
+        setMessage('Propuesta enviada. Un administrador la revisará antes de aplicar los cambios.')
+        return
+      }
+
       if (mode === 'create') {
         const result = await createPerson(form)
         if (!result.ok) {
@@ -127,7 +178,6 @@ export function PersonEditor({
         setError(result.error)
         return
       }
-
       setMessage('Cambios guardados.')
       router.refresh()
     })
@@ -216,6 +266,18 @@ export function PersonEditor({
     })
   }
 
+  const submitLabel = isPending
+    ? (mode === 'edit' && isMember ? 'Enviando...' : 'Guardando...')
+    : mode === 'create'
+      ? 'Crear persona'
+      : isMember ? 'Enviar propuesta' : 'Guardar cambios'
+
+  const submitHint = isMember && mode === 'edit'
+    ? 'Los cambios serán revisados antes de aplicarse.'
+    : mode === 'create'
+      ? 'Completa los datos y crea la persona.'
+      : 'Guarda para confirmar los cambios.'
+
   return (
     <div style={shellStyle}>
       <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -227,10 +289,12 @@ export function PersonEditor({
           <p style={{ margin: 0, fontSize: 13, color: '#6B6B6B' }}>
             {mode === 'create'
               ? 'Crea una persona nueva y luego podras subir sus fotos y elegir la portada.'
-              : 'Actualiza los datos centrales, parentesco y foto principal.'}
+              : isMember
+                ? 'Propone cambios en los datos biográficos. Un administrador los revisará antes de aplicarlos.'
+                : 'Actualiza los datos centrales, parentesco y foto principal.'}
           </p>
         </div>
-        {mode === 'edit' && (
+        {mode === 'edit' && !isMember && (
           <Link
             href={`/${payload.familySlug}/person/new`}
             style={{
@@ -286,7 +350,12 @@ export function PersonEditor({
               </select>
             </Field>
             <Field label="Padre">
-              <select value={form.fatherId} onChange={e => updateField('fatherId', e.target.value)} style={inputStyle}>
+              <select
+                value={form.fatherId}
+                onChange={e => updateField('fatherId', e.target.value)}
+                style={canChangeRel ? inputStyle : disabledInputStyle}
+                disabled={!canChangeRel}
+              >
                 <option value="">Sin asignar</option>
                 {parentOptions.map(option => (
                   <option key={option.id} value={option.id}>{option.label}</option>
@@ -294,7 +363,12 @@ export function PersonEditor({
               </select>
             </Field>
             <Field label="Madre">
-              <select value={form.motherId} onChange={e => updateField('motherId', e.target.value)} style={inputStyle}>
+              <select
+                value={form.motherId}
+                onChange={e => updateField('motherId', e.target.value)}
+                style={canChangeRel ? inputStyle : disabledInputStyle}
+                disabled={!canChangeRel}
+              >
                 <option value="">Sin asignar</option>
                 {parentOptions.map(option => (
                   <option key={option.id} value={option.id}>{option.label}</option>
@@ -313,7 +387,7 @@ export function PersonEditor({
             </Field>
           </div>
 
-          {mode === 'edit' && (
+          {isAdmin && mode === 'edit' && (
             <div style={{ marginTop: 18 }}>
               <label style={{ display: 'inline-flex', gap: 10, alignItems: 'center', color: '#5A615C', fontSize: 13 }}>
                 <input
@@ -323,6 +397,67 @@ export function PersonEditor({
                 />
                 Proteger como tronco central del arbol
               </label>
+            </div>
+          )}
+
+          {showAffiliation && (
+            <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid #E7E1D8' }}>
+              <p style={{ margin: '0 0 14px', fontSize: 13, color: '#6B6B6B' }}>
+                Esta persona no tiene padre ni madre conocidos. Puedes afiliarla a una unidad familiar para mantener la conexión.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}>
+                <Field label="Unidad familiar">
+                  <select
+                    value={form.unitAffiliationId}
+                    onChange={e => {
+                      updateField('unitAffiliationId', e.target.value)
+                      if (!e.target.value) {
+                        updateField('claimedRelation', '')
+                        updateField('claimedRelationOfId', '')
+                      }
+                    }}
+                    style={inputStyle}
+                  >
+                    <option value="">Sin afiliar</option>
+                    {payload.managedUnits.map(u => (
+                      <option key={u.id} value={u.id}>{u.label}</option>
+                    ))}
+                  </select>
+                </Field>
+                {form.unitAffiliationId && (
+                  <Field label="Tipo de relación con la unidad">
+                    <select
+                      value={form.claimedRelation}
+                      onChange={e => {
+                        updateField('claimedRelation', e.target.value)
+                        updateField('claimedRelationOfId', '')
+                      }}
+                      style={inputStyle}
+                    >
+                      <option value="">Sin especificar</option>
+                      {(Object.entries(CLAIMED_RELATION_LABELS) as [ClaimedRelation, string][]).map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                {form.unitAffiliationId &&
+                  form.claimedRelation &&
+                  CLAIMED_RELATION_REQUIRES_REF.has(form.claimedRelation as ClaimedRelation) && (
+                  <Field label="Relación con persona de la unidad">
+                    <select
+                      value={form.claimedRelationOfId}
+                      onChange={e => updateField('claimedRelationOfId', e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">Seleccionar...</option>
+                      {parentOptions.map(option => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </div>
             </div>
           )}
 
@@ -359,12 +494,10 @@ export function PersonEditor({
                 textTransform: 'uppercase',
               }}
             >
-              {isPending ? 'Guardando...' : mode === 'create' ? 'Crear persona' : 'Guardar cambios'}
+              {submitLabel}
             </button>
-            <span style={{ fontSize: 12, color: '#7A847E' }}>
-              {mode === 'create' ? 'Completa los datos y crea la persona.' : 'Guarda para confirmar los cambios.'}
-            </span>
-            {mode === 'edit' && (
+            <span style={{ fontSize: 12, color: '#7A847E' }}>{submitHint}</span>
+            {mode === 'edit' && !isMember && (
               <button
                 type="button"
                 onClick={handleDeletePerson}
