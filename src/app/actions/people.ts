@@ -2,10 +2,20 @@
 
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
-import { assertCanEditPerson, assertCanManagePerson, assertPersonAccess, getVisiblePersonIds } from '@/lib/permissions'
+import {
+  assertCanEditPerson,
+  assertCanManagePerson,
+  assertPersonAccess,
+  canChangeRelationships,
+  canCreatePerson,
+  getVisiblePersonIds,
+} from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
+import { CLAIMED_RELATION_REQUIRES_REF } from '@/lib/content-types'
 import type {
   ActionResult,
+  ClaimedRelation,
+  ManagedUnitOption,
   MediaItem,
   PersonEditorPayload,
   PersonFormData,
@@ -120,34 +130,46 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
     return { ok: false, error: (error as Error).message }
   }
 
-  const [candidates, person, media] = await Promise.all([
+  const [candidates, person, media, managedUnitsRaw] = await Promise.all([
     getVisiblePeopleForEditor(session),
     personId
       ? prisma.person.findUnique({
           where: { id: personId },
-          include: {
-            media: {
-              orderBy: [{ featured: 'desc' }, { order: 'asc' }],
-            },
-          },
+          include: { media: { orderBy: [{ featured: 'desc' }, { order: 'asc' }] } },
         })
       : Promise.resolve(null),
     personId
-      ? prisma.media.findMany({
-          where: { personId },
-          orderBy: [{ featured: 'desc' }, { order: 'asc' }],
-        })
+      ? prisma.media.findMany({ where: { personId }, orderBy: [{ featured: 'desc' }, { order: 'asc' }] })
       : Promise.resolve([]),
+    prisma.managedFamilyUnit.findMany({
+      where: { familyId: session.familyId, representativeUserId: session.userId },
+      select: { id: true, label: true },
+    }),
   ])
 
   if (personId && (!person || person.familyId !== session.familyId)) {
     return { ok: false, error: 'Persona no encontrada' }
   }
 
+  const isAdmin = session.role === 'ADMIN' || session.scope === 'ADMIN'
+  const isRepresentative = !isAdmin && managedUnitsRaw.length > 0
+  const viewerMode: 'ADMIN' | 'REPRESENTATIVE' | 'MEMBER' = isAdmin
+    ? 'ADMIN'
+    : isRepresentative ? 'REPRESENTATIVE' : 'MEMBER'
+
+  const canChangeRel = personId
+    ? await canChangeRelationships(session, personId)
+    : isAdmin || isRepresentative
+
+  const managedUnits: ManagedUnitOption[] = managedUnitsRaw.map(u => ({ id: u.id, label: u.label }))
+
   return {
     ok: true,
     data: {
       familySlug: session.familySlug,
+      viewerMode,
+      canChangeRelationships: canChangeRel,
+      managedUnits,
       person: person
         ? {
             id: person.id,
@@ -165,11 +187,12 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
             motherId: person.motherId ?? '',
             coverPhoto: person.coverPhoto ?? '',
             isCore: person.isCore,
+            unitAffiliationId: person.unitAffiliationId ?? '',
+            claimedRelation: person.claimedRelation ?? '',
+            claimedRelationOfId: person.claimedRelationOfId ?? '',
           }
         : null,
-      candidates: candidates
-        .filter(candidate => candidate.id !== personId)
-        .map(serializeOption),
+      candidates: candidates.filter(c => c.id !== personId).map(serializeOption),
       media: media.map(serializeMedia),
     },
   }
@@ -193,29 +216,55 @@ export async function createPerson(input: Omit<PersonFormData, 'id' | 'coverPhot
       return { ok: false, error: 'Padre y madre deben ser personas distintas.' }
     }
 
-    if (session.scope === 'BRANCH' && !fatherId && !motherId) {
-      return { ok: false, error: 'Para usuarios de rama, la nueva persona debe conectarse a un padre o madre visible.' }
-    }
-
-    if (session.role !== 'ADMIN') {
-      const manageableParentIds = [fatherId, motherId].filter(Boolean) as string[]
-      if (manageableParentIds.length === 0) {
-        return { ok: false, error: 'Debes conectar la nueva persona a un padre o madre que puedas administrar.' }
+    if (session.role !== 'ADMIN' && session.scope !== 'ADMIN') {
+      if (!(await canCreatePerson(session))) {
+        return { ok: false, error: 'No tienes permiso para crear personas.' }
       }
 
-      let managesAtLeastOneParent = false
-      for (const parentId of manageableParentIds) {
-        try {
-          await assertCanManagePerson(parentId, session, 'people')
-          managesAtLeastOneParent = true
-          break
-        } catch {
-          // keep checking other parent
+      if (!fatherId && !motherId) {
+        const unitId = normalizeText(input.unitAffiliationId) || null
+        if (!unitId) {
+          return { ok: false, error: 'Para crear una persona sin padre ni madre, debes afiliarla a una unidad familiar.' }
+        }
+        const ownedUnits = await prisma.managedFamilyUnit.findMany({
+          where: { familyId: session.familyId, representativeUserId: session.userId },
+          select: { id: true },
+        })
+        if (!ownedUnits.some(u => u.id === unitId)) {
+          return { ok: false, error: 'No puedes afiliar la persona a una unidad que no administras.' }
+        }
+      } else {
+        const manageableParentIds = [fatherId, motherId].filter(Boolean) as string[]
+        let managesAtLeastOneParent = false
+        for (const parentId of manageableParentIds) {
+          try {
+            await assertCanManagePerson(parentId, session, 'people')
+            managesAtLeastOneParent = true
+            break
+          } catch {
+            // keep checking other parent
+          }
+        }
+        if (!managesAtLeastOneParent) {
+          return { ok: false, error: 'No puedes crear personas fuera de tu unidad administrada.' }
         }
       }
+    }
 
-      if (!managesAtLeastOneParent) {
-        return { ok: false, error: 'No puedes crear personas fuera de tu unidad administrada.' }
+    let unitAffiliationId: string | null = null
+    let claimedRelation: ClaimedRelation | null = null
+    let claimedRelationOfId: string | null = null
+
+    if (!fatherId && !motherId) {
+      unitAffiliationId = normalizeText(input.unitAffiliationId) || null
+      const rawRel = normalizeText(input.claimedRelation) as ClaimedRelation | ''
+      claimedRelation = rawRel || null
+      claimedRelationOfId = normalizeText(input.claimedRelationOfId) || null
+      if (claimedRelation && CLAIMED_RELATION_REQUIRES_REF.has(claimedRelation) && !claimedRelationOfId) {
+        return { ok: false, error: 'Este tipo de relación requiere indicar con quién de la unidad.' }
+      }
+      if (!claimedRelation || !CLAIMED_RELATION_REQUIRES_REF.has(claimedRelation)) {
+        claimedRelationOfId = null
       }
     }
 
@@ -234,6 +283,9 @@ export async function createPerson(input: Omit<PersonFormData, 'id' | 'coverPhot
         bio: normalizeText(input.bio) || null,
         fatherId,
         motherId,
+        unitAffiliationId,
+        claimedRelation,
+        claimedRelationOfId,
       },
     })
 
@@ -282,11 +334,40 @@ export async function updatePerson(input: PersonFormData): Promise<ActionResult>
       return { ok: false, error: 'Nombre y apellido son obligatorios.' }
     }
 
-    const fatherId = await validateParent(input.fatherId || undefined, session, input.id)
-    const motherId = await validateParent(input.motherId || undefined, session, input.id)
+    const canChangeRel = await canChangeRelationships(session, input.id)
 
-    if (fatherId && motherId && fatherId === motherId) {
-      return { ok: false, error: 'Padre y madre deben ser personas distintas.' }
+    let fatherId = existing.fatherId
+    let motherId = existing.motherId
+
+    if (canChangeRel) {
+      fatherId = await validateParent(input.fatherId || undefined, session, input.id)
+      motherId = await validateParent(input.motherId || undefined, session, input.id)
+      if (fatherId && motherId && fatherId === motherId) {
+        return { ok: false, error: 'Padre y madre deben ser personas distintas.' }
+      }
+    }
+
+    let unitAffiliationId = existing.unitAffiliationId
+    let claimedRelation = existing.claimedRelation
+    let claimedRelationOfId = existing.claimedRelationOfId
+
+    if (canChangeRel) {
+      if (fatherId || motherId) {
+        unitAffiliationId = null
+        claimedRelation = null
+        claimedRelationOfId = null
+      } else {
+        unitAffiliationId = normalizeText(input.unitAffiliationId) || null
+        const rawRel = normalizeText(input.claimedRelation) as ClaimedRelation | ''
+        claimedRelation = rawRel || null
+        claimedRelationOfId = normalizeText(input.claimedRelationOfId) || null
+        if (claimedRelation && CLAIMED_RELATION_REQUIRES_REF.has(claimedRelation) && !claimedRelationOfId) {
+          return { ok: false, error: 'Este tipo de relación requiere indicar con quién de la unidad.' }
+        }
+        if (!claimedRelation || !CLAIMED_RELATION_REQUIRES_REF.has(claimedRelation)) {
+          claimedRelationOfId = null
+        }
+      }
     }
 
     const updated = await prisma.person.update({
@@ -306,6 +387,9 @@ export async function updatePerson(input: PersonFormData): Promise<ActionResult>
         motherId,
         coverPhoto: normalizeText(input.coverPhoto) || null,
         isCore: session.role === 'ADMIN' ? input.isCore : existing.isCore,
+        unitAffiliationId,
+        claimedRelation,
+        claimedRelationOfId,
       },
     })
 
