@@ -8,6 +8,7 @@ import {
   deleteAccessRule,
   importRelationsJson,
   previewManagedFamilyUnit,
+  previewRelationsImport,
   updateFamilyConfig,
   updateManagedFamilyUnit,
   updateUserAccess,
@@ -18,6 +19,7 @@ import type {
   AdminDashboardData,
   FamilyConfigData,
   ManagedFamilyUnitPreviewPerson,
+  RelationsImportPreview,
   UserScope,
   UserRole,
 } from '@/lib/content-types'
@@ -56,6 +58,7 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
   const [config, setConfig] = useState<FamilyConfigData>(data.config)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [relationsJsonText, setRelationsJsonText] = useState('')
+  const [importPreview, setImportPreview] = useState<RelationsImportPreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ label: string; managedPeople: ManagedFamilyUnitPreviewPerson[] } | null>(null)
@@ -196,6 +199,25 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
     })
   }
 
+  function handlePreviewRelations() {
+    setError(null)
+    setMessage(null)
+    setImportPreview(null)
+    startTransition(async () => {
+      const result = await previewRelationsImport({ jsonText: relationsJsonText })
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setImportPreview(result.data)
+      setMessage(
+        result.data.changesCount > 0
+          ? `Preview listo: ${result.data.changesCount} cambio(s) sobre ${result.data.totalInFile} persona(s).`
+          : `Sin cambios: el archivo ya coincide con el estado actual (${result.data.totalInFile} persona(s) revisadas).`
+      )
+    })
+  }
+
   function handleImportRelations() {
     setError(null)
     setMessage(null)
@@ -205,6 +227,7 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         setError(result.error)
         return
       }
+      setImportPreview(null)
       setMessage(
         result.data.updatedPeople > 0
           ? `Importacion completada. Personas actualizadas: ${result.data.updatedPeople}.`
@@ -219,6 +242,7 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
 
     const text = await file.text()
     setRelationsJsonText(text)
+    setImportPreview(null)
     setError(null)
     setMessage(`Archivo cargado: ${file.name}`)
   }
@@ -544,13 +568,62 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
             </Field>
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" disabled={isPending || relationsJsonText.trim().length === 0} onClick={handleImportRelations} style={actionButtonStyle}>
-                Importar relaciones
+              <button
+                type="button"
+                disabled={isPending || relationsJsonText.trim().length === 0}
+                onClick={handlePreviewRelations}
+                style={secondaryButtonStyle}
+              >
+                Ver cambios antes de importar
               </button>
               <span style={{ fontSize: 12, color: '#8B9E94' }}>
                 No crea personas nuevas ni importa historias, fotos, recetas u otros contenidos.
               </span>
             </div>
+
+            {importPreview && importPreview.changesCount > 0 && (
+              <div style={{ marginTop: 8, border: '1px solid #E0DAD0', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ padding: '10px 14px', background: '#F8F5EE', borderBottom: '1px solid #E0DAD0', fontSize: 12, color: '#6B6B6B' }}>
+                  {importPreview.changesCount} cambio(s) pendiente(s) de {importPreview.totalInFile} persona(s) en el archivo
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#F3F0EA' }}>
+                      <th style={thStyle}>Persona</th>
+                      <th style={thStyle}>Padre actual</th>
+                      <th style={thStyle}>Padre nuevo</th>
+                      <th style={thStyle}>Madre actual</th>
+                      <th style={thStyle}>Madre nueva</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.changes.map(row => (
+                      <tr key={row.personId} style={{ borderTop: '1px solid #EFE8DD' }}>
+                        <td style={tdStyle}>{row.personName}</td>
+                        <td style={tdStyle}>{row.currentFatherName ?? <span style={{ color: '#8B9E94' }}>sin padre</span>}</td>
+                        <td style={{ ...tdStyle, color: row.currentFatherId !== row.newFatherId ? '#2D4A3E' : undefined, fontWeight: row.currentFatherId !== row.newFatherId ? 600 : undefined }}>
+                          {row.newFatherName ?? <span style={{ color: '#8B4444' }}>sin padre</span>}
+                        </td>
+                        <td style={tdStyle}>{row.currentMotherName ?? <span style={{ color: '#8B9E94' }}>sin madre</span>}</td>
+                        <td style={{ ...tdStyle, color: row.currentMotherId !== row.newMotherId ? '#2D4A3E' : undefined, fontWeight: row.currentMotherId !== row.newMotherId ? 600 : undefined }}>
+                          {row.newMotherName ?? <span style={{ color: '#8B4444' }}>sin madre</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ padding: '12px 14px', borderTop: '1px solid #E0DAD0', background: '#FFFCF8' }}>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={handleImportRelations}
+                    style={actionButtonStyle}
+                  >
+                    Confirmar importacion
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </section>}
 
@@ -818,4 +891,20 @@ const denyBadgeStyle: React.CSSProperties = {
   ...allowBadgeStyle,
   background: '#FFF1F1',
   color: '#8B4444',
+}
+
+const thStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  textAlign: 'left',
+  fontSize: 11,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: '#6B6B6B',
+  fontWeight: 600,
+}
+
+const tdStyle: React.CSSProperties = {
+  padding: '9px 12px',
+  color: '#2C2C2C',
+  verticalAlign: 'top',
 }
