@@ -67,6 +67,23 @@ enum AccessPermission {
   VIEW_CONTENT
 }
 
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ClaimedRelation {
+  SIBLING
+  HALF_SIBLING
+  UNCLE_AUNT
+  GREAT_UNCLE_AUNT
+  COUSIN
+  NEPHEW_NIECE
+  ANCESTOR
+  EXTENDED_FAMILY
+}
+
 // ─────────────────────────────────────────────
 // FAMILY (tenant raíz)
 // ─────────────────────────────────────────────
@@ -87,6 +104,7 @@ model Family {
   auditLogs      AuditLog[]
   managedUnits   ManagedFamilyUnit[]
   accessRules    AccessRule[]
+  proposals      PersonUpdateProposal[]
 }
 
 // ─────────────────────────────────────────────
@@ -115,6 +133,11 @@ model Person {
   // ── Familia central (solo admin puede editar) ─────────────────────
   isCore     Boolean  @default(false)
 
+  // ── Afiliación a unidad cuando los padres son desconocidos ────────
+  unitAffiliationId   String?
+  claimedRelation     ClaimedRelation?
+  claimedRelationOfId String?
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -140,7 +163,11 @@ model Person {
   importantLinkTargets ImportantLink[] @relation("ImportantLinkTarget")
   managedUnitsAsParentA ManagedFamilyUnit[] @relation("ManagedUnitParentA")
   managedUnitsAsParentB ManagedFamilyUnit[] @relation("ManagedUnitParentB")
-  accessRules          AccessRule[]     @relation("AccessRuleTargetPerson")
+  accessRules           AccessRule[]        @relation("AccessRuleTargetPerson")
+  unitAffiliation       ManagedFamilyUnit?  @relation("PersonUnitAffiliation", fields: [unitAffiliationId], references: [id])
+  claimedRelationOf     Person?             @relation("ClaimedRelationOf", fields: [claimedRelationOfId], references: [id])
+  claimedRelationRefs   Person[]            @relation("ClaimedRelationOf")
+  proposals             PersonUpdateProposal[] @relation("ProposalPerson")
 }
 
 // ─────────────────────────────────────────────
@@ -186,8 +213,10 @@ model User {
   content        Content[]
   importantLinks ImportantLink[]
   auditLogs      AuditLog[]
-  representativeManagedUnits ManagedFamilyUnit[] @relation("ManagedUnitRepresentative")
-  accessRules    AccessRule[]
+  representativeManagedUnits ManagedFamilyUnit[]      @relation("ManagedUnitRepresentative")
+  accessRules                AccessRule[]
+  proposalsMade              PersonUpdateProposal[]   @relation("ProposalProposedBy")
+  proposalsReviewed          PersonUpdateProposal[]   @relation("ProposalReviewedBy")
 }
 
 model ManagedFamilyUnit {
@@ -210,6 +239,7 @@ model ManagedFamilyUnit {
   parentA              Person   @relation("ManagedUnitParentA", fields: [parentAId], references: [id])
   parentB              Person?  @relation("ManagedUnitParentB", fields: [parentBId], references: [id])
   representativeUser   User?    @relation("ManagedUnitRepresentative", fields: [representativeUserId], references: [id])
+  affiliatedPersons    Person[] @relation("PersonUnitAffiliation")
 }
 
 model AccessRule {
@@ -362,6 +392,43 @@ model ContentMedia {
 // IMPORTANT LINK (relaciones no familiares)
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// PERSON UPDATE PROPOSAL
+// ─────────────────────────────────────────────
+
+model PersonUpdateProposal {
+  id              String         @id @default(cuid())
+  familyId        String
+  personId        String
+  proposedById    String
+  status          ProposalStatus @default(PENDING)
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+
+  // Campos propuestos — null significa "no cambia este campo"
+  firstName     String?
+  middleName    String?
+  lastName      String?
+  gender        Gender?
+  birthDate     DateTime?
+  deathDate     DateTime?
+  birthPlace    String?
+  bio           String?
+
+  currentValues Json
+  createdAt     DateTime @default(now())
+
+  family     Family  @relation(fields: [familyId], references: [id])
+  person     Person  @relation("ProposalPerson", fields: [personId], references: [id])
+  proposedBy User    @relation("ProposalProposedBy", fields: [proposedById], references: [id])
+  reviewedBy User?   @relation("ProposalReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([familyId, status])
+  @@index([personId, status])
+}
+
+// ─────────────────────────────────────────────
 model ImportantLink {
   id              String           @id @default(cuid())
   personId        String
