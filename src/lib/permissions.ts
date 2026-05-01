@@ -352,3 +352,31 @@ export async function canCreatePerson(session: SessionPayload): Promise<boolean>
   const units = await getManagedUnitsForUser(session, 'people')
   return units.length > 0
 }
+
+// Devuelve el conjunto de IDs de personas que el representante gestiona directamente.
+// null = admin, ve todo. Set vacío = no gestiona nada.
+export async function getManagedPersonIdSet(
+  session: SessionPayload
+): Promise<Set<string> | null> {
+  if (session.role === 'ADMIN' || session.scope === 'ADMIN') return null
+
+  const units = await getManagedUnitsForUser(session, 'people')
+  if (units.length === 0) return new Set()
+
+  const people = await getAllFamilyPeopleWithAffiliation(session.familyId)
+  const managed = new Set<string>()
+
+  for (const unit of units) {
+    const ids = getManagedUnitPersonIdsFromPeople(people, unit.parentAId, unit.parentBId)
+    for (const id of ids) managed.add(id)
+  }
+
+  const unitIds = new Set(units.map(u => u.id))
+  for (const p of people) {
+    if (p.unitAffiliationId && unitIds.has(p.unitAffiliationId)) {
+      managed.add(p.id)
+    }
+  }
+
+  return managed
+}
