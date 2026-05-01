@@ -237,6 +237,14 @@ export interface PersonFormData {
   motherId: string
   coverPhoto: string
   isCore: boolean
+  unitAffiliationId: string
+  claimedRelation: string
+  claimedRelationOfId: string
+}
+
+export interface ManagedUnitOption {
+  id: string
+  label: string
 }
 
 export interface PersonEditorPayload {
@@ -244,6 +252,9 @@ export interface PersonEditorPayload {
   person: PersonFormData | null
   candidates: PersonOption[]
   media: MediaItem[]
+  viewerMode: 'ADMIN' | 'REPRESENTATIVE' | 'MEMBER'
+  canChangeRelationships: boolean
+  managedUnits: ManagedUnitOption[]
 }
 
 export interface AdminUserItem {
@@ -343,6 +354,7 @@ export interface AdminDashboardData {
   accessRules: AccessRuleItem[]
   config: FamilyConfigData
   auditLogs: AuditLogItem[]
+  proposals: PersonProposalItem[]
 }
 
 export interface ContentEditorData {

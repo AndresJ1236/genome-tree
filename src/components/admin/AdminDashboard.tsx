@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   createAccessRule,
   createInviteLink,
@@ -13,12 +14,14 @@ import {
   updateManagedFamilyUnit,
   updateUserAccess,
 } from '@/app/actions/admin'
+import { approveProposal, rejectProposal } from '@/app/actions/proposals'
 import type {
   AccessEffect,
   AccessPermission,
   AdminDashboardData,
   FamilyConfigData,
   ManagedFamilyUnitPreviewPerson,
+  PersonProposalItem,
   RelationsImportPreview,
   UserScope,
   UserRole,
@@ -54,6 +57,7 @@ function formDataToManagedUnitPayload(formData: FormData): ManagedUnitFormPayloa
 }
 
 export function AdminDashboard({ data }: { data: AdminDashboardData }) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [config, setConfig] = useState<FamilyConfigData>(data.config)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
@@ -62,6 +66,8 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ label: string; managedPeople: ManagedFamilyUnitPreviewPerson[] } | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
   const isAdminView = data.viewerMode === 'ADMIN'
 
   const representativeOptions = data.users.filter(user => user.personId)
@@ -196,6 +202,36 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         return
       }
       setMessage('Regla de acceso eliminada.')
+    })
+  }
+
+  function handleApproveProposal(proposalId: string) {
+    setError(null)
+    setMessage(null)
+    startTransition(async () => {
+      const result = await approveProposal(proposalId)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setMessage('Propuesta aprobada.')
+      router.refresh()
+    })
+  }
+
+  function handleRejectProposal(proposalId: string) {
+    setError(null)
+    setMessage(null)
+    startTransition(async () => {
+      const result = await rejectProposal({ proposalId, reason: rejectReason })
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setRejectingId(null)
+      setRejectReason('')
+      setMessage('Propuesta rechazada.')
+      router.refresh()
     })
   }
 
@@ -452,6 +488,37 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
           </div>
         </section>
 
+        <section style={cardStyle}>
+          <div style={{ marginBottom: data.proposals.length > 0 ? 16 : 0 }}>
+            <h2 style={sectionTitleStyle}>Propuestas pendientes</h2>
+            {data.proposals.length > 0 && (
+              <p style={{ margin: 0, fontSize: 13, color: '#6B6B6B' }}>
+                Cambios biográficos propuestos por miembros. Revísalos y aprueba o rechaza cada uno.
+              </p>
+            )}
+          </div>
+          {data.proposals.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 13, color: '#8B9E94' }}>No hay propuestas pendientes.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 14 }}>
+              {data.proposals.map(proposal => (
+                <ProposalCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  isPending={isPending}
+                  familySlug={data.familySlug}
+                  rejectingId={rejectingId}
+                  rejectReason={rejectReason}
+                  onSetRejectingId={id => { setRejectingId(id); setRejectReason('') }}
+                  onSetRejectReason={setRejectReason}
+                  onApprove={handleApproveProposal}
+                  onReject={handleRejectProposal}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
         {isAdminView && <section style={cardStyle}>
           <div style={{ marginBottom: 16 }}>
             <h2 style={sectionTitleStyle}>Access rules</h2>
@@ -698,6 +765,115 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
           </div>
         </section>
       </div>
+    </div>
+  )
+}
+
+function ProposalCard({
+  proposal,
+  isPending,
+  familySlug,
+  rejectingId,
+  rejectReason,
+  onSetRejectingId,
+  onSetRejectReason,
+  onApprove,
+  onReject,
+}: {
+  proposal: PersonProposalItem
+  isPending: boolean
+  familySlug: string
+  rejectingId: string | null
+  rejectReason: string
+  onSetRejectingId: (id: string | null) => void
+  onSetRejectReason: (reason: string) => void
+  onApprove: (id: string) => void
+  onReject: (id: string) => void
+}) {
+  const isRejecting = rejectingId === proposal.id
+
+  return (
+    <div style={{ border: '1px solid #E6E0D5', borderRadius: 3, padding: '16px 18px', background: '#FFFCF8' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+        <div>
+          <a
+            href={`/${familySlug}/person/${proposal.personId}`}
+            style={{ fontSize: 15, color: '#2D4A3E', fontFamily: 'Georgia, serif', textDecoration: 'none' }}
+          >
+            {proposal.personName}
+          </a>
+          <div style={{ fontSize: 12, color: '#8B9E94', marginTop: 4 }}>
+            Propuesto por {proposal.proposedByName} · {new Date(proposal.createdAt).toLocaleDateString('es')}
+          </div>
+        </div>
+        {!isRejecting && (
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => onApprove(proposal.id)}
+              style={actionButtonStyle}
+            >
+              Aprobar
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => onSetRejectingId(proposal.id)}
+              style={dangerButtonStyle}
+            >
+              Rechazar
+            </button>
+          </div>
+        )}
+      </div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: '#F3F0EA' }}>
+            <th style={thStyle}>Campo</th>
+            <th style={thStyle}>Valor actual</th>
+            <th style={thStyle}>Valor propuesto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {proposal.fields.map(field => (
+            <tr key={field.key} style={{ borderTop: '1px solid #EFE8DD' }}>
+              <td style={tdStyle}>{field.label}</td>
+              <td style={{ ...tdStyle, color: '#8B9E94' }}>{field.currentValue ?? <em>vacío</em>}</td>
+              <td style={{ ...tdStyle, fontWeight: 600, color: '#2D4A3E' }}>{field.proposedValue ?? <em>vacío</em>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {isRejecting && (
+        <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            value={rejectReason}
+            onChange={e => onSetRejectReason(e.target.value)}
+            placeholder="Motivo del rechazo (opcional)"
+            style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+          />
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => onReject(proposal.id)}
+            style={dangerButtonStyle}
+          >
+            Confirmar rechazo
+          </button>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => onSetRejectingId(null)}
+            style={secondaryButtonStyle}
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
     </div>
   )
 }

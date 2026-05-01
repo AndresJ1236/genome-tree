@@ -18,10 +18,36 @@ import type {
   FamilyConfigData,
   ManagedFamilyUnitItem,
   ManagedFamilyUnitPreviewPerson,
+  PersonProposalItem,
   RelationsImportPreview,
   UserRole,
   UserScope,
 } from '@/lib/content-types'
+
+const PROPOSAL_FIELD_LABELS: Record<string, string> = {
+  firstName: 'Nombre',
+  middleName: 'Segundo nombre',
+  lastName: 'Apellido',
+  gender: 'Género',
+  birthDate: 'Fecha de nacimiento',
+  deathDate: 'Fecha de fallecimiento',
+  birthPlace: 'Lugar de nacimiento',
+  bio: 'Biografía',
+}
+
+const PROPOSAL_GENDER_LABELS: Record<string, string> = {
+  MALE: 'Masculino', FEMALE: 'Femenino', OTHER: 'Otro', UNKNOWN: 'Desconocido',
+}
+
+function formatProposalFieldValue(key: string, value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null
+  if (key === 'gender') return PROPOSAL_GENDER_LABELS[value as string] ?? String(value)
+  if ((key === 'birthDate' || key === 'deathDate') && typeof value === 'string') {
+    try { return new Date(value).toLocaleDateString('es') } catch { return String(value) }
+  }
+  if (value instanceof Date) return value.toLocaleDateString('es')
+  return String(value)
+}
 import { revalidatePath } from 'next/cache'
 
 function ensureAdmin(session: NonNullable<Awaited<ReturnType<typeof getSession>>>) {
@@ -306,6 +332,53 @@ export async function getAdminDashboard(): Promise<ActionResult<AdminDashboardDa
     ? users
     : users.filter(user => user.personId && representedManagedPersonIds.has(user.personId))
 
+  const proposalsRaw = await prisma.personUpdateProposal.findMany({
+    where: {
+      familyId: session.familyId,
+      status: 'PENDING',
+      ...(isAdmin ? {} : { personId: { in: [...representedManagedPersonIds] } }),
+    },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true, personId: true, status: true,
+      createdAt: true, reviewedAt: true, rejectionReason: true,
+      firstName: true, middleName: true, lastName: true,
+      gender: true, birthDate: true, deathDate: true,
+      birthPlace: true, bio: true, currentValues: true,
+      person:     { select: { firstName: true, middleName: true, lastName: true } },
+      proposedBy: { select: { name: true } },
+    },
+  })
+
+  const proposals: PersonProposalItem[] = proposalsRaw.map(p => {
+    const current = p.currentValues as Record<string, unknown>
+    const proposed: Record<string, unknown> = {
+      firstName: p.firstName,  middleName: p.middleName, lastName: p.lastName,
+      gender: p.gender,
+      birthDate: p.birthDate?.toISOString() ?? null,
+      deathDate: p.deathDate?.toISOString() ?? null,
+      birthPlace: p.birthPlace, bio: p.bio,
+    }
+    const fields = Object.entries(PROPOSAL_FIELD_LABELS)
+      .filter(([key]) => proposed[key] !== null)
+      .map(([key, label]) => ({
+        key, label,
+        currentValue:  formatProposalFieldValue(key, current[key]),
+        proposedValue: formatProposalFieldValue(key, proposed[key]),
+      }))
+    return {
+      id: p.id,
+      personId: p.personId,
+      personName: getPersonDisplayName(p.person),
+      proposedByName: p.proposedBy.name,
+      status: p.status as 'PENDING',
+      createdAt: p.createdAt.toISOString(),
+      reviewedAt: p.reviewedAt?.toISOString() ?? null,
+      rejectionReason: p.rejectionReason,
+      fields,
+    }
+  })
+
   return {
     ok: true,
     data: {
@@ -364,6 +437,7 @@ export async function getAdminDashboard(): Promise<ActionResult<AdminDashboardDa
         oldValue: log.oldValue,
         newValue: log.newValue,
       })),
+      proposals,
     },
   }
 }
