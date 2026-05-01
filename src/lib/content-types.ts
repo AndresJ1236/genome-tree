@@ -386,6 +386,56 @@ export interface RelationsImportPreview {
   changes: RelationsImportPreviewChange[]
 }
 
+export type ProposalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export type ClaimedRelation =
+  | 'SIBLING'
+  | 'HALF_SIBLING'
+  | 'UNCLE_AUNT'
+  | 'GREAT_UNCLE_AUNT'
+  | 'COUSIN'
+  | 'NEPHEW_NIECE'
+  | 'ANCESTOR'
+  | 'EXTENDED_FAMILY'
+
+export const CLAIMED_RELATION_LABELS: Record<ClaimedRelation, string> = {
+  SIBLING:          'Hermano/a',
+  HALF_SIBLING:     'Medio hermano/a',
+  UNCLE_AUNT:       'Tío/Tía',
+  GREAT_UNCLE_AUNT: 'Tío abuelo / Tía abuela',
+  COUSIN:           'Primo/Prima',
+  NEPHEW_NIECE:     'Sobrino/Sobrina',
+  ANCESTOR:         'Antepasado (conexión no determinada)',
+  EXTENDED_FAMILY:  'Familiar (parentesco no determinado)',
+}
+
+export const CLAIMED_RELATION_REQUIRES_REF: Set<ClaimedRelation> = new Set([
+  'SIBLING',
+  'HALF_SIBLING',
+  'UNCLE_AUNT',
+  'GREAT_UNCLE_AUNT',
+  'COUSIN',
+  'NEPHEW_NIECE',
+])
+
+export interface PersonProposalItem {
+  id: string
+  personId: string
+  personName: string
+  proposedByName: string
+  status: ProposalStatus
+  createdAt: string
+  reviewedAt: string | null
+  rejectionReason: string | null
+  // campos propuestos vs actuales
+  fields: {
+    key: string
+    label: string
+    currentValue: string | null
+    proposedValue: string | null
+  }[]
+}
+
 export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string }

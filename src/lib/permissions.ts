@@ -17,6 +17,7 @@ import {
 type ManagedCapability = 'people' | 'content'
 
 interface ManagedUnitRecord {
+  id: string
   parentAId: string
   parentBId: string | null
   canEditPeople: boolean
@@ -117,6 +118,13 @@ async function getAllFamilyPeople(familyId: string) {
   })
 }
 
+async function getAllFamilyPeopleWithAffiliation(familyId: string) {
+  return prisma.person.findMany({
+    where: { familyId },
+    select: { id: true, fatherId: true, motherId: true, unitAffiliationId: true },
+  })
+}
+
 async function getManagedUnitsForUser(
   session: SessionPayload,
   capability?: ManagedCapability
@@ -127,6 +135,7 @@ async function getManagedUnitsForUser(
       representativeUserId: session.userId,
     },
     select: {
+      id: true,
       parentAId: true,
       parentBId: true,
       canEditPeople: true,
@@ -277,4 +286,69 @@ export function computeLockedAt(): Date {
   const d = new Date()
   d.setDate(d.getDate() + 10)
   return d
+}
+
+// Puede modificar fatherId/motherId de una persona.
+// Representante: sí, salvo que la persona sea parentA o parentB de su propia unidad.
+export async function canChangeRelationships(
+  session: SessionPayload,
+  personId: string
+): Promise<boolean> {
+  if (session.role === 'ADMIN' || session.scope === 'ADMIN') return true
+
+  const units = await getManagedUnitsForUser(session, 'people')
+  if (units.length === 0) return false
+
+  // Los parentA/parentB de las unidades del representante no los puede tocar
+  const isUnitRoot = units.some(u => u.parentAId === personId || u.parentBId === personId)
+  if (isUnitRoot) return false
+
+  const people = await getAllFamilyPeopleWithAffiliation(session.familyId)
+
+  // Persona dentro de la unidad por estructura del árbol
+  if (isPersonManagedByUnitsFromPeople(people, units, personId)) return true
+
+  // Persona flotante afiliada explícitamente a una de las unidades del representante
+  const unitIds = new Set(units.map(u => u.id))
+  const person = people.find(p => p.id === personId)
+  return !!(person?.unitAffiliationId && unitIds.has(person.unitAffiliationId))
+}
+
+export async function assertCanChangeRelationships(
+  personId: string,
+  session: SessionPayload
+): Promise<void> {
+  if (session.role === 'ADMIN' || session.scope === 'ADMIN') return
+
+  const units = await getManagedUnitsForUser(session, 'people')
+  const isUnitRoot = units.some(u => u.parentAId === personId || u.parentBId === personId)
+  if (isUnitRoot) {
+    throw new Error(
+      'Las relaciones de los padres raíz de tu unidad solo puede modificarlas el administrador.'
+    )
+  }
+
+  const allowed = await canChangeRelationships(session, personId)
+  if (!allowed) {
+    throw new Error('No tienes permiso para modificar relaciones familiares de esta persona.')
+  }
+}
+
+// Determina si el usuario debe crear una propuesta en vez de guardar directamente.
+// ADMIN y representantes que gestionan la persona guardan directo.
+// MEMBER sin esa capacidad propone.
+export async function shouldProposeInsteadOfSave(
+  session: SessionPayload,
+  personId: string
+): Promise<boolean> {
+  if (session.role === 'ADMIN' || session.scope === 'ADMIN') return false
+  const manages = await userManagesPerson(session, personId, 'people')
+  return !manages
+}
+
+// Puede crear personas nuevas directamente (sin propuesta).
+export async function canCreatePerson(session: SessionPayload): Promise<boolean> {
+  if (session.role === 'ADMIN' || session.scope === 'ADMIN') return true
+  const units = await getManagedUnitsForUser(session, 'people')
+  return units.length > 0
 }
