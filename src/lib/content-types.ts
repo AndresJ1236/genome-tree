@@ -367,6 +367,25 @@ export interface ContentEditorData {
   media: MediaItem[]
 }
 
+export interface RelationsImportPreviewChange {
+  personId: string
+  personName: string
+  currentFatherId: string | null
+  currentFatherName: string | null
+  newFatherId: string | null
+  newFatherName: string | null
+  currentMotherId: string | null
+  currentMotherName: string | null
+  newMotherId: string | null
+  newMotherName: string | null
+}
+
+export interface RelationsImportPreview {
+  totalInFile: number
+  changesCount: number
+  changes: RelationsImportPreviewChange[]
+}
+
 export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string }

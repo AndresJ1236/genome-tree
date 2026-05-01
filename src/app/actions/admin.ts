@@ -18,6 +18,7 @@ import type {
   FamilyConfigData,
   ManagedFamilyUnitItem,
   ManagedFamilyUnitPreviewPerson,
+  RelationsImportPreview,
   UserRole,
   UserScope,
 } from '@/lib/content-types'
@@ -905,6 +906,87 @@ export async function importRelationsJson(input: {
     }
 
     return { ok: true, data: { updatedPeople: changedUpdates.length } }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+export async function previewRelationsImport(input: {
+  jsonText: string
+}): Promise<ActionResult<RelationsImportPreview>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    ensureAdmin(session)
+
+    const jsonText = input.jsonText.trim()
+    if (!jsonText) {
+      return { ok: false, error: 'Pega el JSON o carga un archivo antes de previsualizar.' }
+    }
+
+    const payload = parseRelationsJsonPayload(jsonText)
+    if (payload.familySlug !== session.familySlug) {
+      return { ok: false, error: 'El JSON pertenece a otra familia.' }
+    }
+
+    const people = await prisma.person.findMany({
+      where: { familyId: session.familyId },
+      select: { id: true, firstName: true, middleName: true, lastName: true, fatherId: true, motherId: true },
+    })
+
+    const existingIds = new Set(people.map(p => p.id))
+    const plan = planRelationsImport(payload, existingIds)
+
+    if (plan.duplicateIds.length > 0) {
+      return { ok: false, error: `El JSON repite personas: ${plan.duplicateIds.slice(0, 5).join(', ')}` }
+    }
+    if (plan.missingPersonIds.length > 0) {
+      return { ok: false, error: `Estas personas no existen en la familia actual: ${plan.missingPersonIds.slice(0, 5).join(', ')}` }
+    }
+    if (plan.missingReferenceIds.length > 0) {
+      return { ok: false, error: `Hay referencias de padre o madre que no existen en la familia actual: ${plan.missingReferenceIds.slice(0, 5).join(', ')}` }
+    }
+    if (plan.selfReferenceIds.length > 0) {
+      return { ok: false, error: `Una persona no puede ser su propio padre o madre: ${plan.selfReferenceIds.slice(0, 5).join(', ')}` }
+    }
+
+    const byId = new Map(people.map(p => [p.id, p]))
+    const resolveName = (id: string | null): string | null => {
+      if (!id) return null
+      const p = byId.get(id)
+      return p ? getPersonDisplayName(p) : null
+    }
+
+    const changes = plan.updates
+      .filter(update => {
+        const current = byId.get(update.id)
+        return current && (current.fatherId !== update.fatherId || current.motherId !== update.motherId)
+      })
+      .map(update => {
+        const current = byId.get(update.id)!
+        return {
+          personId: update.id,
+          personName: getPersonDisplayName(current),
+          currentFatherId: current.fatherId,
+          currentFatherName: resolveName(current.fatherId),
+          newFatherId: update.fatherId,
+          newFatherName: resolveName(update.fatherId),
+          currentMotherId: current.motherId,
+          currentMotherName: resolveName(current.motherId),
+          newMotherId: update.motherId,
+          newMotherName: resolveName(update.motherId),
+        }
+      })
+
+    return {
+      ok: true,
+      data: {
+        totalInFile: payload.people.length,
+        changesCount: changes.length,
+        changes,
+      },
+    }
   } catch (error: unknown) {
     return { ok: false, error: (error as Error).message }
   }
