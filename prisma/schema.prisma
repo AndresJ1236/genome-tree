@@ -1,0 +1,385 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+enum RelationshipType {
+  SPOUSE
+  PARTNER
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum UserScope {
+  ADMIN
+  FAMILY
+  BRANCH
+}
+
+enum ContentType {
+  STORY
+  RECIPE
+  OBJECT
+  DIARY
+  INTERVIEW
+  SOURCE
+}
+
+enum Visibility {
+  BRANCH
+  FAMILY
+  ADMIN
+}
+
+enum ConfidenceLevel {
+  HIGH    // documento, registro oficial, foto fechada
+  MEDIUM  // testimonio directo
+  LOW     // recuerdo indirecto o incompleto
+}
+
+enum AccessEffect {
+  ALLOW
+  DENY
+}
+
+enum AccessPermission {
+  VIEW_PERSON
+  EDIT_PERSON
+  VIEW_MEDIA
+  VIEW_PRIVATE
+  VIEW_CONTENT
+}
+
+// ─────────────────────────────────────────────
+// FAMILY (tenant raíz)
+// ─────────────────────────────────────────────
+
+model Family {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  persons        Person[]
+  relationships  Relationship[]
+  users          User[]
+  content        Content[]
+  media          Media[]
+  importantLinks ImportantLink[]
+  config         FamilyConfig?
+  auditLogs      AuditLog[]
+  managedUnits   ManagedFamilyUnit[]
+  accessRules    AccessRule[]
+}
+
+// ─────────────────────────────────────────────
+// PERSON
+// ─────────────────────────────────────────────
+
+model Person {
+  id         String    @id @default(cuid())
+  familyId   String
+  firstName  String
+  middleName String?
+  lastName   String
+  birthSurname1 String?
+  birthSurname2 String?
+  birthDate  DateTime?
+  deathDate  DateTime?
+  birthPlace String?
+  gender     Gender    @default(UNKNOWN)
+  bio        String?
+  coverPhoto String?
+
+  // ── Parentesco directo ────────────────────────────────────────────
+  fatherId   String?
+  motherId   String?
+
+  // ── Familia central (solo admin puede editar) ─────────────────────
+  isCore     Boolean  @default(false)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // ── Relaciones Prisma ─────────────────────────────────────────────
+  family               Family          @relation(fields: [familyId], references: [id])
+
+  // padre/madre → referencia a otra Person
+  father               Person?         @relation("ChildFather", fields: [fatherId], references: [id])
+  mother               Person?         @relation("ChildMother", fields: [motherId], references: [id])
+
+  // hijos donde esta persona es el padre o la madre
+  childrenAsFather     Person[]        @relation("ChildFather")
+  childrenAsMother     Person[]        @relation("ChildMother")
+
+  // Relaciones explícitas (solo SPOUSE / PARTNER — no PARENT_CHILD)
+  person1Relations     Relationship[]  @relation("Person1")
+  person2Relations     Relationship[]  @relation("Person2")
+
+  user                 User?
+  content              Content[]
+  media                Media[]
+  importantLinks       ImportantLink[] @relation("PersonLinks")
+  importantLinkTargets ImportantLink[] @relation("ImportantLinkTarget")
+  managedUnitsAsParentA ManagedFamilyUnit[] @relation("ManagedUnitParentA")
+  managedUnitsAsParentB ManagedFamilyUnit[] @relation("ManagedUnitParentB")
+  accessRules          AccessRule[]     @relation("AccessRuleTargetPerson")
+}
+
+// ─────────────────────────────────────────────
+// RELATIONSHIP (solo parejas explícitas)
+// El árbol genealógico usa fatherId/motherId en Person.
+// Esta tabla guarda solo vínculos de pareja formales (SPOUSE/PARTNER).
+// ─────────────────────────────────────────────
+
+model Relationship {
+  id        String           @id @default(cuid())
+  familyId  String
+  person1Id String
+  person2Id String
+  type      RelationshipType
+  createdAt DateTime         @default(now())
+
+  family  Family @relation(fields: [familyId], references: [id])
+  person1 Person @relation("Person1", fields: [person1Id], references: [id])
+  person2 Person @relation("Person2", fields: [person2Id], references: [id])
+
+  @@unique([person1Id, person2Id, type])
+}
+
+// ─────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  familyId     String
+  personId     String?   @unique
+  role         UserRole  @default(MEMBER)
+  scope        UserScope @default(FAMILY)
+  branchRootId String?   // para scope BRANCH: ID de la persona raíz de su subárbol
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  family         Family          @relation(fields: [familyId], references: [id])
+  person         Person?         @relation(fields: [personId], references: [id])
+  content        Content[]
+  importantLinks ImportantLink[]
+  auditLogs      AuditLog[]
+  representativeManagedUnits ManagedFamilyUnit[] @relation("ManagedUnitRepresentative")
+  accessRules    AccessRule[]
+}
+
+model ManagedFamilyUnit {
+  id                   String   @id @default(cuid())
+  familyId             String
+  label                String
+  parentAId            String
+  parentBId            String?
+  primarySurname       String?
+  secondarySurname     String?
+  representativeUserId String?
+  canInviteUsers       Boolean  @default(true)
+  canEditPeople        Boolean  @default(true)
+  canManageContent     Boolean  @default(true)
+  canViewAudit         Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  createdById          String?
+
+  family               Family   @relation(fields: [familyId], references: [id])
+  parentA              Person   @relation("ManagedUnitParentA", fields: [parentAId], references: [id])
+  parentB              Person?  @relation("ManagedUnitParentB", fields: [parentBId], references: [id])
+  representativeUser   User?    @relation("ManagedUnitRepresentative", fields: [representativeUserId], references: [id])
+}
+
+model AccessRule {
+  id             String           @id @default(cuid())
+  familyId       String
+  userId         String?
+  targetPersonId String
+  effect         AccessEffect
+  permission     AccessPermission
+  reason         String?
+  createdAt      DateTime         @default(now())
+  createdById    String?
+
+  family         Family           @relation(fields: [familyId], references: [id])
+  user           User?            @relation(fields: [userId], references: [id])
+  targetPerson   Person           @relation("AccessRuleTargetPerson", fields: [targetPersonId], references: [id])
+
+  @@index([familyId, userId, permission])
+  @@index([familyId, targetPersonId, permission])
+}
+
+// ─────────────────────────────────────────────
+// FAMILY CONFIG (límites y módulos por familia)
+// ─────────────────────────────────────────────
+
+model FamilyConfig {
+  id       String @id @default(cuid())
+  familyId String @unique
+
+  // Límites configurables
+  maxMediaPerPerson Int @default(100)
+  maxFeaturedMedia  Int @default(9)
+  maxStories        Int @default(30)
+  maxStoryChars     Int @default(10000)
+  maxRecipeMedia    Int @default(3)
+
+  // Módulos activables
+  moduleStories      Boolean @default(true)
+  moduleDiary        Boolean @default(true)
+  moduleRecipes      Boolean @default(true)
+  moduleMedia        Boolean @default(true)
+  moduleObjects      Boolean @default(true)
+  moduleLinks        Boolean @default(true)
+  moduleAudioVideo   Boolean @default(false)
+  moduleExportImport Boolean @default(false)
+  moduleSearch       Boolean @default(true)
+
+  family Family @relation(fields: [familyId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  familyId   String
+  userId     String
+  action     String   // "CREATE_PERSON", "EDIT_PERSON", "UPLOAD_MEDIA", etc.
+  entityType String   // "Person", "Content", "Media", etc.
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+
+  family Family @relation(fields: [familyId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// CONTENT (historias, recetas, objetos, diario, entrevistas, fuentes)
+// ─────────────────────────────────────────────
+
+model Content {
+  id          String           @id @default(cuid())
+  personId    String
+  familyId    String
+  type        ContentType
+  title       String
+  body        String?          @db.Text
+  visibility  Visibility       @default(FAMILY)
+  createdById String
+  createdAt   DateTime         @default(now())
+  lockedAt    DateTime
+  updatedAt   DateTime         @updatedAt
+
+  source      String?
+  confidence  ConfidenceLevel?
+
+  // STORY
+  approximateDate String?
+  authorName      String?
+
+  // RECIPE
+  ingredients Json?
+  steps       Json?
+  notes       String? @db.Text
+
+  // DIARY
+  entryDate   DateTime?
+
+  // INTERVIEW
+  question    String? @db.Text
+
+  person    Person         @relation(fields: [personId], references: [id])
+  family    Family         @relation(fields: [familyId], references: [id])
+  createdBy User           @relation(fields: [createdById], references: [id])
+  media     ContentMedia[]
+}
+
+// ─────────────────────────────────────────────
+// MEDIA
+// ─────────────────────────────────────────────
+
+model Media {
+  id           String   @id @default(cuid())
+  personId     String
+  familyId     String
+  url          String
+  key          String
+  mimeType     String
+  alt          String?
+  caption      String?
+  featured     Boolean  @default(false)
+  order        Int      @default(0)
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  person       Person         @relation(fields: [personId], references: [id])
+  family       Family         @relation(fields: [familyId], references: [id])
+  contentMedia ContentMedia[]
+}
+
+// ─────────────────────────────────────────────
+// CONTENT ↔ MEDIA (pivot)
+// ─────────────────────────────────────────────
+
+model ContentMedia {
+  contentId String
+  mediaId   String
+  order     Int    @default(0)
+
+  content Content @relation(fields: [contentId], references: [id])
+  media   Media   @relation(fields: [mediaId], references: [id])
+
+  @@id([contentId, mediaId])
+}
+
+// ─────────────────────────────────────────────
+// IMPORTANT LINK (relaciones no familiares)
+// ─────────────────────────────────────────────
+
+model ImportantLink {
+  id              String           @id @default(cuid())
+  personId        String
+  familyId        String
+  relatedPersonId String?
+  externalName    String?
+  label           String
+  notes           String?          @db.Text
+  source          String?
+  confidence      ConfidenceLevel?
+  visibility      Visibility       @default(FAMILY)
+  createdById     String
+  lockedAt        DateTime
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  person        Person  @relation("PersonLinks", fields: [personId], references: [id])
+  relatedPerson Person? @relation("ImportantLinkTarget", fields: [relatedPersonId], references: [id])
+  family        Family  @relation(fields: [familyId], references: [id])
+  createdBy     User    @relation(fields: [createdById], references: [id])
+}
