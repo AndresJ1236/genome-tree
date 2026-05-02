@@ -86,6 +86,18 @@ export async function proposePeopleUpdate(input: {
     )
     if (!hasChange) return { ok: false, error: 'Incluye al menos un campo con un valor propuesto.' }
 
+    const proposedBirth = input.fields.birthDate ? new Date(input.fields.birthDate) : null
+    const proposedDeath = input.fields.deathDate ? new Date(input.fields.deathDate) : null
+    const effectiveBirth = proposedBirth ?? person.birthDate
+    const effectiveDeath = proposedDeath ?? person.deathDate
+    if (effectiveBirth && effectiveDeath && effectiveDeath < effectiveBirth) {
+      return { ok: false, error: 'La fecha de fallecimiento no puede ser anterior a la fecha de nacimiento.' }
+    }
+
+    if (input.fields.bio && input.fields.bio.trim().length > 5000) {
+      return { ok: false, error: 'La biografía no puede superar los 5000 caracteres.' }
+    }
+
     const proposal = await prisma.personUpdateProposal.create({
       data: {
         familyId:    session.familyId,

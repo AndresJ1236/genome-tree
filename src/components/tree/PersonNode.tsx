@@ -26,18 +26,25 @@ export function PersonNode({ node, selected, highlighted, onSelect, animDelay }:
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'background 0.25s ease, box-shadow 0.25s ease',
-    background: selected ? '#2D4A3E' : highlighted ? '#C8D9D2' : '#EAF0ED',
+    background: selected
+      ? '#2D4A3E'
+      : highlighted
+      ? '#C8D9D2'
+      : isDead
+      ? '#EDE8E0'
+      : '#EAF0ED',
     border: selected
       ? '2px solid #2D4A3E'
       : highlighted
       ? '2px solid #7aad95'
+      : isDead
+      ? '1.5px dashed #9B9690'
       : '1.5px solid #B5C4BC',
     boxShadow: selected
       ? '0 0 0 5px rgba(45,74,62,0.18)'
       : highlighted
       ? '0 0 0 3px rgba(122,173,149,0.22)'
       : '0 2px 8px rgba(44,44,44,0.09)',
-    opacity: isDead ? 0.68 : 1,
   }
 
   return (
@@ -55,7 +62,7 @@ export function PersonNode({ node, selected, highlighted, onSelect, animDelay }:
             fontSize: 17,
             fontFamily: 'Georgia, Cambria, serif',
             fontWeight: 600,
-            color: selected ? '#fff' : '#2D4A3E',
+            color: selected ? '#fff' : isDead ? '#6B6660' : '#2D4A3E',
             letterSpacing: '0.04em',
           }}
         >

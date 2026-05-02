@@ -1,25 +1,27 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { computeTreeLayout } from '@/lib/tree-layout'
-import type { PersonData } from '@/lib/tree-types'
+import { computeTreeLayout, NODE_W, NODE_H } from '@/lib/tree-layout'
+import type { PersonData, RelationshipData } from '@/lib/tree-types'
 import { PersonNode } from './PersonNode'
 import { FamilyEdges } from './FamilyEdges'
 import { PersonPanel } from './PersonPanel'
 import { TreeSearch } from './TreeSearch'
 
 const CANVAS_PAD = 120
+const CENTER_SCALE = 1.2   // zoom level when centering from search
 
 interface FamilyTreeProps {
-  persons:    PersonData[]
-  familySlug: string
+  persons:       PersonData[]
+  relationships: RelationshipData[]
+  familySlug:    string
   searchEnabled: boolean
 }
 
-export function FamilyTree({ persons, familySlug, searchEnabled }: FamilyTreeProps) {
+export function FamilyTree({ persons, relationships, familySlug, searchEnabled }: FamilyTreeProps) {
   const { nodes, familyUnits, bounds } = useMemo(
-    () => computeTreeLayout(persons),
-    [persons]
+    () => computeTreeLayout(persons, relationships),
+    [persons, relationships]
   )
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -51,6 +53,25 @@ export function FamilyTree({ persons, familySlug, searchEnabled }: FamilyTreePro
   }, [transform])
 
   const dragRef = useRef({ active: false, lastX: 0, lastY: 0 })
+  const [centering, setCentering] = useState(false)
+
+  const centerOnNode = useCallback((personId: string) => {
+    const node = nodes.find(n => n.id === personId)
+    const el = viewportRef.current
+    if (!node || !el) return
+    const vw = el.clientWidth
+    const vh = el.clientHeight
+    const scale = CENTER_SCALE
+    const offsetX = -bounds.minX + CANVAS_PAD
+    const offsetY = -bounds.minY + CANVAS_PAD
+    const cx = node.x + offsetX + NODE_W / 2
+    const cy = node.y + offsetY + NODE_H / 2
+    const newT = { x: vw / 2 - cx * scale, y: vh / 2 - cy * scale, scale }
+    setCentering(true)
+    setTransform(newT)
+    transformRef.current = newT
+    setTimeout(() => setCentering(false), 420)
+  }, [nodes, bounds])
 
   const canvasW = bounds.maxX - bounds.minX + CANVAS_PAD * 2
   const canvasH = bounds.maxY - bounds.minY + CANVAS_PAD * 2
@@ -117,7 +138,10 @@ export function FamilyTree({ persons, familySlug, searchEnabled }: FamilyTreePro
     >
       <TreeSearch
         enabled={searchEnabled}
-        onSelectPerson={personId => setSelectedId(personId)}
+        onSelectPerson={personId => {
+          setSelectedId(personId)
+          centerOnNode(personId)
+        }}
       />
 
       <div
@@ -133,6 +157,7 @@ export function FamilyTree({ persons, familySlug, searchEnabled }: FamilyTreePro
             position: 'absolute',
             transformOrigin: '0 0',
             transform: "translate(" + transform.x + "px, " + transform.y + "px) scale(" + transform.scale + ")",
+          transition: centering ? 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none',
             width: canvasW,
             height: canvasH,
           }}
