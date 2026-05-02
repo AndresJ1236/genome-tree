@@ -92,8 +92,7 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
   const ox = -bounds.minX + CANVAS_PAD
   const oy = -bounds.minY + CANVAS_PAD
 
-  // The focus node is the one the layout centered on (n.x === 0 after centering).
-  // If focusPersonId was passed, look it up; otherwise find the node with x closest to 0.
+  // Focus node: the one at x≈0 (layout centers on it via n.x -= focusX).
   const focusNode = useMemo(() => {
     if (nodes.length === 0) return null
     if (focusPersonId) {
@@ -102,6 +101,25 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
     }
     return nodes.reduce((best, n) => Math.abs(n.x) < Math.abs(best.x) ? n : best, nodes[0])
   }, [nodes, focusPersonId])
+
+  // Core family center: average x of focus person + their parents + their siblings.
+  // Centering on this gives a more natural "family in the middle" view.
+  const coreCenterX = useMemo(() => {
+    if (!focusNode || nodes.length === 0) return 0
+    const coreIds = new Set<string>([focusNode.id])
+    if (focusNode.fatherId) coreIds.add(focusNode.fatherId)
+    if (focusNode.motherId) coreIds.add(focusNode.motherId)
+    for (const n of nodes) {
+      if (n.id === focusNode.id) continue
+      if ((focusNode.fatherId && n.fatherId === focusNode.fatherId) ||
+          (focusNode.motherId && n.motherId === focusNode.motherId)) {
+        coreIds.add(n.id)
+      }
+    }
+    const coreNodes = nodes.filter(n => coreIds.has(n.id))
+    if (coreNodes.length === 0) return focusNode.x + NODE_W / 2
+    return coreNodes.reduce((sum, n) => sum + n.x + NODE_W / 2, 0) / coreNodes.length
+  }, [nodes, focusNode])
 
   useEffect(() => {
     const el = viewportRef.current
@@ -112,17 +130,17 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
 
     let init: { x: number; y: number; scale: number }
     if (focusNode) {
-      // Place the focus person at the horizontal center and ~40% from the top
-      // (so ancestors above and children below are both visible)
-      const fcx = focusNode.x + ox + NODE_W / 2
-      const fcy = focusNode.y + oy + NODE_H / 2
+      // Center horizontally on the core family (focus + parents + siblings).
+      // Vertically: put the focus person at ~40% from the top.
+      const fcx = coreCenterX + ox          // canvas x of core family center
+      const fcy = focusNode.y + oy + NODE_H / 2  // canvas y of focus person center
       init = { x: vw / 2 - fcx * s, y: vh * 0.4 - fcy * s, scale: s }
     } else {
       init = { x: (vw - canvasW * s) / 2, y: (vh - canvasH * s) / 2, scale: s }
     }
     setTransform(init)
     transformRef.current = init
-  }, [canvasW, canvasH, nodes.length, focusNode, ox, oy])
+  }, [canvasW, canvasH, nodes.length, focusNode, coreCenterX, ox, oy])
 
   useEffect(() => {
     const el = viewportRef.current
