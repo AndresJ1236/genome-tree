@@ -7,9 +7,13 @@ import { PersonNode } from './PersonNode'
 import { FamilyEdges } from './FamilyEdges'
 import { PersonPanel } from './PersonPanel'
 import { TreeSearch } from './TreeSearch'
+import { OnboardingOverlay } from './OnboardingOverlay'
+import { HelpTooltip } from '@/components/ui/HelpTooltip'
 
 const CANVAS_PAD = 120
-const CENTER_SCALE = 1.2   // zoom level when centering from search
+const CENTER_SCALE = 1.2
+// Buffer in canvas-space pixels around the viewport to pre-render nearby nodes
+const VIRT_BUFFER = 320
 
 interface FamilyTreeProps {
   persons:       PersonData[]
@@ -63,6 +67,9 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled }
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const canvasW = bounds.maxX - bounds.minX + CANVAS_PAD * 2
+  const canvasH = bounds.maxY - bounds.minY + CANVAS_PAD * 2
+
   const centerOnNode = useCallback((personId: string) => {
     const node = nodes.find(n => n.id === personId)
     const el = viewportRef.current
@@ -81,8 +88,6 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled }
     setTimeout(() => setCentering(false), 420)
   }, [nodes, bounds])
 
-  const canvasW = bounds.maxX - bounds.minX + CANVAS_PAD * 2
-  const canvasH = bounds.maxY - bounds.minY + CANVAS_PAD * 2
   const ox = -bounds.minX + CANVAS_PAD
   const oy = -bounds.minY + CANVAS_PAD
 
@@ -137,13 +142,43 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled }
 
   const stopDrag = useCallback(() => { dragRef.current.active = false }, [])
 
+  // ── Virtualización ────────────────────────────────────────────────────────
+  // Only enabled when node count is large enough to matter
+  const visibleIds = useMemo<Set<string> | null>(() => {
+    if (nodes.length < 80) return null  // show all for small trees
+
+    const el = viewportRef.current
+    if (!el) return null
+    const vw = el.clientWidth
+    const vh = el.clientHeight
+    const { x, y, scale } = transform
+
+    const vpLeft   = (-x) / scale - VIRT_BUFFER
+    const vpTop    = (-y) / scale - VIRT_BUFFER
+    const vpRight  = (vw - x) / scale + VIRT_BUFFER
+    const vpBottom = (vh - y) / scale + VIRT_BUFFER
+
+    const _ox = -bounds.minX + CANVAS_PAD
+    const _oy = -bounds.minY + CANVAS_PAD
+
+    const ids = new Set<string>()
+    for (const n of nodes) {
+      const nx = n.x + _ox
+      const ny = n.y + _oy
+      if (nx + NODE_W > vpLeft && nx < vpRight && ny + NODE_H > vpTop && ny < vpBottom) {
+        ids.add(n.id)
+      }
+    }
+    // Always include selected + highlighted so edges/nodes stay visible
+    if (selectedId) {
+      ids.add(selectedId)
+      highlighted.forEach(id => ids.add(id))
+    }
+    return ids
+  }, [transform, nodes, bounds, selectedId, highlighted])
+
   return (
-    <div
-      style={{
-        position: 'relative',
-        height: '100%',
-      }}
-    >
+    <div style={{ position: 'relative', height: '100%' }}>
       <TreeSearch
         enabled={searchEnabled}
         onSelectPerson={personId => {
@@ -151,6 +186,47 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled }
           centerOnNode(personId)
         }}
       />
+
+      {/* Hint de navegación — esquina inferior izquierda, discreto */}
+      <div
+        style={{
+          position: 'absolute', bottom: 16, left: 16, zIndex: 20,
+          display: 'flex', gap: 8, alignItems: 'center',
+          pointerEvents: 'none',
+        }}
+      >
+        <span style={{ fontSize: 10, color: '#A8B5AE', letterSpacing: '0.06em', userSelect: 'none' }}>
+          Arrastra · Rueda = zoom
+        </span>
+        <HelpTooltip
+          text={"Arrastra el fondo para moverte.\nRueda del ratón para hacer zoom.\nHaz clic en una persona para ver su perfil."}
+          position="top"
+        >
+          <span
+            style={{
+              pointerEvents: 'auto',
+              width: 15, height: 15, borderRadius: '50%',
+              border: '1px solid #B5C4BC',
+              color: '#8B9E94', fontSize: 9,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'default', fontFamily: 'Georgia, serif', fontStyle: 'italic', fontWeight: 700,
+            }}
+          >
+            ?
+          </span>
+        </HelpTooltip>
+      </div>
+
+      {/* Contador de personas visibles — solo si hay virtualización activa */}
+      {visibleIds !== null && (
+        <div style={{
+          position: 'absolute', bottom: 16, right: 16, zIndex: 20,
+          fontSize: 10, color: '#A8B5AE', letterSpacing: '0.05em',
+          userSelect: 'none', pointerEvents: 'none',
+        }}>
+          {visibleIds.size} / {nodes.length} visibles
+        </div>
+      )}
 
       <div
         ref={viewportRef}
@@ -164,8 +240,8 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled }
           style={{
             position: 'absolute',
             transformOrigin: '0 0',
-            transform: "translate(" + transform.x + "px, " + transform.y + "px) scale(" + transform.scale + ")",
-          transition: centering ? 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none',
+            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+            transition: centering ? 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none',
             width: canvasW,
             height: canvasH,
           }}
@@ -175,25 +251,35 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled }
             height={canvasH}
             style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
           >
-            <g transform={"translate(" + ox + ", " + oy + ")"}>
-              <FamilyEdges nodes={nodes} familyUnits={familyUnits} selectedId={selectedId} />
+            <g transform={`translate(${ox}, ${oy})`}>
+              <FamilyEdges
+                nodes={nodes}
+                familyUnits={familyUnits}
+                selectedId={selectedId}
+                visibleIds={visibleIds}
+              />
             </g>
           </svg>
 
           <div style={{ position: 'absolute', top: oy, left: ox }}>
-            {nodes.map((node, i) => (
-              <PersonNode
-                key={node.id}
-                node={node}
-                selected={node.id === selectedId}
-                highlighted={highlighted.has(node.id)}
-                onSelect={id => setSelectedId(prev => (prev === id ? null : id))}
-                animDelay={i * 60}
-              />
-            ))}
+            {nodes.map((node, i) => {
+              if (visibleIds !== null && !visibleIds.has(node.id)) return null
+              return (
+                <PersonNode
+                  key={node.id}
+                  node={node}
+                  selected={node.id === selectedId}
+                  highlighted={highlighted.has(node.id)}
+                  onSelect={id => setSelectedId(prev => (prev === id ? null : id))}
+                  animDelay={i * 60}
+                />
+              )
+            })}
           </div>
         </div>
       </div>
+
+      <OnboardingOverlay />
 
       <PersonPanel
         personId={selectedId}

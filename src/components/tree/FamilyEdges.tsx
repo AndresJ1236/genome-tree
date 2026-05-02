@@ -12,10 +12,17 @@ interface FamilyEdgesProps {
   nodes: LayoutNode[]
   familyUnits: FamilyUnit[]
   selectedId: string | null
+  visibleIds: Set<string> | null
 }
 
-export function FamilyEdges({ nodes, familyUnits, selectedId }: FamilyEdgesProps) {
+export function FamilyEdges({ nodes, familyUnits, selectedId, visibleIds }: FamilyEdgesProps) {
   const byId = new Map(nodes.map(n => [n.id, n]))
+
+  const units = visibleIds === null ? familyUnits : familyUnits.filter(u =>
+    visibleIds.has(u.parent1Id) ||
+    (u.parent2Id != null && visibleIds.has(u.parent2Id)) ||
+    u.childIds.some(c => visibleIds.has(c))
+  )
 
   const isActive = (unit: FamilyUnit) =>
     selectedId === unit.parent1Id ||
@@ -24,7 +31,7 @@ export function FamilyEdges({ nodes, familyUnits, selectedId }: FamilyEdgesProps
 
   return (
     <g>
-      {familyUnits.map(unit => {
+      {units.map(unit => {
         const p1 = byId.get(unit.parent1Id)
         const p2 = unit.parent2Id ? byId.get(unit.parent2Id) : null
         if (!p1) return null
@@ -49,7 +56,7 @@ export function FamilyEdges({ nodes, familyUnits, selectedId }: FamilyEdgesProps
         return (
           <g key={unit.id} className="family-unit">
             {/* Couple connector (horizontal arc between spouses) */}
-            {p2 && (
+            {p2 && !unit.isExCouple && (
               <path
                 d={coupleArc(p1cx, p1.y + NODE_H * 0.5, p2cx, p2.y + NODE_H * 0.5)}
                 fill="none"
@@ -61,19 +68,21 @@ export function FamilyEdges({ nodes, familyUnits, selectedId }: FamilyEdgesProps
               />
             )}
 
-            {/* Parent 1 → junction */}
-            <path
-              d={branchDown(p1cx, p1by, jx, jy)}
-              pathLength={1}
-              fill="none"
-              stroke={stroke}
-              strokeWidth={strokeW}
-              strokeLinecap="round"
-              style={branchStyle(unit.parent1Id + '-j', active)}
-            />
+            {/* Parent 1 → junction (only when there are children) */}
+            {children.length > 0 && (
+              <path
+                d={branchDown(p1cx, p1by, jx, jy)}
+                pathLength={1}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={strokeW}
+                strokeLinecap="round"
+                style={branchStyle(unit.parent1Id + '-j', active)}
+              />
+            )}
 
-            {/* Parent 2 → junction */}
-            {p2 && (
+            {/* Parent 2 → junction (only when there are children) */}
+            {p2 && children.length > 0 && (
               <path
                 d={branchDown(p2cx, p2by, jx, jy)}
                 pathLength={1}
