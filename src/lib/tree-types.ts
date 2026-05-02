@@ -46,3 +46,7 @@ export interface TreeLayout {
   petLinks:    PetLink[]
   bounds:      { minX: number; minY: number; maxX: number; maxY: number }
 }
+
+export interface TreeLayoutOptions {
+  focusPersonId?: string
+}

@@ -16,16 +16,17 @@ const CENTER_SCALE = 1.2
 const VIRT_BUFFER = 320
 
 interface FamilyTreeProps {
-  persons:       PersonData[]
-  relationships: RelationshipData[]
-  familySlug:    string
-  searchEnabled: boolean
+  persons:        PersonData[]
+  relationships:  RelationshipData[]
+  familySlug:     string
+  searchEnabled:  boolean
+  focusPersonId?: string
 }
 
-export function FamilyTree({ persons, relationships, familySlug, searchEnabled }: FamilyTreeProps) {
+export function FamilyTree({ persons, relationships, familySlug, searchEnabled, focusPersonId }: FamilyTreeProps) {
   const { nodes, familyUnits, petLinks, bounds } = useMemo(
-    () => computeTreeLayout(persons, relationships),
-    [persons, relationships]
+    () => computeTreeLayout(persons, relationships, { focusPersonId }),
+    [persons, relationships, focusPersonId]
   )
 
   const [selectedId, setSelectedId] = useState<string | null>(null)

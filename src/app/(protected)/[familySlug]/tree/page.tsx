@@ -186,7 +186,13 @@ export default async function TreePage({
         </div>
       </div>
       <div className="flex-1 min-h-0">
-        <FamilyTree persons={persons} relationships={relationships} familySlug={familySlug} searchEnabled={modules.moduleSearch} />
+        <FamilyTree
+          persons={persons}
+          relationships={relationships}
+          familySlug={familySlug}
+          searchEnabled={modules.moduleSearch}
+          focusPersonId={session?.personId ?? undefined}
+        />
       </div>
     </div>
   )

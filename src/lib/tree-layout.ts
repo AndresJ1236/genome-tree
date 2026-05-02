@@ -1,4 +1,4 @@
-import type { PersonData, RelationshipData, LayoutNode, FamilyUnit, PetLink, TreeLayout } from './tree-types'
+import type { PersonData, RelationshipData, LayoutNode, FamilyUnit, PetLink, TreeLayout, TreeLayoutOptions } from './tree-types'
 
 export const NODE_W = 72
 export const NODE_H = 72
@@ -9,7 +9,146 @@ const ORBIT_R    = 110
 // Preferred orbit angles (degrees, 0=right, clockwise in screen space)
 const ORBIT_ANGLES = [80, 35, 125, -35, 145, -80, 170]
 
-export function computeTreeLayout(persons: PersonData[], relationships: RelationshipData[] = []): TreeLayout {
+// ── Focus-centered lateral score ──────────────────────────────────────────
+// BFS upward from the focus person.
+// Going via fatherId → LEFT (negative scores)
+// Going via motherId → RIGHT (positive scores)
+// Paternal ancestors stay negative, maternal ancestors stay positive.
+function computeFocusLateralScores(
+  focusId: string,
+  personMap: Map<string, PersonData>,
+  personSet: Set<string>,
+  spousesOf: Map<string, string[]>,
+): Map<string, number> {
+  const scores = new Map<string, number>()
+  scores.set(focusId, 0)
+
+  type QueueItem = { id: string; score: number }
+  const queue: QueueItem[] = [{ id: focusId, score: 0 }]
+
+  while (queue.length > 0) {
+    const { id, score } = queue.shift()!
+    const person = personMap.get(id)
+    if (!person) continue
+
+    if (person.fatherId && personSet.has(person.fatherId) && !scores.has(person.fatherId)) {
+      // Father → LEFT. Already on left: full step. On right: half step.
+      const next = score <= 0 ? score - 1 : score - 0.5
+      scores.set(person.fatherId, next)
+      queue.push({ id: person.fatherId, score: next })
+    }
+
+    if (person.motherId && personSet.has(person.motherId) && !scores.has(person.motherId)) {
+      // Mother → RIGHT. Already on right: full step. On left: half step.
+      const next = score >= 0 ? score + 1 : score + 0.5
+      scores.set(person.motherId, next)
+      queue.push({ id: person.motherId, score: next })
+    }
+  }
+
+  // Propagate scores to spouses of scored people
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const [id, s] of [...scores.entries()]) {
+      for (const sid of (spousesOf.get(id) ?? [])) {
+        if (!scores.has(sid)) {
+          scores.set(sid, s)
+          changed = true
+        }
+      }
+    }
+  }
+
+  // Unscored people default to 0
+  for (const id of personSet) {
+    if (!scores.has(id)) scores.set(id, 0)
+  }
+
+  return scores
+}
+
+// ── Clan score (fallback when no focus) ───────────────────────────────────
+// Assigns each root cluster a fractional 0→1 position (ordered by birth year),
+// then propagates down through descendants.
+function computeClanScores(
+  persons: PersonData[],
+  parentsOf: Map<string, string[]>,
+  spousesOf: Map<string, string[]>,
+  personSet: Set<string>,
+  byGen: Map<number, string[]>,
+  maxGen: number,
+  ownYear: (id: string) => number,
+): Map<string, number> {
+  const score = new Map<string, number>()
+
+  const rootIds = persons.map(p => p.id).filter(id => (parentsOf.get(id)?.length ?? 0) === 0)
+  const rootInSet = new Set(rootIds)
+  const rootSeen  = new Set<string>()
+  const rootClusters: string[][] = []
+
+  for (const id of rootIds) {
+    if (rootSeen.has(id)) continue
+    const cluster: string[] = []
+    const queue = [id]
+    rootSeen.add(id)
+    while (queue.length > 0) {
+      const cid = queue.shift()!
+      cluster.push(cid)
+      for (const sid of spousesOf.get(cid) ?? []) {
+        if (rootInSet.has(sid) && !rootSeen.has(sid)) {
+          rootSeen.add(sid)
+          queue.push(sid)
+        }
+      }
+    }
+    rootClusters.push(cluster)
+  }
+
+  rootClusters.sort((a, b) => {
+    const minA = Math.min(...a.map(ownYear))
+    const minB = Math.min(...b.map(ownYear))
+    if (minA !== minB) return minA - minB
+    return a[0].localeCompare(b[0])
+  })
+
+  const n = rootClusters.length
+  rootClusters.forEach((cluster, idx) => {
+    const s = n > 1 ? idx / (n - 1) : 0.5
+    for (const id of cluster) score.set(id, s)
+  })
+
+  for (let g = 1; g <= maxGen; g++) {
+    const genIds = byGen.get(g) ?? []
+    for (const id of genIds) {
+      const ss = (parentsOf.get(id) ?? [])
+        .map(pid => score.get(pid))
+        .filter((s): s is number => s !== undefined)
+      if (ss.length > 0) score.set(id, ss.reduce((a, b) => a + b, 0) / ss.length)
+    }
+    for (const id of genIds) {
+      if (score.has(id)) continue
+      const ss = (spousesOf.get(id) ?? [])
+        .map(sid => score.get(sid))
+        .filter((s): s is number => s !== undefined)
+      score.set(id, ss.length > 0 ? ss.reduce((a, b) => a + b, 0) / ss.length : 0.5)
+    }
+  }
+
+  for (const p of persons) {
+    if (!score.has(p.id)) score.set(p.id, 0.5)
+  }
+
+  return score
+}
+
+// ── Main layout function ──────────────────────────────────────────────────
+
+export function computeTreeLayout(
+  persons: PersonData[],
+  relationships: RelationshipData[] = [],
+  options?: TreeLayoutOptions,
+): TreeLayout {
   if (persons.length === 0) {
     return { nodes: [], familyUnits: [], petLinks: [], bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 } }
   }
@@ -18,8 +157,6 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
   const pets    = persons.filter(p => p.nodeKind === 'PET')
   const nonPets = persons.filter(p => p.nodeKind !== 'PET')
 
-  // Run the rest of the algorithm on non-pets only, then re-join
-  const persons_orig = persons
   persons = nonPets
 
   const personSet = new Set(persons.map(p => p.id))
@@ -64,7 +201,6 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     }
   }
 
-  // Merge explicit relationships into inferredCouples
   const explicitCoupleData = new Map<string, { isEx: boolean }>()
   for (const rel of relationships) {
     if (!personSet.has(rel.person1Id) || !personSet.has(rel.person2Id)) continue
@@ -82,6 +218,7 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     if (!spousesOf.get(p1)!.includes(p2)) spousesOf.get(p1)!.push(p2)
     if (!spousesOf.get(p2)!.includes(p1)) spousesOf.get(p2)!.push(p1)
   }
+
   const minParentYear = (id: string): number => {
     const p = personMap.get(id)
     if (!p) return 9999
@@ -90,19 +227,18 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     return Math.min(fy, my)
   }
 
+  // ── Generation assignment ─────────────────────────────────────────────────
   const gen = new Map<string, number>()
   const visiting = new Set<string>()
 
   function deriveGeneration(id: string): number {
     if (gen.has(id)) return gen.get(id)!
     if (visiting.has(id)) return 0
-
     visiting.add(id)
     const parents = parentsOf.get(id) ?? []
-    const value =
-      parents.length === 0
-        ? 0
-        : Math.max(...parents.map(parentId => deriveGeneration(parentId) + 1))
+    const value = parents.length === 0
+      ? 0
+      : Math.max(...parents.map(pid => deriveGeneration(pid) + 1))
     visiting.delete(id)
     gen.set(id, value)
     return value
@@ -119,15 +255,10 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
 
   for (const { p1, p2 } of inferredCouples.values()) {
     if (!likelySameGenerationSpouses(p1, p2)) continue
-
     const g1 = gen.get(p1) ?? 0
     const g2 = gen.get(p2) ?? 0
-
-    if (!hasKnownParents(p1) && hasKnownParents(p2)) {
-      gen.set(p1, g2)
-    } else if (!hasKnownParents(p2) && hasKnownParents(p1)) {
-      gen.set(p2, g1)
-    }
+    if (!hasKnownParents(p1) && hasKnownParents(p2)) gen.set(p1, g2)
+    else if (!hasKnownParents(p2) && hasKnownParents(p1)) gen.set(p2, g1)
   }
 
   const byGen = new Map<number, string[]>()
@@ -136,90 +267,35 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     byGen.get(g)!.push(id)
   }
   const maxGen = Math.max(...gen.values())
-  const xPos = new Map<string, number>()
 
-  // ── Clan scores: assign each root cluster a fractional 0→1 position,
-  // then propagate down so siblings stay together and cross-family couples
-  // land at the boundary between their two ancestral clusters.
-  const clanScore = new Map<string, number>()
-  {
-    const rootIds = persons.map(p => p.id).filter(id => (parentsOf.get(id)?.length ?? 0) === 0)
-    const rootInSet = new Set(rootIds)
-    const rootSeen  = new Set<string>()
-    const rootClusters: string[][] = []
+  // ── Score computation ─────────────────────────────────────────────────────
+  // Use focus-lateral scores when a valid focus person is provided;
+  // otherwise fall back to clan scores (origin-based ordering).
+  const focusId = options?.focusPersonId && personSet.has(options.focusPersonId)
+    ? options.focusPersonId
+    : null
 
-    for (const id of rootIds) {
-      if (rootSeen.has(id)) continue
-      const cluster: string[] = []
-      const queue = [id]
-      rootSeen.add(id)
-      while (queue.length > 0) {
-        const cid = queue.shift()!
-        cluster.push(cid)
-        for (const sid of spousesOf.get(cid) ?? []) {
-          if (rootInSet.has(sid) && !rootSeen.has(sid)) {
-            rootSeen.add(sid)
-            queue.push(sid)
-          }
-        }
-      }
-      rootClusters.push(cluster)
-    }
+  const score: Map<string, number> = focusId
+    ? computeFocusLateralScores(focusId, personMap, personSet, spousesOf)
+    : computeClanScores(persons, parentsOf, spousesOf, personSet, byGen, maxGen, ownYear)
 
-    rootClusters.sort((a, b) => {
-      const minA = Math.min(...a.map(id => ownYear(id)))
-      const minB = Math.min(...b.map(id => ownYear(id)))
-      if (minA !== minB) return minA - minB
-      return a[0].localeCompare(b[0])
-    })
-
-    const n = rootClusters.length
-    rootClusters.forEach((cluster, idx) => {
-      const score = n > 1 ? idx / (n - 1) : 0.5
-      for (const id of cluster) clanScore.set(id, score)
-    })
-
-    for (let g = 1; g <= maxGen; g++) {
-      const genIds = byGen.get(g) ?? []
-      for (const id of genIds) {
-        const scores = (parentsOf.get(id) ?? [])
-          .map(pid => clanScore.get(pid))
-          .filter((s): s is number => s !== undefined)
-        if (scores.length > 0)
-          clanScore.set(id, scores.reduce((a, b) => a + b, 0) / scores.length)
-      }
-      for (const id of genIds) {
-        if (clanScore.has(id)) continue
-        const scores = (spousesOf.get(id) ?? [])
-          .map(sid => clanScore.get(sid))
-          .filter((s): s is number => s !== undefined)
-        clanScore.set(id, scores.length > 0
-          ? scores.reduce((a, b) => a + b, 0) / scores.length
-          : 0.5)
-      }
-    }
-
-    for (const p of persons) {
-      if (!clanScore.has(p.id)) clanScore.set(p.id, 0.5)
-    }
-  }
-
-  const unitClanScore = (members: string[]) => {
-    const scores = members.map(id => clanScore.get(id) ?? 0.5)
-    return scores.reduce((a, b) => a + b, 0) / scores.length
+  // ── X-position layout ─────────────────────────────────────────────────────
+  const unitScore = (members: string[]) => {
+    const ss = members.map(id => score.get(id) ?? 0)
+    return ss.reduce((a, b) => a + b, 0) / ss.length
   }
 
   type GenUnit = { members: string[]; sortKey: number }
 
   function buildGenerationUnits(ids: string[]): GenUnit[] {
     const inGen = new Set(ids)
-    const seen = new Set<string>()
+    const seen  = new Set<string>()
     const units: GenUnit[] = []
 
     const sortedIds = [...ids].sort((a, b) => {
-      const clanA = clanScore.get(a) ?? 0.5
-      const clanB = clanScore.get(b) ?? 0.5
-      if (clanA !== clanB) return clanA - clanB
+      const sa = score.get(a) ?? 0
+      const sb = score.get(b) ?? 0
+      if (sa !== sb) return sa - sb
       const pyA = minParentYear(a)
       const pyB = minParentYear(b)
       if (pyA !== pyB) return pyA - pyB
@@ -235,7 +311,6 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
       while (queue.length > 0) {
         const current = queue.shift()!
         component.push(current)
-
         for (const sid of spousesOf.get(current) ?? []) {
           if (!inGen.has(sid) || seen.has(sid)) continue
           seen.add(sid)
@@ -244,14 +319,14 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
       }
 
       component.sort((a, b) => {
-        const clanA = clanScore.get(a) ?? 0.5
-        const clanB = clanScore.get(b) ?? 0.5
-        if (clanA !== clanB) return clanA - clanB
+        const sa = score.get(a) ?? 0
+        const sb = score.get(b) ?? 0
+        if (sa !== sb) return sa - sb
         return ownYear(a) - ownYear(b)
       })
       units.push({
         members: component,
-        sortKey: Math.min(...component.map(member => Math.min(minParentYear(member), ownYear(member)))),
+        sortKey: Math.min(...component.map(m => Math.min(minParentYear(m), ownYear(m)))),
       })
     }
 
@@ -261,12 +336,13 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
   function memberOffsets(members: string[]): number[] {
     if (members.length === 1) return [0]
     if (members.length === 2) return [-COUPLE_GAP / 2, COUPLE_GAP / 2]
-
     const offsets: number[] = []
     const start = -((members.length - 1) * H_GAP) / 2
     for (let i = 0; i < members.length; i++) offsets.push(start + i * H_GAP)
     return offsets
   }
+
+  const xPos = new Map<string, number>()
 
   function desiredCenterForUnit(members: string[]): number | null {
     const childXes: number[] = []
@@ -275,26 +351,23 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
         if (xPos.has(cid)) childXes.push(xPos.get(cid)!)
       }
     }
-
     if (childXes.length > 0) {
       return (Math.min(...childXes) + Math.max(...childXes)) / 2
     }
     return null
   }
 
-  const orderedByGen = new Map<number, string[]>()
-
   for (let g = maxGen; g >= 0; g--) {
-    const ids = byGen.get(g) ?? []
+    const ids   = byGen.get(g) ?? []
     const units = buildGenerationUnits(ids)
+
     const fallbackCenters = new Map<GenUnit, number>()
     const orderedByFallback = [...units].sort((a, b) => {
-      const clanA = unitClanScore(a.members)
-      const clanB = unitClanScore(b.members)
-      if (Math.abs(clanA - clanB) > 1e-9) return clanA - clanB
+      const sa = unitScore(a.members)
+      const sb = unitScore(b.members)
+      if (Math.abs(sa - sb) > 1e-9) return sa - sb
       return a.sortKey - b.sortKey
     })
-
     orderedByFallback.forEach((unit, index) => {
       fallbackCenters.set(unit, index * H_GAP)
     })
@@ -307,32 +380,27 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     })
 
     let previousRightmost: number | null = null
-    const ordered: string[] = []
 
     for (const unit of units) {
-      const offsets = memberOffsets(unit.members)
+      const offsets       = memberOffsets(unit.members)
       const desiredCenter = desiredCenterForUnit(unit.members) ?? fallbackCenters.get(unit) ?? 0
-      const desiredLeftmost = desiredCenter + offsets[0]
+      const desiredLeft   = desiredCenter + offsets[0]
 
       let center = desiredCenter
       if (previousRightmost !== null) {
-        const minLeftmost = previousRightmost + H_GAP
-        if (desiredLeftmost < minLeftmost) {
-          center += minLeftmost - desiredLeftmost
-        }
+        const minLeft = previousRightmost + H_GAP
+        if (desiredLeft < minLeft) center += minLeft - desiredLeft
       }
 
       for (let i = 0; i < unit.members.length; i++) {
         xPos.set(unit.members[i], center + offsets[i])
-        ordered.push(unit.members[i])
       }
 
       previousRightmost = center + offsets[offsets.length - 1]
     }
-
-    orderedByGen.set(g, ordered)
   }
 
+  // ── Build nodes ───────────────────────────────────────────────────────────
   const nodes: LayoutNode[] = persons.map(p => ({
     ...p,
     x:          xPos.get(p.id) ?? 0,
@@ -340,13 +408,19 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     generation: gen.get(p.id) ?? 0,
   }))
 
-  const allX    = nodes.map(n => n.x)
-  const centerX = (Math.min(...allX) + Math.max(...allX)) / 2
-  for (const n of nodes) n.x -= centerX
+  // Center the canvas: on focus person if available, otherwise on midpoint of all nodes
+  if (focusId && xPos.has(focusId)) {
+    const focusX = xPos.get(focusId)!
+    for (const n of nodes) n.x -= focusX
+  } else {
+    const allX    = nodes.map(n => n.x)
+    const centerX = (Math.min(...allX) + Math.max(...allX)) / 2
+    for (const n of nodes) n.x -= centerX
+  }
 
-  // ── Place pets orbiting their owner ─────────────────────────────────────────
-  const nodeById = new Map(nodes.map(n => [n.id, n]))
-  const petsByOwner = new Map<string, string[]>()
+  // ── Place pets orbiting their owner ──────────────────────────────────────
+  const nodeById     = new Map(nodes.map(n => [n.id, n]))
+  const petsByOwner  = new Map<string, string[]>()
   for (const pet of pets) {
     const ownerId = pet.fatherId ?? pet.motherId
     if (!ownerId || !nodeById.has(ownerId)) continue
@@ -354,15 +428,14 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     petsByOwner.get(ownerId)!.push(pet.id)
   }
 
-  const petLinks: PetLink[] = []
+  const petLinks:    PetLink[] = []
   const petXOverride = new Map<string, number>()
   const petYOverride = new Map<string, number>()
 
   for (const [ownerId, petIds] of petsByOwner.entries()) {
-    const owner = nodeById.get(ownerId)!
+    const owner   = nodeById.get(ownerId)!
     const ownerCx = owner.x + NODE_W / 2
     const ownerCy = owner.y + NODE_H / 2
-
     for (let i = 0; i < petIds.length; i++) {
       const angleDeg = ORBIT_ANGLES[i % ORBIT_ANGLES.length]
       const angleRad = (angleDeg * Math.PI) / 180
@@ -371,7 +444,6 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     }
   }
 
-  // Pets without a known owner: stack at top-left corner of canvas
   const leftmostX = nodes.length > 0 ? Math.min(...nodes.map(n => n.x)) : 0
   let orphanPetIndex = 0
   for (const pet of pets) {
@@ -385,9 +457,7 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
 
   for (const pet of pets) {
     const ownerId = pet.fatherId ?? pet.motherId
-    if (ownerId && personSet.has(ownerId)) {
-      petLinks.push({ petId: pet.id, ownerId })
-    }
+    if (ownerId && personSet.has(ownerId)) petLinks.push({ petId: pet.id, ownerId })
     nodes.push({
       ...pet,
       x:          petXOverride.get(pet.id) ?? 0,
@@ -396,9 +466,7 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     })
   }
 
-  // Restore full person list reference for any future use
-  void persons_orig
-
+  // ── Family units (for edge drawing) ──────────────────────────────────────
   const familyUnits: FamilyUnit[] = []
   const processedUnits = new Set<string>()
 
@@ -410,12 +478,7 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     for (const p of persons) {
       const fid = p.fatherId && personSet.has(p.fatherId) ? p.fatherId : null
       const mid = p.motherId && personSet.has(p.motherId) ? p.motherId : null
-      if (
-        (fid === p1 && mid === p2) ||
-        (fid === p2 && mid === p1)
-      ) {
-        kids.add(p.id)
-      }
+      if ((fid === p1 && mid === p2) || (fid === p2 && mid === p1)) kids.add(p.id)
     }
 
     familyUnits.push({
@@ -433,19 +496,13 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     if (fid && !mid) {
       const key = 'solo-' + fid
       const existing = familyUnits.find(u => u.id === key)
-      if (existing) {
-        existing.childIds.push(p.id)
-      } else {
-        familyUnits.push({ id: key, parent1Id: fid, parent2Id: null, childIds: [p.id] })
-      }
+      if (existing) existing.childIds.push(p.id)
+      else familyUnits.push({ id: key, parent1Id: fid, parent2Id: null, childIds: [p.id] })
     } else if (!fid && mid) {
       const key = 'solo-' + mid
       const existing = familyUnits.find(u => u.id === key)
-      if (existing) {
-        existing.childIds.push(p.id)
-      } else {
-        familyUnits.push({ id: key, parent1Id: mid, parent2Id: null, childIds: [p.id] })
-      }
+      if (existing) existing.childIds.push(p.id)
+      else familyUnits.push({ id: key, parent1Id: mid, parent2Id: null, childIds: [p.id] })
     }
   }
 

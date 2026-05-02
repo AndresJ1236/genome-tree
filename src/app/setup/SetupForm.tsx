@@ -15,17 +15,44 @@ const input: React.CSSProperties = {
   fontFamily: 'inherit',
 }
 
+/** Remove diacritics (for slug generation). */
+function deaccent(s: string) {
+  // eslint-disable-next-line no-control-regex
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 function slugify(s: string) {
-  return s.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+  return deaccent(s).toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+}
+
+/**
+ * Derive the default family name from the administrator's full name.
+ * Spanish names end with two last names, so we take the last 2 words.
+ * "Persona Owner" → "Familia Apellido1 Apellido2"
+ * "Juan García"           → "Familia García"
+ */
+function deriveFamilyName(adminName: string): string {
+  const words = adminName.trim().split(/\s+/).filter(Boolean)
+  if (words.length >= 3) return `Familia ${words[words.length - 2]} ${words[words.length - 1]}`
+  if (words.length === 2) return `Familia ${words[1]}`
+  if (words.length === 1) return `Familia ${words[0]}`
+  return ''
 }
 
 export function SetupForm() {
   const [state, action, pending] = useActionState(setupFamily, null)
 
-  function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const slugInput = e.currentTarget.form?.elements.namedItem('familySlug') as HTMLInputElement | null
+  function handleAdminNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const form = e.currentTarget.form
+    const familyNameInput = form?.elements.namedItem('familyName') as HTMLInputElement | null
+    const slugInput       = form?.elements.namedItem('familySlug') as HTMLInputElement | null
+    const name = e.target.value
+
+    if (familyNameInput && !familyNameInput.dataset.edited) {
+      familyNameInput.value = deriveFamilyName(name)
+    }
     if (slugInput && !slugInput.dataset.edited) {
-      slugInput.value = slugify(e.target.value)
+      slugInput.value = slugify(deriveFamilyName(name))
     }
   }
 
@@ -37,12 +64,15 @@ export function SetupForm() {
         </p>
         <div style={field}>
           <label style={label}>Nombre de la familia</label>
-          <input name="familyName" style={input} placeholder="Ej: Familia Martínez" required onChange={handleNameChange} />
+          <input
+            name="familyName" style={input} placeholder="Ej: Familia Apellido1 Apellido2" required
+            onInput={e => { (e.currentTarget as HTMLInputElement).dataset.edited = '1' }}
+          />
         </div>
         <div style={field}>
           <label style={label}>Slug (URL)</label>
           <input
-            name="familySlug" style={input} placeholder="familia-martinez" required
+            name="familySlug" style={input} placeholder="familia-apellido1-apellido2" required
             pattern="[a-z0-9-]+"
             onInput={e => { (e.currentTarget as HTMLInputElement).dataset.edited = '1' }}
           />
@@ -55,8 +85,12 @@ export function SetupForm() {
           Administrador
         </p>
         <div style={field}>
-          <label style={label}>Nombre</label>
-          <input name="adminName" style={input} placeholder="Tu nombre completo" required />
+          <label style={label}>Nombre completo</label>
+          <input
+            name="adminName" style={input} placeholder="Ej: Persona Owner" required
+            onChange={handleAdminNameChange}
+          />
+          <span style={{ fontSize: 11, color: '#9B9B9B' }}>Nombre y apellidos — se usarán para generar el nombre de la familia.</span>
         </div>
         <div style={field}>
           <label style={label}>Usuario</label>
