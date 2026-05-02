@@ -138,6 +138,77 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
   const maxGen = Math.max(...gen.values())
   const xPos = new Map<string, number>()
 
+  // ── Clan scores: assign each root cluster a fractional 0→1 position,
+  // then propagate down so siblings stay together and cross-family couples
+  // land at the boundary between their two ancestral clusters.
+  const clanScore = new Map<string, number>()
+  {
+    const rootIds = persons.map(p => p.id).filter(id => (parentsOf.get(id)?.length ?? 0) === 0)
+    const rootInSet = new Set(rootIds)
+    const rootSeen  = new Set<string>()
+    const rootClusters: string[][] = []
+
+    for (const id of rootIds) {
+      if (rootSeen.has(id)) continue
+      const cluster: string[] = []
+      const queue = [id]
+      rootSeen.add(id)
+      while (queue.length > 0) {
+        const cid = queue.shift()!
+        cluster.push(cid)
+        for (const sid of spousesOf.get(cid) ?? []) {
+          if (rootInSet.has(sid) && !rootSeen.has(sid)) {
+            rootSeen.add(sid)
+            queue.push(sid)
+          }
+        }
+      }
+      rootClusters.push(cluster)
+    }
+
+    rootClusters.sort((a, b) => {
+      const minA = Math.min(...a.map(id => ownYear(id)))
+      const minB = Math.min(...b.map(id => ownYear(id)))
+      if (minA !== minB) return minA - minB
+      return a[0].localeCompare(b[0])
+    })
+
+    const n = rootClusters.length
+    rootClusters.forEach((cluster, idx) => {
+      const score = n > 1 ? idx / (n - 1) : 0.5
+      for (const id of cluster) clanScore.set(id, score)
+    })
+
+    for (let g = 1; g <= maxGen; g++) {
+      const genIds = byGen.get(g) ?? []
+      for (const id of genIds) {
+        const scores = (parentsOf.get(id) ?? [])
+          .map(pid => clanScore.get(pid))
+          .filter((s): s is number => s !== undefined)
+        if (scores.length > 0)
+          clanScore.set(id, scores.reduce((a, b) => a + b, 0) / scores.length)
+      }
+      for (const id of genIds) {
+        if (clanScore.has(id)) continue
+        const scores = (spousesOf.get(id) ?? [])
+          .map(sid => clanScore.get(sid))
+          .filter((s): s is number => s !== undefined)
+        clanScore.set(id, scores.length > 0
+          ? scores.reduce((a, b) => a + b, 0) / scores.length
+          : 0.5)
+      }
+    }
+
+    for (const p of persons) {
+      if (!clanScore.has(p.id)) clanScore.set(p.id, 0.5)
+    }
+  }
+
+  const unitClanScore = (members: string[]) => {
+    const scores = members.map(id => clanScore.get(id) ?? 0.5)
+    return scores.reduce((a, b) => a + b, 0) / scores.length
+  }
+
   type GenUnit = { members: string[]; sortKey: number }
 
   function buildGenerationUnits(ids: string[]): GenUnit[] {
@@ -146,6 +217,9 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     const units: GenUnit[] = []
 
     const sortedIds = [...ids].sort((a, b) => {
+      const clanA = clanScore.get(a) ?? 0.5
+      const clanB = clanScore.get(b) ?? 0.5
+      if (clanA !== clanB) return clanA - clanB
       const pyA = minParentYear(a)
       const pyB = minParentYear(b)
       if (pyA !== pyB) return pyA - pyB
@@ -169,7 +243,12 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
         }
       }
 
-      component.sort((a, b) => ownYear(a) - ownYear(b))
+      component.sort((a, b) => {
+        const clanA = clanScore.get(a) ?? 0.5
+        const clanB = clanScore.get(b) ?? 0.5
+        if (clanA !== clanB) return clanA - clanB
+        return ownYear(a) - ownYear(b)
+      })
       units.push({
         members: component,
         sortKey: Math.min(...component.map(member => Math.min(minParentYear(member), ownYear(member)))),
@@ -209,7 +288,12 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
     const ids = byGen.get(g) ?? []
     const units = buildGenerationUnits(ids)
     const fallbackCenters = new Map<GenUnit, number>()
-    const orderedByFallback = [...units].sort((a, b) => a.sortKey - b.sortKey)
+    const orderedByFallback = [...units].sort((a, b) => {
+      const clanA = unitClanScore(a.members)
+      const clanB = unitClanScore(b.members)
+      if (Math.abs(clanA - clanB) > 1e-9) return clanA - clanB
+      return a.sortKey - b.sortKey
+    })
 
     orderedByFallback.forEach((unit, index) => {
       fallbackCenters.set(unit, index * H_GAP)
