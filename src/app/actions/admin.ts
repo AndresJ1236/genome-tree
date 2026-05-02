@@ -1089,7 +1089,23 @@ export async function bulkCreatePeopleJson(input: {
       return val.trim() || null
     }
 
-    type CreateData = { id: string; firstName: string; lastName: string; middleName: string | null; birthSurname1: string | null; birthSurname2: string | null }
+    const VALID_GENDERS   = new Set(['MALE', 'FEMALE', 'OTHER', 'UNKNOWN'])
+    const VALID_NODEKINDS = new Set(['PERSON', 'PET'])
+
+    const toParseDate = (val: unknown): Date | null => {
+      if (!val || typeof val !== 'string' || !val.trim()) return null
+      const d = new Date(val.trim())
+      return isNaN(d.getTime()) ? null : d
+    }
+
+    type CreateData = {
+      id: string
+      firstName: string; lastName: string; middleName: string | null
+      birthSurname1: string | null; birthSurname2: string | null
+      gender: 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN'
+      nodeKind: 'PERSON' | 'PET'
+      birthDate: Date | null; deathDate: Date | null; birthPlace: string | null
+    }
     type RelUpdate = { id: string; fatherId: string | null; motherId: string | null }
 
     const toCreate: CreateData[] = []
@@ -1101,13 +1117,20 @@ export async function bulkCreatePeopleJson(input: {
       const isNew = !existingIds.has(jsonId)
 
       if (isNew) {
+        const rawGender   = typeof p.gender   === 'string' ? p.gender.trim().toUpperCase()   : ''
+        const rawNodeKind = typeof p.nodeKind === 'string' ? p.nodeKind.trim().toUpperCase() : ''
         toCreate.push({
-          id: realId,
-          firstName: typeof p.firstName === 'string' ? p.firstName.trim() : '',
-          lastName: typeof p.lastName === 'string' ? p.lastName.trim() : '',
-          middleName: trim(p.middleName),
+          id:           realId,
+          firstName:    typeof p.firstName === 'string' ? p.firstName.trim() : '',
+          lastName:     typeof p.lastName  === 'string' ? p.lastName.trim()  : '',
+          middleName:   trim(p.middleName),
           birthSurname1: trim(p.birthSurname1),
           birthSurname2: trim(p.birthSurname2),
+          gender:       (VALID_GENDERS.has(rawGender)     ? rawGender   : 'UNKNOWN') as 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN',
+          nodeKind:     (VALID_NODEKINDS.has(rawNodeKind) ? rawNodeKind : 'PERSON')  as 'PERSON' | 'PET',
+          birthDate:    toParseDate(p.birthDate),
+          deathDate:    toParseDate(p.deathDate),
+          birthPlace:   trim(p.birthPlace),
         })
       }
       allRelUpdates.push({ id: realId, fatherId: resolveRef(p.fatherId), motherId: resolveRef(p.motherId) })
@@ -1117,13 +1140,18 @@ export async function bulkCreatePeopleJson(input: {
       ...toCreate.map(person =>
         prisma.person.create({
           data: {
-            id: person.id,
-            familyId: session.familyId,
-            firstName: person.firstName,
-            lastName: person.lastName,
-            middleName: person.middleName,
+            id:           person.id,
+            familyId:     session.familyId,
+            firstName:    person.firstName,
+            lastName:     person.lastName,
+            middleName:   person.middleName,
             birthSurname1: person.birthSurname1,
             birthSurname2: person.birthSurname2,
+            gender:       person.gender,
+            nodeKind:     person.nodeKind,
+            birthDate:    person.birthDate,
+            deathDate:    person.deathDate,
+            birthPlace:   person.birthPlace,
           },
         })
       ),
