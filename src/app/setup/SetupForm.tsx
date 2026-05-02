@@ -59,8 +59,8 @@ export function SetupForm() {
           <input name="adminName" style={input} placeholder="Tu nombre completo" required />
         </div>
         <div style={field}>
-          <label style={label}>Correo electrónico</label>
-          <input name="adminEmail" type="email" style={input} placeholder="admin@ejemplo.com" required />
+          <label style={label}>Usuario</label>
+          <input name="adminUsername" type="text" style={input} placeholder="admin" required autoComplete="username" />
         </div>
         <div style={field}>
           <label style={label}>Contraseña</label>

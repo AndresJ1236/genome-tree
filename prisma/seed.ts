@@ -56,10 +56,10 @@ async function main() {
   // ── Usuario admin ──────────────────────────────────────────────────────────
   const hash      = await bcrypt.hash('admin123', 12)
   const adminUser = await prisma.user.upsert({
-    where:  { email: 'admin@demo.com' },
+    where:  { username: 'admin@demo.com' },
     update: {},
     create: {
-      email:        'admin@demo.com',
+      username:     'admin@demo.com',
       passwordHash: hash,
       name:         'Administrador',
       familyId:     fid,
@@ -70,7 +70,7 @@ async function main() {
   })
   const luisHash = await bcrypt.hash('luis123', 12)
   const luisUser = await prisma.user.upsert({
-    where: { email: 'luis@demo.com' },
+    where: { username: 'luis@demo.com' },
     update: {
       name: 'Luis Martinez',
       familyId: fid,
@@ -79,7 +79,7 @@ async function main() {
       scope: 'FAMILY',
     },
     create: {
-      email: 'luis@demo.com',
+      username: 'luis@demo.com',
       passwordHash: luisHash,
       name: 'Luis Martinez',
       familyId: fid,

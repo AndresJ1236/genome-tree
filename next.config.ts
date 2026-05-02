@@ -22,6 +22,19 @@ const nextConfig: NextConfig = {
   output: process.env.BUILD_STANDALONE === '1' ? 'standalone' : undefined,
   allowedDevOrigins: ['127.0.0.1'],
   images: { remotePatterns },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '15mb',
+    },
+  },
+  // Force-include pg driver adapter deps that standalone tracing misses
+  outputFileTracingIncludes: {
+    '/**': [
+      './node_modules/postgres-array/**',
+      './node_modules/pgpass/**',
+      './node_modules/pg-cloudflare/**',
+    ],
+  },
 }
 
 export default nextConfig

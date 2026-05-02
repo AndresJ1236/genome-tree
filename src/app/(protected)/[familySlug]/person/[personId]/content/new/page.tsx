@@ -59,7 +59,7 @@ export default async function NewContentPage({
   const people = await prisma.person.findMany({
     where: { familyId: session.familyId },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-    select: { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true },
+    select: { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, gender: true },
   })
 
   return (
@@ -74,6 +74,7 @@ export default async function NewContentPage({
         lastName: person.lastName,
         birthDate: person.birthDate ? person.birthDate.toISOString() : null,
         deathDate: person.deathDate ? person.deathDate.toISOString() : null,
+        gender: person.gender,
       }))}
     />
   )

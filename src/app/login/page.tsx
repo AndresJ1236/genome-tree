@@ -9,7 +9,7 @@ function getErrorMessage(error?: string) {
     case 'missing':
       return 'Completa todos los campos'
     case 'invalid':
-      return 'Correo o contrasena incorrectos'
+      return 'Usuario o contrasena incorrectos'
     default:
       return null
   }
@@ -57,17 +57,17 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="email"
+                htmlFor="username"
                 className="text-xs tracking-widest uppercase"
                 style={{ color: '#6B6B6B' }}
               >
-                Correo
+                Usuario
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
                 required
                 className="w-full bg-transparent py-2 text-sm outline-none transition-colors"
                 style={{

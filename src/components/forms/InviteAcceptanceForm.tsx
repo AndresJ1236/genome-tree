@@ -14,14 +14,14 @@ export function InviteAcceptanceForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   function handleSubmit() {
     setError(null)
     startTransition(async () => {
-      const result = await acceptInvite({ token, name, email, password })
+      const result = await acceptInvite({ token, name, username, password })
       if (!result.ok) {
         setError(result.error)
         return
@@ -42,8 +42,8 @@ export function InviteAcceptanceForm({
         <Field label="Nombre completo">
           <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
         </Field>
-        <Field label="Correo">
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
+        <Field label="Usuario">
+          <input type="text" value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} autoComplete="username" />
         </Field>
         <Field label="Contrasena">
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} />

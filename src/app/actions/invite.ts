@@ -10,17 +10,17 @@ import type { ActionResult } from '@/lib/content-types'
 export async function acceptInvite(input: {
   token: string
   name: string
-  email: string
+  username: string
   password: string
 }): Promise<ActionResult> {
   const payload = await verifyInviteToken(input.token)
   if (!payload) return { ok: false, error: 'La invitacion no es valida o ya expiro.' }
 
   const name = input.name.trim()
-  const email = input.email.trim().toLowerCase()
+  const username = input.username.trim().toLowerCase()
   const password = input.password
 
-  if (!name || !email || password.length < 6) {
+  if (!name || !username || password.length < 6) {
     return { ok: false, error: 'Completa todos los campos y usa una contrasena de al menos 6 caracteres.' }
   }
 
@@ -29,15 +29,15 @@ export async function acceptInvite(input: {
     return { ok: false, error: 'La familia asociada a la invitacion no existe.' }
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } })
+  const existing = await prisma.user.findUnique({ where: { username } })
   if (existing) {
-    return { ok: false, error: 'Ya existe una cuenta con ese correo.' }
+    return { ok: false, error: 'Ya existe una cuenta con ese usuario.' }
   }
 
   const passwordHash = await bcrypt.hash(password, 12)
   const user = await prisma.user.create({
     data: {
-      email,
+      username,
       name,
       passwordHash,
       familyId: payload.familyId,
@@ -54,7 +54,7 @@ export async function acceptInvite(input: {
     entityType: 'User',
     entityId: user.id,
     newValue: {
-      email: user.email,
+      username: user.username,
       role: user.role,
       scope: user.scope,
       branchRootId: user.branchRootId,
