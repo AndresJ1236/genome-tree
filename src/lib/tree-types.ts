@@ -35,8 +35,14 @@ export interface FamilyUnit {
   isExCouple?: boolean
 }
 
+export interface PetLink {
+  petId:   string
+  ownerId: string
+}
+
 export interface TreeLayout {
   nodes:       LayoutNode[]
   familyUnits: FamilyUnit[]
+  petLinks:    PetLink[]
   bounds:      { minX: number; minY: number; maxX: number; maxY: number }
 }
