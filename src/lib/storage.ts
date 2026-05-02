@@ -19,12 +19,15 @@ import path from 'path'
 
 function getConfig() {
   return {
-    endpoint: process.env.MINIO_ENDPOINT ?? '',
-    port: parseInt(process.env.MINIO_PORT ?? '9000', 10),
-    user: process.env.MINIO_ROOT_USER ?? '',
-    password: process.env.MINIO_ROOT_PASSWORD ?? '',
-    bucket: process.env.MINIO_BUCKET ?? 'genome-tree',
-    useMinIO: !!process.env.MINIO_ENDPOINT,
+    endpoint:  process.env.MINIO_ENDPOINT ?? '',
+    port:      parseInt(process.env.MINIO_PORT ?? '9000', 10),
+    user:      process.env.MINIO_ROOT_USER ?? '',
+    password:  process.env.MINIO_ROOT_PASSWORD ?? '',
+    bucket:    process.env.MINIO_BUCKET ?? 'genome-tree',
+    useMinIO:  !!process.env.MINIO_ENDPOINT,
+    // Public base URL for browser access (e.g. https://arbol.adastranium.com/media)
+    // Falls back to direct MinIO URL if not set
+    publicUrl: process.env.MINIO_PUBLIC_URL?.replace(/\/$/, '') ?? '',
   }
 }
 
@@ -92,10 +95,8 @@ export async function uploadFile(
           ContentType: mimeType,
         })
       )
-      return {
-        url: `http://${cfg.endpoint}:${cfg.port}/${cfg.bucket}/${key}`,
-        key,
-      }
+      const publicBase = cfg.publicUrl || `http://${cfg.endpoint}:${cfg.port}/${cfg.bucket}`
+      return { url: `${publicBase}/${key}`, key }
     } catch (error: unknown) {
       if (isProduction()) {
         throw new Error(
@@ -140,7 +141,8 @@ export async function deleteFile(key: string): Promise<void> {
 export function getPublicUrl(key: string): string {
   const cfg = getConfig()
   if (cfg.useMinIO) {
-    return `http://${cfg.endpoint}:${cfg.port}/${cfg.bucket}/${key}`
+    const publicBase = cfg.publicUrl || `http://${cfg.endpoint}:${cfg.port}/${cfg.bucket}`
+    return `${publicBase}/${key}`
   }
   return `/uploads/${key}`
 }

@@ -3,8 +3,8 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: genome_tree
-      POSTGRES_USER: genome_tree
+      POSTGRES_DB:       genome_tree
+      POSTGRES_USER:     genome_tree
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -21,12 +21,12 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
     ports:
-      - "9001:9001"
+      - "127.0.0.1:9001:9001"   # MinIO console — solo accesible desde localhost
     networks:
       - genome_net
     healthcheck:
@@ -36,17 +36,21 @@ services:
       retries: 3
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        APP_HOSTNAME: ${APP_HOSTNAME}
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://genome_tree:${POSTGRES_PASSWORD}@db:5432/genome_tree
-      SESSION_SECRET: ${SESSION_SECRET}
-      MINIO_ENDPOINT: minio
-      MINIO_PORT: "9000"
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      DATABASE_URL:      postgresql://genome_tree:${POSTGRES_PASSWORD}@db:5432/genome_tree
+      SESSION_SECRET:    ${SESSION_SECRET}
+      MINIO_ENDPOINT:    minio
+      MINIO_PORT:        "9000"
+      MINIO_ROOT_USER:   ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_BUCKET: genome-tree
-      NODE_ENV: production
+      MINIO_BUCKET:      genome-tree
+      MINIO_PUBLIC_URL:  https://${APP_HOSTNAME}/media
+      NODE_ENV:          production
     depends_on:
       db:
         condition: service_healthy
@@ -57,13 +61,23 @@ services:
     image: nginx:alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "127.0.0.1:8080:80"     # solo accesible desde localhost; cloudflared apunta aquí
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
       - app
+      - minio
+    networks:
+      - genome_net
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - nginx
     networks:
       - genome_net
 
