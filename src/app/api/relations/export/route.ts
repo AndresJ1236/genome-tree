@@ -22,6 +22,9 @@ export async function GET() {
       birthSurname2: true,
       fatherId: true,
       motherId: true,
+      unitAffiliationId: true,
+      claimedRelation: true,
+      claimedRelationOfId: true,
     },
   })
 

@@ -15,6 +15,7 @@ import {
 import { assertModuleEnabled, getFamilyModules, getModuleForContentType } from '@/lib/family-config'
 import { revalidatePath } from 'next/cache'
 import type {
+  ClaimedRelation,
   PersonProfile,
   PersonFull,
   StoryItem,
@@ -151,9 +152,10 @@ export async function getPersonProfile(
     prisma.person.findUnique({
       where: { id: personId },
       include: {
-        // Padre y madre desde fatherId/motherId
-        father: { select: personSelect },
-        mother: { select: personSelect },
+        father:           { select: personSelect },
+        mother:           { select: personSelect },
+        unitAffiliation:  { select: { label: true } },
+        claimedRelationOf: { select: personSelect },
         media:  { where: { featured: true }, orderBy: { order: 'asc' }, take: LIMITS.FEATURED_MAX },
         _count: { select: { media: true } },
       },
@@ -226,8 +228,11 @@ export async function getPersonProfile(
     modules,
     parents,
     spouses:       partners,
-    children:      children.map(toPersonBasic),
-    featuredMedia: canViewMedia && Array.isArray(person.media) ? person.media.map(toMediaItem) : [],
+    children:           children.map(toPersonBasic),
+    featuredMedia:      canViewMedia && Array.isArray(person.media) ? person.media.map(toMediaItem) : [],
+    claimedRelation:    person.claimedRelation as ClaimedRelation | null,
+    claimedRelationOf:  person.claimedRelationOf ? toPersonBasic(person.claimedRelationOf) : null,
+    unitAffiliationLabel: person.unitAffiliation?.label ?? null,
     counts: {
       stories:        countMap['STORY']     ?? 0,
       recipes:        countMap['RECIPE']    ?? 0,

@@ -15,6 +15,9 @@ const people = [
     birthSurname2: 'Rojas',
     fatherId: null,
     motherId: null,
+    unitAffiliationId: null,
+    claimedRelation: null,
+    claimedRelationOfId: null,
   },
   {
     id: 'child',
@@ -25,6 +28,9 @@ const people = [
     birthSurname2: 'Lopez',
     fatherId: 'parent',
     motherId: 'hidden-mother',
+    unitAffiliationId: null,
+    claimedRelation: null,
+    claimedRelationOfId: null,
   },
 ]
 
@@ -56,6 +62,9 @@ const badPlan = planRelationsImport({
       birthSurname2: 'Lopez',
       fatherId: 'missing-parent',
       motherId: 'child',
+      unitAffiliationId: null,
+      claimedRelation: null,
+      claimedRelationOfId: null,
     },
     {
       id: 'child',
@@ -66,6 +75,9 @@ const badPlan = planRelationsImport({
       birthSurname2: 'Lopez',
       fatherId: null,
       motherId: null,
+      unitAffiliationId: null,
+      claimedRelation: null,
+      claimedRelationOfId: null,
     },
   ],
 }, new Set(['child']))

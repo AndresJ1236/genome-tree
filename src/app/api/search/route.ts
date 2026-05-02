@@ -21,9 +21,11 @@ function buildPersonSearchWhere(terms: string[], visibleIds: Set<string> | null,
     ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
     AND: terms.map(term => ({
       OR: [
-        { firstName: { contains: term, mode: 'insensitive' as const } },
+        { firstName:  { contains: term, mode: 'insensitive' as const } },
         { middleName: { contains: term, mode: 'insensitive' as const } },
-        { lastName: { contains: term, mode: 'insensitive' as const } },
+        { lastName:   { contains: term, mode: 'insensitive' as const } },
+        { birthPlace: { contains: term, mode: 'insensitive' as const } },
+        { bio:        { contains: term, mode: 'insensitive' as const } },
       ],
     })),
   }
