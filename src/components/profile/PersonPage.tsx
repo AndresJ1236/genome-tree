@@ -38,7 +38,7 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
   const birthYear = person.birthDate ? new Date(person.birthDate).getFullYear() : null
   const deathYear = person.deathDate ? new Date(person.deathDate).getFullYear() : null
   const fullName  = getPersonDisplayName(person)
-  const initials  = (person.firstName[0] ?? '') + (person.lastName[0] ?? '')
+  const initials  = ((person.firstName[0] ?? '') + (person.lastName[0] ?? '')).toUpperCase() || '?'
 
   const isPet = person.nodeKind === 'PET'
 
@@ -140,8 +140,8 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
             background: 'rgba(255,255,255,0.12)', border: '2px solid rgba(255,255,255,0.2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <span style={{ fontSize: 28, fontFamily: 'Georgia, serif', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
-              {initials.toUpperCase()}
+            <span style={{ fontSize: isPet ? 32 : 28, fontFamily: 'Georgia, serif', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
+              {isPet ? '◉' : initials}
             </span>
           </div>
         )}

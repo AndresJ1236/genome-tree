@@ -136,7 +136,10 @@ export function PersonEditor({
   const isFloating = !form.fatherId && !form.motherId
   const showAffiliation = canChangeRel && payload.managedUnits.length > 0 && isFloating
 
-  const title = mode === 'create' ? 'Nueva persona' : 'Editar persona'
+  const isPet = form.nodeKind === 'PET'
+  const title = mode === 'create'
+    ? (isPet ? 'Nueva mascota' : 'Nueva persona')
+    : (isPet ? 'Editar mascota' : 'Editar persona')
   const personPath = form.id ? `/${payload.familySlug}/person/${form.id}` : `/${payload.familySlug}/tree`
 
   const parentOptions = useMemo(
@@ -355,13 +358,13 @@ export function PersonEditor({
   const submitLabel = isPending
     ? (mode === 'edit' && isMember ? 'Enviando...' : 'Guardando...')
     : mode === 'create'
-      ? 'Crear persona'
+      ? (isPet ? 'Crear mascota' : 'Crear persona')
       : isMember ? 'Enviar propuesta' : 'Guardar cambios'
 
   const submitHint = isMember && mode === 'edit'
     ? 'Los cambios serán revisados antes de aplicarse.'
     : mode === 'create'
-      ? 'Completa los datos y crea la persona.'
+      ? `Completa los datos y ${isPet ? 'crea la mascota' : 'crea la persona'}.`
       : 'Guarda para confirmar los cambios.'
 
   return (
@@ -381,10 +384,10 @@ export function PersonEditor({
           <h1 style={{ margin: '10px 0 4px', fontFamily: 'Georgia, serif', fontSize: 30, color: '#2D4A3E' }}>{title}</h1>
           <p style={{ margin: 0, fontSize: 13, color: '#6B6B6B' }}>
             {mode === 'create'
-              ? 'Crea una persona nueva y luego podras subir sus fotos y elegir la portada.'
+              ? `Crea ${isPet ? 'una mascota nueva' : 'una persona nueva'} y luego podrás subir sus fotos y elegir la portada.`
               : isMember
                 ? 'Propone cambios en los datos biográficos. Un administrador los revisará antes de aplicarlos.'
-                : 'Actualiza los datos centrales, parentesco y foto principal.'}
+                : `Actualiza los datos ${isPet ? 'de la mascota' : 'centrales, parentesco'} y foto principal.`}
           </p>
         </div>
         {mode === 'edit' && !isMember && (
@@ -402,7 +405,7 @@ export function PersonEditor({
               background: '#F8F5EE',
             }}
           >
-            Nueva persona
+            + Nuevo
           </Link>
         )}
       </div>
