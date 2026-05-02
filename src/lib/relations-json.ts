@@ -7,6 +7,9 @@ export interface RelationsJsonPerson {
   birthSurname2: string | null
   fatherId: string | null
   motherId: string | null
+  unitAffiliationId: string | null
+  claimedRelation: string | null
+  claimedRelationOfId: string | null
 }
 
 export interface RelationsJsonPayload {
@@ -24,6 +27,9 @@ type SourcePerson = {
   birthSurname2: string | null
   fatherId: string | null
   motherId: string | null
+  unitAffiliationId: string | null
+  claimedRelation: string | null
+  claimedRelationOfId: string | null
 }
 
 function normalizeNullableId(value: unknown) {
@@ -52,6 +58,11 @@ export function buildRelationsExportPayload(
       birthSurname2: person.birthSurname2,
       fatherId: person.fatherId && visibleIdSet.has(person.fatherId) ? person.fatherId : null,
       motherId: person.motherId && visibleIdSet.has(person.motherId) ? person.motherId : null,
+      unitAffiliationId: person.unitAffiliationId,
+      claimedRelation: person.claimedRelation,
+      claimedRelationOfId: person.claimedRelationOfId && visibleIdSet.has(person.claimedRelationOfId)
+        ? person.claimedRelationOfId
+        : null,
     })),
   }
 }
@@ -97,6 +108,9 @@ export function parseRelationsJsonPayload(jsonText: string): RelationsJsonPayloa
       birthSurname2: typeof person.birthSurname2 === 'string' && person.birthSurname2.trim().length > 0 ? person.birthSurname2.trim() : null,
       fatherId: normalizeNullableId(person.fatherId),
       motherId: normalizeNullableId(person.motherId),
+      unitAffiliationId: normalizeNullableId(person.unitAffiliationId),
+      claimedRelation: typeof person.claimedRelation === 'string' && person.claimedRelation.trim().length > 0 ? person.claimedRelation.trim() : null,
+      claimedRelationOfId: normalizeNullableId(person.claimedRelationOfId),
     } satisfies RelationsJsonPerson
   })
 

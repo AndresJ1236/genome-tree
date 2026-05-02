@@ -4,11 +4,12 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type {
+  ClaimedRelation,
   PersonFull, StoryItem, RecipeItem, DiaryItem,
   InterviewItem, ObjectItem, SourceItem, ImportantLinkItem,
   MediaItem, ConfidenceLevel,
 } from '@/lib/content-types'
-import { CONFIDENCE_LABELS } from '@/lib/content-types'
+import { CLAIMED_RELATION_LABELS, CONFIDENCE_LABELS } from '@/lib/content-types'
 import { uploadMedia, deleteMedia, toggleFeaturedMedia } from '@/app/actions/media'
 import { getPersonDisplayName } from '@/lib/person-name'
 
@@ -178,6 +179,31 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
               {person.children.map(p => (
                 <FamilyBadge key={p.id} person={p} label="Hijo/a" familySlug={familySlug} />
               ))}
+            </div>
+          )}
+
+          {/* Afiliación a unidad */}
+          {(person.unitAffiliationLabel || person.claimedRelation) && (
+            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {person.unitAffiliationLabel && (
+                <span style={{
+                  fontSize: 11, padding: '3px 10px', borderRadius: 999,
+                  background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)',
+                  letterSpacing: '0.04em',
+                }}>
+                  Afiliado a {person.unitAffiliationLabel}
+                </span>
+              )}
+              {person.claimedRelation && (
+                <span style={{
+                  fontSize: 11, padding: '3px 10px', borderRadius: 999,
+                  background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)',
+                  letterSpacing: '0.04em',
+                }}>
+                  {CLAIMED_RELATION_LABELS[person.claimedRelation as ClaimedRelation]}
+                  {person.claimedRelationOf && ` de ${getPersonDisplayName(person.claimedRelationOf)}`}
+                </span>
+              )}
             </div>
           )}
         </div>

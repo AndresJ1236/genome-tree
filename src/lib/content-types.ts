@@ -135,6 +135,9 @@ export interface PersonProfile {
     importantLinks: number
     media: number
   }
+  claimedRelation: ClaimedRelation | null
+  claimedRelationOf: PersonBasic | null
+  unitAffiliationLabel: string | null
 }
 
 export interface PersonFull extends PersonProfile {
