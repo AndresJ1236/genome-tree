@@ -1,4 +1,4 @@
-import type { PersonData, LayoutNode, FamilyUnit, TreeLayout } from './tree-types'
+import type { PersonData, RelationshipData, LayoutNode, FamilyUnit, TreeLayout } from './tree-types'
 
 export const NODE_W = 72
 export const NODE_H = 72
@@ -6,7 +6,7 @@ const GEN_H      = 250
 const H_GAP      = 150
 const COUPLE_GAP = 120
 
-export function computeTreeLayout(persons: PersonData[]): TreeLayout {
+export function computeTreeLayout(persons: PersonData[], relationships: RelationshipData[] = []): TreeLayout {
   if (persons.length === 0) {
     return { nodes: [], familyUnits: [], bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 } }
   }
@@ -50,6 +50,17 @@ export function computeTreeLayout(persons: PersonData[]): TreeLayout {
     if (fid && mid && likelyRealCouple(fid, mid)) {
       const k = coupleKey(fid, mid)
       if (!inferredCouples.has(k)) inferredCouples.set(k, { p1: fid, p2: mid })
+    }
+  }
+
+  // Merge explicit relationships into inferredCouples
+  const explicitCoupleData = new Map<string, { isEx: boolean }>()
+  for (const rel of relationships) {
+    if (!personSet.has(rel.person1Id) || !personSet.has(rel.person2Id)) continue
+    const k = coupleKey(rel.person1Id, rel.person2Id)
+    explicitCoupleData.set(k, { isEx: rel.endDate !== null })
+    if (!inferredCouples.has(k)) {
+      inferredCouples.set(k, { p1: rel.person1Id, p2: rel.person2Id })
     }
   }
 
@@ -258,10 +269,11 @@ export function computeTreeLayout(persons: PersonData[]): TreeLayout {
     }
 
     familyUnits.push({
-      id:        'unit-' + key,
-      parent1Id: p1,
-      parent2Id: p2,
-      childIds:  [...kids],
+      id:         'unit-' + key,
+      parent1Id:  p1,
+      parent2Id:  p2,
+      childIds:   [...kids],
+      isExCouple: explicitCoupleData.get(key)?.isEx ?? false,
     })
   }
 

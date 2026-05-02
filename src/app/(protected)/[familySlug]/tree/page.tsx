@@ -181,7 +181,7 @@ export default async function TreePage({
               background: '#F8F5EE',
             }}
           >
-            Nueva persona
+            Nuevo
           </Link>
         </div>
       </div>

@@ -492,46 +492,58 @@ export function PersonEditor({
         )}
 
         <section style={cardStyle}>
+          {/* Selector de tipo siempre visible primero */}
+          <div style={{ marginBottom: 18 }}>
+            <Field label="Tipo" help="Persona: aparece como nodo normal en el árbol. Mascota: aparece como nodo pequeño y discreto.">
+              <select value={form.nodeKind} onChange={e => updateField('nodeKind', e.target.value as PersonFormData['nodeKind'])} style={{ ...inputStyle, width: 'auto' }}>
+                <option value="PERSON">Persona</option>
+                <option value="PET">Mascota</option>
+              </select>
+            </Field>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}>
             <Field label="Nombre" required>
               <input value={form.firstName} onChange={e => updateField('firstName', e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="Segundo nombre">
-              <input value={form.middleName} onChange={e => updateField('middleName', e.target.value)} style={inputStyle} />
-            </Field>
-            <Field label="Apellido" required>
-              <input value={form.lastName} onChange={e => updateField('lastName', e.target.value)} style={inputStyle} />
-            </Field>
-            <Field label="Apellido de nacimiento 1">
-              <input value={form.birthSurname1} onChange={e => updateField('birthSurname1', e.target.value)} style={inputStyle} />
-            </Field>
-            <Field label="Apellido de nacimiento 2">
-              <input value={form.birthSurname2} onChange={e => updateField('birthSurname2', e.target.value)} style={inputStyle} />
-            </Field>
+            {form.nodeKind !== 'PET' && (
+              <Field label="Segundo nombre">
+                <input value={form.middleName} onChange={e => updateField('middleName', e.target.value)} style={inputStyle} />
+              </Field>
+            )}
+            {form.nodeKind !== 'PET' && (
+              <Field label="Apellido" required>
+                <input value={form.lastName} onChange={e => updateField('lastName', e.target.value)} style={inputStyle} />
+              </Field>
+            )}
+            {form.nodeKind !== 'PET' && (
+              <Field label="Apellido de nacimiento 1">
+                <input value={form.birthSurname1} onChange={e => updateField('birthSurname1', e.target.value)} style={inputStyle} />
+              </Field>
+            )}
+            {form.nodeKind !== 'PET' && (
+              <Field label="Apellido de nacimiento 2">
+                <input value={form.birthSurname2} onChange={e => updateField('birthSurname2', e.target.value)} style={inputStyle} />
+              </Field>
+            )}
             <Field label="Fecha de nacimiento">
               <input type="date" value={form.birthDate} onChange={e => updateField('birthDate', e.target.value)} style={inputStyle} />
             </Field>
             <Field label="Fecha de fallecimiento">
               <input type="date" value={form.deathDate} onChange={e => updateField('deathDate', e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="Lugar de nacimiento">
+            <Field label={form.nodeKind === 'PET' ? 'Lugar de origen' : 'Lugar de nacimiento'}>
               <input value={form.birthPlace} onChange={e => updateField('birthPlace', e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="Genero">
+            <Field label="Género">
               <select value={form.gender} onChange={e => updateField('gender', e.target.value as PersonFormData['gender'])} style={inputStyle}>
                 <option value="UNKNOWN">No especificado</option>
-                <option value="MALE">Masculino</option>
-                <option value="FEMALE">Femenino</option>
-                <option value="OTHER">Otro</option>
+                <option value="MALE">{form.nodeKind === 'PET' ? 'Macho' : 'Masculino'}</option>
+                <option value="FEMALE">{form.nodeKind === 'PET' ? 'Hembra' : 'Femenino'}</option>
+                {form.nodeKind !== 'PET' && <option value="OTHER">Otro</option>}
               </select>
             </Field>
-            <Field label="Tipo" help="Persona: aparece como nodo normal en el árbol. Mascota: aparece como nodo pequeño y discreto.">
-              <select value={form.nodeKind} onChange={e => updateField('nodeKind', e.target.value as PersonFormData['nodeKind'])} style={inputStyle}>
-                <option value="PERSON">Persona</option>
-                <option value="PET">Mascota</option>
-              </select>
-            </Field>
-            <Field label="Padre" help="Padre biológico o adoptivo registrado en el árbol. Solo puedes vincular personas que ya existan.">
+            <Field label={form.nodeKind === 'PET' ? 'Dueño 1' : 'Padre'} help={form.nodeKind === 'PET' ? 'Primera persona responsable de la mascota.' : 'Padre biológico o adoptivo registrado en el árbol.'}>
               <select
                 value={form.fatherId}
                 onChange={e => updateField('fatherId', e.target.value)}
@@ -544,7 +556,7 @@ export function PersonEditor({
                 ))}
               </select>
             </Field>
-            <Field label="Madre" help="Madre biológica o adoptiva registrada en el árbol. Solo puedes vincular personas que ya existan.">
+            <Field label={form.nodeKind === 'PET' ? 'Dueño 2' : 'Madre'} help={form.nodeKind === 'PET' ? 'Segunda persona responsable de la mascota.' : 'Madre biológica o adoptiva registrada en el árbol.'}>
               <select
                 value={form.motherId}
                 onChange={e => updateField('motherId', e.target.value)}
@@ -560,7 +572,7 @@ export function PersonEditor({
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <Field label="Bio" help="Texto libre sobre la persona. Aparece en el panel lateral (resumido) y en su perfil completo. Máximo 5000 caracteres.">
+            <Field label="Bio" help={form.nodeKind === 'PET' ? 'Historia o descripción de la mascota. Máximo 5000 caracteres.' : 'Texto libre sobre la persona. Aparece en el panel lateral (resumido) y en su perfil completo. Máximo 5000 caracteres.'}>
               <textarea
                 value={form.bio}
                 onChange={e => updateField('bio', e.target.value)}

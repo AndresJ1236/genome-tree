@@ -340,7 +340,8 @@ export async function createPerson(input: Omit<PersonFormData, 'id' | 'coverPhot
 
   const firstName = normalizeText(input.firstName)
   const lastName = normalizeText(input.lastName)
-  if (!firstName || !lastName) {
+  const isPet = input.nodeKind === 'PET'
+  if (!firstName || (!isPet && !lastName)) {
     return { ok: false, error: 'Nombre y apellido son obligatorios.' }
   }
 

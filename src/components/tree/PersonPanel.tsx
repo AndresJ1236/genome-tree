@@ -310,23 +310,64 @@ function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
 // Familia directa
 // ─────────────────────────────────────────────────────────────────────────────
 
+function parentLabel(p: PersonBasic): string {
+  if (p.gender === 'MALE')   return 'Padre'
+  if (p.gender === 'FEMALE') return 'Madre'
+  return 'Padre/Madre'
+}
+
+function spouseLabel(p: PersonBasic): string {
+  if (p.gender === 'MALE')   return 'Esposo'
+  if (p.gender === 'FEMALE') return 'Esposa'
+  return 'Pareja'
+}
+
+function childLabel(p: PersonBasic): string {
+  if (p.gender === 'MALE')   return 'Hijo'
+  if (p.gender === 'FEMALE') return 'Hija'
+  return 'Hijo/a'
+}
+
+function ownerLabel(p: PersonBasic): string {
+  if (p.gender === 'MALE')   return 'Dueño'
+  if (p.gender === 'FEMALE') return 'Dueña'
+  return 'Dueño/a'
+}
+
 function FamilySection({ profile }: { profile: PersonProfile }) {
   const { parents, spouses, children } = profile
+  const isPet = profile.nodeKind === 'PET'
   if (!parents.length && !spouses.length && !children.length) return null
 
   return (
     <section>
-      <SectionLabel>Familia directa</SectionLabel>
+      <SectionLabel>{isPet ? 'Dueños y convivientes' : 'Familia directa'}</SectionLabel>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {spouses.map(p => (
-          <FamilyChip key={p.id} person={p} relation="Pareja" />
+          <FamilyChip key={p.id} person={p} relation={isPet ? ownerLabel(p) : spouseLabel(p)} />
         ))}
         {parents.map(p => (
-          <FamilyChip key={p.id} person={p} relation="Padre/Madre" />
+          <FamilyChip key={p.id} person={p} relation={isPet ? ownerLabel(p) : parentLabel(p)} />
         ))}
-        {children.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, color: '#6B7B70', letterSpacing: '0.03em' }}>Hijos</span>
+        {!isPet && children.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#6B7B70', letterSpacing: '0.03em', paddingTop: 3, flexShrink: 0 }}>Hijos</span>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {children.map(p => (
+                <span key={p.id} title={childLabel(p)} style={{
+                  fontSize: 11, color: '#4a5c54',
+                  background: '#EAF0ED', border: '1px solid #C8D4CE',
+                  borderRadius: 2, padding: '2px 7px',
+                }}>
+                  {p.firstName}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {isPet && children.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#6B7B70', letterSpacing: '0.03em', paddingTop: 3, flexShrink: 0 }}>Convive con</span>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               {children.map(p => (
                 <span key={p.id} style={{

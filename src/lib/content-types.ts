@@ -23,6 +23,7 @@ export interface PersonBasic {
   birthDate: string | null
   deathDate: string | null
   coverPhoto: string | null
+  gender: Gender
 }
 
 export interface PersonOption {
@@ -117,6 +118,7 @@ export interface PersonProfile {
   deathDate: string | null
   birthPlace: string | null
   gender: Gender
+  nodeKind: PersonKind
   bio: string | null
   coverPhoto: string | null
   isCore: boolean
