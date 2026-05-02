@@ -9,6 +9,7 @@ import { uploadMedia, deleteMedia } from '@/app/actions/media'
 import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF } from '@/lib/content-types'
 import type { ClaimedRelation, MediaItem, PersonEditorPayload, PersonFormData, RelationshipItem } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
+import { HelpTooltip } from '@/components/ui/HelpTooltip'
 
 const shellStyle: React.CSSProperties = {
   maxWidth: 880,
@@ -523,7 +524,7 @@ export function PersonEditor({
                 <option value="OTHER">Otro</option>
               </select>
             </Field>
-            <Field label="Padre">
+            <Field label="Padre" help="Padre biológico o adoptivo registrado en el árbol. Solo puedes vincular personas que ya existan.">
               <select
                 value={form.fatherId}
                 onChange={e => updateField('fatherId', e.target.value)}
@@ -536,7 +537,7 @@ export function PersonEditor({
                 ))}
               </select>
             </Field>
-            <Field label="Madre">
+            <Field label="Madre" help="Madre biológica o adoptiva registrada en el árbol. Solo puedes vincular personas que ya existan.">
               <select
                 value={form.motherId}
                 onChange={e => updateField('motherId', e.target.value)}
@@ -552,7 +553,7 @@ export function PersonEditor({
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <Field label="Bio">
+            <Field label="Bio" help="Texto libre sobre la persona. Aparece en el panel lateral (resumido) y en su perfil completo. Máximo 5000 caracteres.">
               <textarea
                 value={form.bio}
                 onChange={e => updateField('bio', e.target.value)}
@@ -570,6 +571,11 @@ export function PersonEditor({
                   onChange={e => updateField('isCore', e.target.checked)}
                 />
                 Proteger como tronco central del arbol
+                <HelpTooltip
+                  text="Las personas marcadas como tronco central no pueden ser eliminadas accidentalmente. Útil para los fundadores del árbol."
+                  position="top"
+                  maxWidth={260}
+                />
               </label>
             </div>
           )}
@@ -580,7 +586,7 @@ export function PersonEditor({
                 Esta persona no tiene padre ni madre conocidos. Puedes afiliarla a una unidad familiar para mantener la conexión.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}>
-                <Field label="Unidad familiar">
+                <Field label="Unidad familiar" help="Agrupa esta persona con una familia cuando no tiene padre/madre directo conocido en el árbol.">
                   <select
                     value={form.unitAffiliationId}
                     onChange={e => {
@@ -897,12 +903,13 @@ export function PersonEditor({
   )
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, help, children }: { label: string; required?: boolean; help?: string; children: React.ReactNode }) {
   return (
     <label>
-      <span style={labelStyle}>
+      <span style={{ ...labelStyle, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
         {label}
-        {required && <span style={{ color: '#9B4444', marginLeft: 3 }}>*</span>}
+        {required && <span style={{ color: '#9B4444' }}>*</span>}
+        {help && <HelpTooltip text={help} position="top" maxWidth={240} />}
       </span>
       {children}
     </label>

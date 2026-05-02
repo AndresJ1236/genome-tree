@@ -2,6 +2,7 @@
 import { logout } from '@/app/actions/auth'
 import { getUnreadCount } from '@/lib/notifications'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { HelpPanel } from '@/components/ui/HelpPanel'
 import { redirect } from 'next/navigation'
 
 export default async function ProtectedLayout({
@@ -70,6 +71,7 @@ export default async function ProtectedLayout({
             </span>
           )}
           <NotificationBell initialUnreadCount={unreadCount} />
+          <HelpPanel />
           <a
             href={`/${session.familySlug}/settings`}
             className="text-xs tracking-widest uppercase transition-colors"
