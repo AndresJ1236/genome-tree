@@ -30,12 +30,20 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static    ./.next/static
 
 # Prisma schema + CLI for db push on startup
 COPY --from=builder /app/prisma                     ./prisma
-COPY --from=builder /app/node_modules/.bin/prisma   ./node_modules/.bin/prisma
+COPY --from=builder /app/node_modules/.bin/prisma*  ./node_modules/.bin/
 COPY --from=builder /app/node_modules/prisma        ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma       ./node_modules/@prisma
+# WASM files needed by the Prisma CLI binary at runtime
+RUN find /app/node_modules/prisma -name "*.wasm" -exec cp {} /app/node_modules/.bin/ \; 2>/dev/null || true
+
+# pg driver adapter deps that standalone tracing misses
+COPY --from=builder /app/node_modules/postgres-array ./node_modules/postgres-array
+COPY --from=builder /app/node_modules/pgpass         ./node_modules/pgpass
+COPY --from=builder /app/node_modules/pg-cloudflare  ./node_modules/pg-cloudflare
 
 # Startup script
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r//' /entrypoint.sh && chmod 755 /entrypoint.sh
 
 USER nextjs
 EXPOSE 3000
