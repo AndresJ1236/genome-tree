@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { decrypt } from '@/lib/session'
 
-const PUBLIC_PATHS = ['/login', '/auth/login']
+const PUBLIC_PATHS = ['/login', '/auth/login', '/setup']
+const PUBLIC_PREFIXES = ['/invite/', '/reset/']
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
-  const isPublic = PUBLIC_PATHS.includes(path)
+  const isPublic = PUBLIC_PATHS.includes(path) || PUBLIC_PREFIXES.some(p => path.startsWith(p))
 
   const token = req.cookies.get('session')?.value
   const session = await decrypt(token)
@@ -26,5 +27,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon\\.ico).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon\\.ico|uploads/).*)'],
 }

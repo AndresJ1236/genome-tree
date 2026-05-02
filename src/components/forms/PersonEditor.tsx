@@ -1,13 +1,13 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createPerson, deletePerson, setPersonCoverPhoto, updatePerson } from '@/app/actions/people'
+import { createPerson, createRelationship, deleteRelationship, deletePerson, setParentChild, setPersonCoverPhoto, setRelationshipEndDate, updatePerson } from '@/app/actions/people'
 import { proposePeopleUpdate } from '@/app/actions/proposals'
 import { uploadMedia, deleteMedia } from '@/app/actions/media'
 import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF } from '@/lib/content-types'
-import type { ClaimedRelation, MediaItem, PersonEditorPayload, PersonFormData } from '@/lib/content-types'
+import type { ClaimedRelation, MediaItem, PersonEditorPayload, PersonFormData, RelationshipItem } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
 
 const shellStyle: React.CSSProperties = {
@@ -101,8 +101,31 @@ export function PersonEditor({
   const [isPending, startTransition] = useTransition()
   const [form, setForm] = useState<PersonFormData>(payload.person ?? emptyForm())
   const [media, setMedia] = useState<MediaItem[]>(payload.media)
+  const [relationships, setRelationships] = useState<RelationshipItem[]>(payload.relationships)
+  const [newPartnerType, setNewPartnerType] = useState<'SPOUSE' | 'PARTNER'>('SPOUSE')
+  const [newPartnerId, setNewPartnerId] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [uploadCount, setUploadCount] = useState(0)
+  const [uploadTotal, setUploadTotal] = useState(0)
+
+  const initialFormRef = useRef<string>(JSON.stringify(payload.person ?? emptyForm()))
+  const isDirty = JSON.stringify(form) !== initialFormRef.current
+
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (!isDirty) return
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
+  // Quick connection (create mode only)
+  const [quickRelType, setQuickRelType] = useState<'' | 'child-of' | 'parent-of' | 'partner-of'>('')
+  const [quickTargetId, setQuickTargetId] = useState('')
+  const [quickParentRole, setQuickParentRole] = useState<'father' | 'mother'>('father')
+  const [quickPartnerType, setQuickPartnerType] = useState<'SPOUSE' | 'PARTNER'>('SPOUSE')
 
   const isMember = payload.viewerMode === 'MEMBER'
   const isAdmin = payload.viewerMode === 'ADMIN'
@@ -163,12 +186,29 @@ export function PersonEditor({
       }
 
       if (mode === 'create') {
-        const result = await createPerson(form)
+        // If "child-of", pre-fill parent fields from quick connection
+        const formToSend = { ...form }
+        if (quickRelType === 'child-of' && quickTargetId) {
+          const target = parentOptions.find(p => p.id === quickTargetId)
+          const role = target?.gender === 'MALE' ? 'fatherId' : target?.gender === 'FEMALE' ? 'motherId' : quickParentRole === 'father' ? 'fatherId' : 'motherId'
+          formToSend[role] = quickTargetId
+        }
+
+        const result = await createPerson(formToSend)
         if (!result.ok) {
           setError(result.error)
           return
         }
-        router.push(`/${payload.familySlug}/person/${result.data.id}/edit`)
+        const newId = result.data.id
+
+        // Apply post-create quick connections
+        if (quickRelType === 'parent-of' && quickTargetId) {
+          await setParentChild({ childId: quickTargetId, parentId: newId, role: quickParentRole })
+        } else if (quickRelType === 'partner-of' && quickTargetId) {
+          await createRelationship({ personId: newId, partnerId: quickTargetId, type: quickPartnerType })
+        }
+
+        router.push(`/${payload.familySlug}/person/${newId}/edit`)
         router.refresh()
         return
       }
@@ -179,6 +219,7 @@ export function PersonEditor({
         return
       }
       setMessage('Cambios guardados.')
+      initialFormRef.current = JSON.stringify(form)
       router.refresh()
     })
   }
@@ -188,8 +229,13 @@ export function PersonEditor({
     setError(null)
     setMessage(null)
 
+    const fileList = Array.from(files)
+    setUploadTotal(fileList.length)
+    setUploadCount(0)
+
     startTransition(async () => {
-      for (const file of Array.from(files)) {
+      let done = 0
+      for (const file of fileList) {
         const fd = new FormData()
         fd.append('file', file)
         fd.append('personId', form.id)
@@ -198,6 +244,8 @@ export function PersonEditor({
           setError(result.error)
           break
         }
+        done++
+        setUploadCount(done)
         setMedia(prev => [
           ...prev,
           {
@@ -211,7 +259,8 @@ export function PersonEditor({
           },
         ])
       }
-      router.refresh()
+      setUploadTotal(0)
+      setUploadCount(0)
     })
   }
 
@@ -250,6 +299,41 @@ export function PersonEditor({
     })
   }
 
+  function handleAddRelationship() {
+    if (!form.id || !newPartnerId) return
+    setError(null)
+    setMessage(null)
+    startTransition(async () => {
+      const result = await createRelationship({ personId: form.id, partnerId: newPartnerId, type: newPartnerType })
+      if (!result.ok) { setError(result.error); return }
+      const partner = payload.candidates.find(c => c.id === newPartnerId)
+      if (partner) {
+        setRelationships(prev => [...prev, {
+          id: result.data.id,
+          type: newPartnerType,
+          partnerId: newPartnerId,
+          partnerName: getPersonDisplayName(partner),
+          endDate: null,
+        }])
+      }
+      setNewPartnerId('')
+      setMessage('Relación de pareja añadida.')
+    })
+  }
+
+  function handleRemoveRelationship(relId: string) {
+    if (!form.id) return
+    if (!confirm('Eliminar esta relación de pareja?')) return
+    setError(null)
+    setMessage(null)
+    startTransition(async () => {
+      const result = await deleteRelationship({ relationshipId: relId, personId: form.id })
+      if (!result.ok) { setError(result.error); return }
+      setRelationships(prev => prev.filter(r => r.id !== relId))
+      setMessage('Relación eliminada.')
+    })
+  }
+
   function handleDeletePerson() {
     if (!form.id) return
     if (!confirm('Eliminar esta persona? Esta accion no se puede deshacer.')) return
@@ -282,9 +366,16 @@ export function PersonEditor({
     <div style={shellStyle}>
       <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <Link href={personPath} style={{ color: '#2D4A3E', textDecoration: 'none', fontSize: 12, letterSpacing: '0.05em' }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (isDirty && !window.confirm('Tienes cambios sin guardar. ¿Salir de todas formas?')) return
+              router.push(personPath)
+            }}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#2D4A3E', fontSize: 12, letterSpacing: '0.05em' }}
+          >
             ← Volver
-          </Link>
+          </button>
           <h1 style={{ margin: '10px 0 4px', fontFamily: 'Georgia, serif', fontSize: 30, color: '#2D4A3E' }}>{title}</h1>
           <p style={{ margin: 0, fontSize: 13, color: '#6B6B6B' }}>
             {mode === 'create'
@@ -315,6 +406,89 @@ export function PersonEditor({
       </div>
 
       <div style={{ display: 'grid', gap: 22 }}>
+
+        {mode === 'create' && (
+          <section style={cardStyle}>
+            <p style={{ margin: '0 0 16px', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8B9E94', fontFamily: 'Georgia, serif' }}>
+              Conexión inicial
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: quickRelType ? 16 : 0 }}>
+              {(['', 'child-of', 'parent-of', 'partner-of'] as const).map(type => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => { setQuickRelType(type); setQuickTargetId(''); }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 2,
+                    border: `1px solid ${quickRelType === type ? '#2D4A3E' : '#D8D3CA'}`,
+                    background: quickRelType === type ? '#2D4A3E' : '#FFFCF8',
+                    color: quickRelType === type ? '#fff' : '#5A615C',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {type === '' ? 'Sin conexión' : type === 'child-of' ? 'Hijo/a de...' : type === 'parent-of' ? 'Padre/Madre de...' : 'Pareja de...'}
+                </button>
+              ))}
+            </div>
+
+            {quickRelType === 'child-of' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end' }}>
+                <Field label="Esta persona es hijo/a de">
+                  <select value={quickTargetId} onChange={e => setQuickTargetId(e.target.value)} style={inputStyle}>
+                    <option value="">Seleccionar padre o madre...</option>
+                    {parentOptions.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  </select>
+                </Field>
+                {quickTargetId && parentOptions.find(p => p.id === quickTargetId)?.gender === 'UNKNOWN' && (
+                  <Field label="Rol">
+                    <select value={quickParentRole} onChange={e => setQuickParentRole(e.target.value as 'father' | 'mother')} style={{ ...inputStyle, width: 'auto' }}>
+                      <option value="father">Es el padre</option>
+                      <option value="mother">Es la madre</option>
+                    </select>
+                  </Field>
+                )}
+              </div>
+            )}
+
+            {quickRelType === 'parent-of' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end' }}>
+                <Field label="Esta persona es padre/madre de">
+                  <select value={quickTargetId} onChange={e => setQuickTargetId(e.target.value)} style={inputStyle}>
+                    <option value="">Seleccionar hijo/a...</option>
+                    {parentOptions.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Como">
+                  <select value={quickParentRole} onChange={e => setQuickParentRole(e.target.value as 'father' | 'mother')} style={{ ...inputStyle, width: 'auto' }}>
+                    <option value="father">Como padre</option>
+                    <option value="mother">Como madre</option>
+                  </select>
+                </Field>
+              </div>
+            )}
+
+            {quickRelType === 'partner-of' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end' }}>
+                <Field label="Esta persona es pareja de">
+                  <select value={quickTargetId} onChange={e => setQuickTargetId(e.target.value)} style={inputStyle}>
+                    <option value="">Seleccionar pareja...</option>
+                    {parentOptions.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Tipo">
+                  <select value={quickPartnerType} onChange={e => setQuickPartnerType(e.target.value as 'SPOUSE' | 'PARTNER')} style={{ ...inputStyle, width: 'auto' }}>
+                    <option value="SPOUSE">Cónyuge</option>
+                    <option value="PARTNER">Pareja</option>
+                  </select>
+                </Field>
+              </div>
+            )}
+          </section>
+        )}
+
         <section style={cardStyle}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}>
             <Field label="Nombre">
@@ -520,6 +694,108 @@ export function PersonEditor({
           </div>
         </section>
 
+        {mode === 'edit' && isAdmin && (
+          <section style={cardStyle}>
+            <div style={{ marginBottom: 18 }}>
+              <h2 style={{ margin: '0 0 6px', fontFamily: 'Georgia, serif', fontSize: 22, color: '#2D4A3E' }}>Pareja / Cónyuge</h2>
+              <p style={{ margin: 0, fontSize: 13, color: '#6B6B6B' }}>
+                Registra relaciones de pareja explícitas (matrimonio o convivencia).
+              </p>
+            </div>
+
+            {relationships.length > 0 && (
+              <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+                {relationships.map(rel => (
+                  <div key={rel.id} style={{ padding: '10px 14px', background: '#F8F5EE', borderRadius: 3, border: '1px solid #E0DAD0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: rel.endDate !== undefined ? 8 : 0 }}>
+                      <span style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8B9E94', minWidth: 60 }}>
+                        {rel.type === 'SPOUSE' ? 'Cónyuge' : 'Pareja'}
+                      </span>
+                      <span style={{ fontSize: 14, color: '#2C2C2C', flex: 1 }}>{rel.partnerName}</span>
+                      {rel.endDate && (
+                        <span style={{ fontSize: 11, color: '#8B9E94' }}>Fin: {rel.endDate}</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRelationship(rel.id)}
+                        disabled={isPending}
+                        style={{ border: '1px solid #E6C1C1', background: '#FFF5F5', color: '#8B4444', borderRadius: 2, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <label style={{ fontSize: 11, color: '#8B9E94', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                        Fecha de separación
+                      </label>
+                      <input
+                        type="date"
+                        defaultValue={rel.endDate ?? ''}
+                        onChange={e => {
+                          const val = e.target.value || null
+                          startTransition(async () => {
+                            const result = await setRelationshipEndDate({ relationshipId: rel.id, personId: form.id, endDate: val })
+                            if (!result.ok) setError(result.error)
+                            else setRelationships(prev => prev.map(r => r.id === rel.id ? { ...r, endDate: val } : r))
+                          })
+                        }}
+                        style={{ ...inputStyle, width: 160, padding: '6px 10px', fontSize: 13 }}
+                      />
+                      {rel.endDate && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            startTransition(async () => {
+                              const result = await setRelationshipEndDate({ relationshipId: rel.id, personId: form.id, endDate: null })
+                              if (!result.ok) setError(result.error)
+                              else setRelationships(prev => prev.map(r => r.id === rel.id ? { ...r, endDate: null } : r))
+                            })
+                          }}
+                          disabled={isPending}
+                          style={{ border: '1px solid #E0DAD0', background: '#fff', borderRadius: 2, color: '#6B6B6B', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}
+                        >
+                          Quitar fecha
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr auto', gap: 10, alignItems: 'end' }}>
+              <Field label="Tipo">
+                <select value={newPartnerType} onChange={e => setNewPartnerType(e.target.value as 'SPOUSE' | 'PARTNER')} style={inputStyle}>
+                  <option value="SPOUSE">Cónyuge</option>
+                  <option value="PARTNER">Pareja</option>
+                </select>
+              </Field>
+              <Field label="Persona">
+                <select
+                  value={newPartnerId}
+                  onChange={e => setNewPartnerId(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Seleccionar...</option>
+                  {payload.candidates
+                    .filter(c => !relationships.some(r => r.partnerId === c.id))
+                    .map(c => (
+                      <option key={c.id} value={c.id}>{getPersonDisplayName(c)}</option>
+                    ))}
+                </select>
+              </Field>
+              <button
+                type="button"
+                onClick={handleAddRelationship}
+                disabled={isPending || !newPartnerId}
+                style={{ border: '1px solid #C8D4CE', background: '#F8F5EE', color: '#2D4A3E', borderRadius: 2, padding: '11px 14px', cursor: 'pointer', fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+              >
+                Añadir
+              </button>
+            </div>
+          </section>
+        )}
+
         {mode === 'edit' && (
           <section style={cardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: 18 }}>
@@ -534,16 +810,19 @@ export function PersonEditor({
                   border: '1px solid #C8D4CE',
                   borderRadius: 2,
                   padding: '10px 12px',
-                  cursor: 'pointer',
+                  cursor: uploadTotal > 0 ? 'not-allowed' : 'pointer',
                   fontSize: 12,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
-                  color: '#2D4A3E',
-                  background: '#F8F5EE',
+                  color: uploadTotal > 0 ? '#8B9E94' : '#2D4A3E',
+                  background: uploadTotal > 0 ? '#F4F1EC' : '#F8F5EE',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
                 }}
               >
-                Subir fotos
-                <input type="file" accept="image/*" multiple hidden onChange={e => handleUpload(e.target.files)} />
+                {uploadTotal > 0 ? `Subiendo ${uploadCount}/${uploadTotal}...` : 'Subir fotos'}
+                <input type="file" accept="image/*" multiple hidden disabled={uploadTotal > 0} onChange={e => handleUpload(e.target.files)} />
               </label>
             </div>
 

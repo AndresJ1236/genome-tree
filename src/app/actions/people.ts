@@ -22,6 +22,7 @@ import type {
   PersonEditorPayload,
   PersonFormData,
   PersonOption,
+  RelationshipItem,
   Gender,
 } from '@/lib/content-types'
 import { revalidatePath } from 'next/cache'
@@ -37,6 +38,7 @@ function serializeOption(p: {
   lastName: string
   birthDate: Date | null
   deathDate: Date | null
+  gender: Gender
 }): PersonOption {
   return {
     id: p.id,
@@ -45,6 +47,7 @@ function serializeOption(p: {
     lastName: p.lastName,
     birthDate: p.birthDate ? p.birthDate.toISOString() : null,
     deathDate: p.deathDate ? p.deathDate.toISOString() : null,
+    gender: p.gender,
   }
 }
 
@@ -98,6 +101,7 @@ async function getVisiblePeopleForEditor(session: NonNullable<Awaited<ReturnType
       lastName: true,
       birthDate: true,
       deathDate: true,
+      gender: true,
     },
   })
 }
@@ -111,6 +115,56 @@ async function validateParent(
   if (parentId === currentPersonId) throw new Error('Una persona no puede ser su propio padre o madre.')
   await assertPersonAccess(parentId, session)
   return parentId
+}
+
+function validateDates(birthDate: Date | null, deathDate: Date | null): string | null {
+  if (birthDate && deathDate && deathDate < birthDate) {
+    return 'La fecha de fallecimiento no puede ser anterior a la fecha de nacimiento.'
+  }
+  return null
+}
+
+async function assertNoCycle(
+  childId: string,
+  fatherId: string | null,
+  motherId: string | null,
+  familyId: string
+): Promise<void> {
+  if (!fatherId && !motherId) return
+
+  const allPersons = await prisma.person.findMany({
+    where: { familyId },
+    select: { id: true, fatherId: true, motherId: true },
+  })
+
+  const childrenOf = new Map<string, Set<string>>()
+  for (const p of allPersons) {
+    for (const pid of [p.fatherId, p.motherId]) {
+      if (!pid) continue
+      if (!childrenOf.has(pid)) childrenOf.set(pid, new Set())
+      childrenOf.get(pid)!.add(p.id)
+    }
+  }
+
+  const isDescendant = (start: string, target: string): boolean => {
+    const visited = new Set<string>()
+    const queue = [start]
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      if (current === target) return true
+      if (visited.has(current)) continue
+      visited.add(current)
+      for (const c of childrenOf.get(current) ?? []) queue.push(c)
+    }
+    return false
+  }
+
+  if (fatherId && isDescendant(childId, fatherId)) {
+    throw new Error('No se puede asignar este padre porque crearía un ciclo en el árbol.')
+  }
+  if (motherId && isDescendant(childId, motherId)) {
+    throw new Error('No se puede asignar esta madre porque crearía un ciclo en el árbol.')
+  }
 }
 
 function revalidateFamilyPaths(familySlug: string, personId?: string) {
@@ -132,7 +186,7 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
     return { ok: false, error: (error as Error).message }
   }
 
-  const [candidates, person, media, managedUnitsRaw] = await Promise.all([
+  const [candidates, person, media, managedUnitsRaw, relationshipsRaw] = await Promise.all([
     getVisiblePeopleForEditor(session),
     personId
       ? prisma.person.findUnique({
@@ -147,6 +201,15 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
       where: { familyId: session.familyId, representativeUserId: session.userId },
       select: { id: true, label: true },
     }),
+    personId
+      ? prisma.relationship.findMany({
+          where: { familyId: session.familyId, OR: [{ person1Id: personId }, { person2Id: personId }] },
+          include: {
+            person1: { select: { id: true, firstName: true, middleName: true, lastName: true } },
+            person2: { select: { id: true, firstName: true, middleName: true, lastName: true } },
+          },
+        })
+      : Promise.resolve([]),
   ])
 
   if (personId && (!person || person.familyId !== session.familyId)) {
@@ -196,7 +259,77 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
         : null,
       candidates: candidates.filter(c => c.id !== personId).map(serializeOption),
       media: media.map(serializeMedia),
+      relationships: relationshipsRaw.map((r): RelationshipItem => {
+        const partner = r.person1Id === personId ? r.person2 : r.person1
+        return {
+          id: r.id,
+          type: r.type as 'SPOUSE' | 'PARTNER',
+          partnerId: partner.id,
+          partnerName: getPersonDisplayName(partner),
+          endDate: r.endDate ? r.endDate.toISOString().slice(0, 10) : null,
+        }
+      }),
     },
+  }
+}
+
+export async function createRelationship(input: {
+  personId: string
+  partnerId: string
+  type: 'SPOUSE' | 'PARTNER'
+}): Promise<ActionResult<{ id: string }>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    const isAdmin = session.role === 'ADMIN' || session.scope === 'ADMIN'
+    if (!isAdmin) return { ok: false, error: 'Solo administradores pueden gestionar relaciones de pareja.' }
+
+    if (input.personId === input.partnerId) {
+      return { ok: false, error: 'Una persona no puede ser pareja de sí misma.' }
+    }
+
+    const [p1, p2] = await Promise.all([
+      prisma.person.findFirst({ where: { id: input.personId, familyId: session.familyId }, select: { id: true } }),
+      prisma.person.findFirst({ where: { id: input.partnerId, familyId: session.familyId }, select: { id: true } }),
+    ])
+    if (!p1 || !p2) return { ok: false, error: 'Persona no encontrada en esta familia.' }
+
+    const [id1, id2] = [input.personId, input.partnerId].sort()
+    const rel = await prisma.relationship.create({
+      data: { familyId: session.familyId, person1Id: id1, person2Id: id2, type: input.type },
+    })
+
+    revalidatePath(`/${session.familySlug}/person/${input.personId}/edit`)
+    revalidatePath(`/${session.familySlug}/tree`)
+    return { ok: true, data: { id: rel.id } }
+  } catch (error: unknown) {
+    const msg = (error as Error).message
+    if (msg.includes('Unique constraint')) return { ok: false, error: 'Ya existe esa relación entre estas personas.' }
+    return { ok: false, error: msg }
+  }
+}
+
+export async function deleteRelationship(input: {
+  relationshipId: string
+  personId: string
+}): Promise<ActionResult<null>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    const isAdmin = session.role === 'ADMIN' || session.scope === 'ADMIN'
+    if (!isAdmin) return { ok: false, error: 'Solo administradores pueden gestionar relaciones de pareja.' }
+
+    await prisma.relationship.deleteMany({
+      where: { id: input.relationshipId, familyId: session.familyId },
+    })
+
+    revalidatePath(`/${session.familySlug}/person/${input.personId}/edit`)
+    revalidatePath(`/${session.familySlug}/tree`)
+    return { ok: true, data: null }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
   }
 }
 
@@ -270,6 +403,14 @@ export async function createPerson(input: Omit<PersonFormData, 'id' | 'coverPhot
       }
     }
 
+    const birthDate = parseDate(input.birthDate)
+    const deathDate = parseDate(input.deathDate)
+    const dateError = validateDates(birthDate, deathDate)
+    if (dateError) return { ok: false, error: dateError }
+
+    const bio = normalizeText(input.bio) || null
+    if (bio && bio.length > 5000) return { ok: false, error: 'La biografía no puede superar los 5000 caracteres.' }
+
     const person = await prisma.person.create({
       data: {
         familyId: session.familyId,
@@ -278,11 +419,11 @@ export async function createPerson(input: Omit<PersonFormData, 'id' | 'coverPhot
         lastName,
         birthSurname1: normalizeText(input.birthSurname1) || null,
         birthSurname2: normalizeText(input.birthSurname2) || null,
-        birthDate: parseDate(input.birthDate),
-        deathDate: parseDate(input.deathDate),
+        birthDate,
+        deathDate,
         birthPlace: normalizeText(input.birthPlace) || null,
         gender: parseGender(input.gender),
-        bio: normalizeText(input.bio) || null,
+        bio,
         fatherId,
         motherId,
         unitAffiliationId,
@@ -355,6 +496,7 @@ export async function updatePerson(input: PersonFormData): Promise<ActionResult>
       if (fatherId && motherId && fatherId === motherId) {
         return { ok: false, error: 'Padre y madre deben ser personas distintas.' }
       }
+      await assertNoCycle(input.id, fatherId, motherId, session.familyId)
     }
 
     let unitAffiliationId = existing.unitAffiliationId
@@ -380,6 +522,14 @@ export async function updatePerson(input: PersonFormData): Promise<ActionResult>
       }
     }
 
+    const birthDate = parseDate(input.birthDate)
+    const deathDate = parseDate(input.deathDate)
+    const dateError = validateDates(birthDate, deathDate)
+    if (dateError) return { ok: false, error: dateError }
+
+    const bio = normalizeText(input.bio) || null
+    if (bio && bio.length > 5000) return { ok: false, error: 'La biografía no puede superar los 5000 caracteres.' }
+
     const updated = await prisma.person.update({
       where: { id: input.id },
       data: {
@@ -388,11 +538,11 @@ export async function updatePerson(input: PersonFormData): Promise<ActionResult>
         lastName,
         birthSurname1: normalizeText(input.birthSurname1) || null,
         birthSurname2: normalizeText(input.birthSurname2) || null,
-        birthDate: parseDate(input.birthDate),
-        deathDate: parseDate(input.deathDate),
+        birthDate,
+        deathDate,
         birthPlace: normalizeText(input.birthPlace) || null,
         gender: parseGender(input.gender),
-        bio: normalizeText(input.bio) || null,
+        bio,
         fatherId,
         motherId,
         coverPhoto: normalizeText(input.coverPhoto) || null,
@@ -533,6 +683,70 @@ export async function deletePerson(personId: string): Promise<ActionResult> {
 
     revalidateFamilyPaths(session.familySlug)
     return { ok: true, data: undefined }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+export async function setRelationshipEndDate(input: {
+  relationshipId: string
+  personId: string
+  endDate: string | null
+}): Promise<ActionResult<null>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    const isAdmin = session.role === 'ADMIN' || session.scope === 'ADMIN'
+    if (!isAdmin) return { ok: false, error: 'Solo administradores pueden modificar relaciones de pareja.' }
+
+    const rel = await prisma.relationship.findFirst({
+      where: { id: input.relationshipId, familyId: session.familyId },
+    })
+    if (!rel) return { ok: false, error: 'Relación no encontrada.' }
+    if (rel.person1Id !== input.personId && rel.person2Id !== input.personId) {
+      return { ok: false, error: 'No autorizado.' }
+    }
+
+    const endDate = input.endDate ? new Date(input.endDate) : null
+    await prisma.relationship.update({
+      where: { id: input.relationshipId },
+      data: { endDate },
+    })
+
+    revalidateFamilyPaths(session.familySlug)
+    return { ok: true, data: null }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+export async function setParentChild(input: {
+  childId: string
+  parentId: string
+  role: 'father' | 'mother'
+}): Promise<ActionResult<null>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    await assertCanEditPerson(input.childId, session)
+
+    const child = await prisma.person.findUnique({ where: { id: input.childId } })
+    if (!child || child.familyId !== session.familyId) {
+      return { ok: false, error: 'Persona no encontrada.' }
+    }
+
+    await validateParent(input.parentId, session, input.childId)
+
+    const data = input.role === 'father'
+      ? { fatherId: input.parentId }
+      : { motherId: input.parentId }
+
+    await prisma.person.update({ where: { id: input.childId }, data })
+
+    revalidateFamilyPaths(session.familySlug, input.childId)
+    return { ok: true, data: null }
   } catch (error: unknown) {
     return { ok: false, error: (error as Error).message }
   }

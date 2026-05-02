@@ -61,6 +61,13 @@ export default async function ProtectedLayout({
             </span>
           )}
           <NotificationBell initialUnreadCount={unreadCount} />
+          <a
+            href={`/${session.familySlug}/settings`}
+            className="text-xs tracking-widest uppercase transition-colors"
+            style={{ color: '#6B6B6B' }}
+          >
+            Ajustes
+          </a>
           <form action={logout}>
             <button
               type="submit"

@@ -5,6 +5,7 @@ import { getSession } from '@/lib/session'
 import { assertPersonAccess } from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
 import { signInviteToken } from '@/lib/invite'
+import { signResetToken } from '@/lib/reset'
 import { hasCompatibleManagedUnitSurname } from '@/lib/managed-family-unit'
 import { auditLogTouchesManagedScope } from '@/lib/managed-audit'
 import { getPersonDisplayName } from '@/lib/person-name'
@@ -67,6 +68,7 @@ type FamilyPersonRecord = {
   motherId: string | null
   birthDate: Date | null
   deathDate: Date | null
+  gender: import('@prisma/client').Gender
 }
 
 type ManagedUnitDashboardRecord = {
@@ -83,7 +85,7 @@ type ManagedUnitDashboardRecord = {
   canViewAudit: boolean
   parentA: { id: string; firstName: string; middleName: string | null; lastName: string }
   parentB: { id: string; firstName: string; middleName: string | null; lastName: string } | null
-  representativeUser: { id: string; name: string; email: string } | null
+  representativeUser: { id: string; name: string; username: string } | null
 }
 
 async function getFamilyPeople(familyId: string) {
@@ -101,6 +103,7 @@ async function getFamilyPeople(familyId: string) {
       motherId: true,
       birthDate: true,
       deathDate: true,
+      gender: true,
     },
   })
 }
@@ -116,7 +119,7 @@ async function getManagedUnitsDashboardRecords(where: {
     include: {
       parentA: { select: { id: true, firstName: true, middleName: true, lastName: true } },
       parentB: { select: { id: true, firstName: true, middleName: true, lastName: true } },
-      representativeUser: { select: { id: true, name: true, email: true } },
+      representativeUser: { select: { id: true, name: true, username: true } },
     },
   })
 }
@@ -168,7 +171,7 @@ async function buildManagedUnitSummary(
     parentB: unit.parentB ? toPreviewPerson(unit.parentB) : null,
     representativeUserId: unit.representativeUserId,
     representativeUserName: unit.representativeUser?.name ?? null,
-    representativeUserEmail: unit.representativeUser?.email ?? null,
+    representativeUserUsername: unit.representativeUser?.username ?? null,
     primarySurname: unit.primarySurname,
     secondarySurname: unit.secondarySurname,
     canInviteUsers: unit.canInviteUsers,
@@ -207,7 +210,7 @@ async function resolveManagedUnitInput(
         select: {
           id: true,
           name: true,
-          email: true,
+          username: true,
           personId: true,
           person: {
             select: {
@@ -387,7 +390,7 @@ export async function getAdminDashboard(): Promise<ActionResult<AdminDashboardDa
       users: visibleUsers.map(user => ({
         id: user.id,
         name: user.name,
-        email: user.email,
+        username: user.username,
         role: user.role,
         scope: user.scope,
         branchRootId: user.branchRootId,
@@ -400,6 +403,7 @@ export async function getAdminDashboard(): Promise<ActionResult<AdminDashboardDa
         lastName: person.lastName,
         birthDate: person.birthDate ? person.birthDate.toISOString() : null,
         deathDate: person.deathDate ? person.deathDate.toISOString() : null,
+        gender: person.gender,
       })),
       managedUnits: managedUnitsSummary,
       accessRules: accessRules.map(rule => ({
@@ -886,7 +890,43 @@ export async function createInviteLink(input: {
       },
     })
 
-    return { ok: true, data: { url: `/invite/${token}` } }
+    const host = process.env.APP_HOSTNAME
+      ? `https://${process.env.APP_HOSTNAME}`
+      : 'http://localhost:3000'
+    return { ok: true, data: { url: `${host}/invite/${token}` } }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+export async function createPasswordResetLink(userId: string): Promise<ActionResult<{ url: string; username: string }>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    ensureAdmin(session)
+
+    const user = await prisma.user.findFirst({
+      where: { id: userId, familyId: session.familyId },
+      select: { id: true, username: true, name: true },
+    })
+    if (!user) return { ok: false, error: 'Usuario no encontrado.' }
+
+    const { token } = await signResetToken(user.id, session.familyId)
+
+    await logAudit({
+      familyId: session.familyId,
+      userId: session.userId,
+      action: 'CREATE_PASSWORD_RESET_LINK',
+      entityType: 'User',
+      entityId: user.id,
+      newValue: { targetUsername: user.username },
+    })
+
+    const host = process.env.APP_HOSTNAME
+      ? `https://${process.env.APP_HOSTNAME}`
+      : 'http://localhost:3000'
+    return { ok: true, data: { url: `${host}/reset/${token}`, username: user.username } }
   } catch (error: unknown) {
     return { ok: false, error: (error as Error).message }
   }
@@ -980,6 +1020,133 @@ export async function importRelationsJson(input: {
     }
 
     return { ok: true, data: { updatedPeople: changedUpdates.length } }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+export async function bulkCreatePeopleJson(input: {
+  jsonText: string
+}): Promise<ActionResult<{ created: number; updated: number }>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    ensureAdmin(session)
+
+    const jsonText = input.jsonText.trim()
+    if (!jsonText) return { ok: false, error: 'El JSON está vacío.' }
+
+    let raw: unknown
+    try { raw = JSON.parse(jsonText) } catch { return { ok: false, error: 'JSON inválido.' } }
+
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return { ok: false, error: 'El JSON debe ser un objeto.' }
+    }
+
+    const payload = raw as Record<string, unknown>
+    if (typeof payload.familySlug !== 'string' || payload.familySlug.trim() !== session.familySlug) {
+      return { ok: false, error: `El JSON dice familySlug="${payload.familySlug}" pero esta familia es "${session.familySlug}".` }
+    }
+
+    if (!Array.isArray(payload.people)) {
+      return { ok: false, error: 'Falta el array "people" en el JSON.' }
+    }
+
+    const jsonPeople = payload.people as Record<string, unknown>[]
+    for (const p of jsonPeople) {
+      if (!p || typeof p.id !== 'string' || !p.id.trim()) {
+        return { ok: false, error: 'Cada persona debe tener un campo "id" no vacío.' }
+      }
+    }
+
+    const jsonIds = jsonPeople.map(p => (p.id as string).trim())
+    const seen = new Set<string>()
+    for (const id of jsonIds) {
+      if (seen.has(id)) return { ok: false, error: `ID duplicado en el JSON: ${id}` }
+      seen.add(id)
+    }
+
+    const existingPeople = await prisma.person.findMany({
+      where: { familyId: session.familyId },
+      select: { id: true },
+    })
+    const existingIds = new Set(existingPeople.map(p => p.id))
+
+    // Build mapping: jsonId → real DB id
+    const idMap = new Map<string, string>()
+    for (const jsonId of jsonIds) {
+      idMap.set(jsonId, existingIds.has(jsonId) ? jsonId : crypto.randomUUID().replace(/-/g, ''))
+    }
+
+    const resolveRef = (val: unknown): string | null => {
+      if (!val || typeof val !== 'string' || !val.trim()) return null
+      return idMap.get(val.trim()) ?? null
+    }
+
+    const trim = (val: unknown): string | null => {
+      if (typeof val !== 'string') return null
+      return val.trim() || null
+    }
+
+    type CreateData = { id: string; firstName: string; lastName: string; middleName: string | null; birthSurname1: string | null; birthSurname2: string | null }
+    type RelUpdate = { id: string; fatherId: string | null; motherId: string | null }
+
+    const toCreate: CreateData[] = []
+    const allRelUpdates: RelUpdate[] = []
+
+    for (const p of jsonPeople) {
+      const jsonId = (p.id as string).trim()
+      const realId = idMap.get(jsonId)!
+      const isNew = !existingIds.has(jsonId)
+
+      if (isNew) {
+        toCreate.push({
+          id: realId,
+          firstName: typeof p.firstName === 'string' ? p.firstName.trim() : '',
+          lastName: typeof p.lastName === 'string' ? p.lastName.trim() : '',
+          middleName: trim(p.middleName),
+          birthSurname1: trim(p.birthSurname1),
+          birthSurname2: trim(p.birthSurname2),
+        })
+      }
+      allRelUpdates.push({ id: realId, fatherId: resolveRef(p.fatherId), motherId: resolveRef(p.motherId) })
+    }
+
+    await prisma.$transaction([
+      ...toCreate.map(person =>
+        prisma.person.create({
+          data: {
+            id: person.id,
+            familyId: session.familyId,
+            firstName: person.firstName,
+            lastName: person.lastName,
+            middleName: person.middleName,
+            birthSurname1: person.birthSurname1,
+            birthSurname2: person.birthSurname2,
+          },
+        })
+      ),
+      ...allRelUpdates.map(u =>
+        prisma.person.update({ where: { id: u.id }, data: { fatherId: u.fatherId, motherId: u.motherId } })
+      ),
+    ])
+
+    const updatedExisting = allRelUpdates.length - toCreate.length
+
+    await logAudit({
+      familyId: session.familyId,
+      userId: session.userId,
+      action: 'BULK_CREATE_PEOPLE_JSON',
+      entityType: 'Family',
+      entityId: session.familyId,
+      newValue: { created: toCreate.length, updated: updatedExisting },
+    })
+
+    revalidatePath(`/${session.familySlug}/tree`)
+    revalidatePath(`/${session.familySlug}/admin`)
+
+    return { ok: true, data: { created: toCreate.length, updated: updatedExisting } }
   } catch (error: unknown) {
     return { ok: false, error: (error as Error).message }
   }
