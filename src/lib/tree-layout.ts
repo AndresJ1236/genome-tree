@@ -68,78 +68,30 @@ function computeFocusLateralScores(
   return scores
 }
 
-// ── Clan score (fallback when no focus) ───────────────────────────────────
-// Assigns each root cluster a fractional 0→1 position (ordered by birth year),
-// then propagates down through descendants.
-function computeClanScores(
+// ── Auto-focus detection ──────────────────────────────────────────────────
+// When no explicit focusPersonId is provided, pick the most "interior" person:
+// the deepest in the tree (by generation) who also has at least one parent
+// AND at least one child in the dataset. This ensures the focus-centered
+// algorithm always runs and separates paternal/maternal branches.
+function findAutoFocus(
   persons: PersonData[],
   parentsOf: Map<string, string[]>,
-  spousesOf: Map<string, string[]>,
-  personSet: Set<string>,
-  byGen: Map<number, string[]>,
-  maxGen: number,
-  ownYear: (id: string) => number,
-): Map<string, number> {
-  const score = new Map<string, number>()
-
-  const rootIds = persons.map(p => p.id).filter(id => (parentsOf.get(id)?.length ?? 0) === 0)
-  const rootInSet = new Set(rootIds)
-  const rootSeen  = new Set<string>()
-  const rootClusters: string[][] = []
-
-  for (const id of rootIds) {
-    if (rootSeen.has(id)) continue
-    const cluster: string[] = []
-    const queue = [id]
-    rootSeen.add(id)
-    while (queue.length > 0) {
-      const cid = queue.shift()!
-      cluster.push(cid)
-      for (const sid of spousesOf.get(cid) ?? []) {
-        if (rootInSet.has(sid) && !rootSeen.has(sid)) {
-          rootSeen.add(sid)
-          queue.push(sid)
-        }
-      }
-    }
-    rootClusters.push(cluster)
-  }
-
-  rootClusters.sort((a, b) => {
-    const minA = Math.min(...a.map(ownYear))
-    const minB = Math.min(...b.map(ownYear))
-    if (minA !== minB) return minA - minB
-    return a[0].localeCompare(b[0])
-  })
-
-  const n = rootClusters.length
-  rootClusters.forEach((cluster, idx) => {
-    const s = n > 1 ? idx / (n - 1) : 0.5
-    for (const id of cluster) score.set(id, s)
-  })
-
-  for (let g = 1; g <= maxGen; g++) {
-    const genIds = byGen.get(g) ?? []
-    for (const id of genIds) {
-      const ss = (parentsOf.get(id) ?? [])
-        .map(pid => score.get(pid))
-        .filter((s): s is number => s !== undefined)
-      if (ss.length > 0) score.set(id, ss.reduce((a, b) => a + b, 0) / ss.length)
-    }
-    for (const id of genIds) {
-      if (score.has(id)) continue
-      const ss = (spousesOf.get(id) ?? [])
-        .map(sid => score.get(sid))
-        .filter((s): s is number => s !== undefined)
-      score.set(id, ss.length > 0 ? ss.reduce((a, b) => a + b, 0) / ss.length : 0.5)
-    }
-  }
+  childrenOf: Map<string, Set<string>>,
+  gen: Map<string, number>,
+): string {
+  let bestId   = persons[0].id
+  let bestScore = -Infinity
 
   for (const p of persons) {
-    if (!score.has(p.id)) score.set(p.id, 0.5)
+    const parentCount = parentsOf.get(p.id)?.length ?? 0
+    const childCount  = childrenOf.get(p.id)?.size  ?? 0
+    const depth       = gen.get(p.id) ?? 0
+    // Primary: prefer deeper generations; secondary: needs both parents + children
+    const s = depth * 100 + (parentCount > 0 ? 50 : 0) + childCount * 10 + parentCount
+    if (s > bestScore) { bestScore = s; bestId = p.id }
   }
 
-  return score
+  return bestId
 }
 
 // ── Main layout function ──────────────────────────────────────────────────
@@ -269,15 +221,15 @@ export function computeTreeLayout(
   const maxGen = Math.max(...gen.values())
 
   // ── Score computation ─────────────────────────────────────────────────────
-  // Use focus-lateral scores when a valid focus person is provided;
-  // otherwise fall back to clan scores (origin-based ordering).
-  const focusId = options?.focusPersonId && personSet.has(options.focusPersonId)
-    ? options.focusPersonId
-    : null
+  // Always use focus-centered lateral scores.
+  // Focus priority: (1) explicit focusPersonId from session, (2) auto-detected
+  // most-interior person (deepest with known parents + children).
+  const focusId: string =
+    options?.focusPersonId && personSet.has(options.focusPersonId)
+      ? options.focusPersonId
+      : findAutoFocus(persons, parentsOf, childrenOf, gen)
 
-  const score: Map<string, number> = focusId
-    ? computeFocusLateralScores(focusId, personMap, personSet, spousesOf)
-    : computeClanScores(persons, parentsOf, spousesOf, personSet, byGen, maxGen, ownYear)
+  const score: Map<string, number> = computeFocusLateralScores(focusId, personMap, personSet, spousesOf)
 
   // ── X-position layout ─────────────────────────────────────────────────────
   const unitScore = (members: string[]) => {
@@ -408,15 +360,9 @@ export function computeTreeLayout(
     generation: gen.get(p.id) ?? 0,
   }))
 
-  // Center the canvas: on focus person if available, otherwise on midpoint of all nodes
-  if (focusId && xPos.has(focusId)) {
-    const focusX = xPos.get(focusId)!
-    for (const n of nodes) n.x -= focusX
-  } else {
-    const allX    = nodes.map(n => n.x)
-    const centerX = (Math.min(...allX) + Math.max(...allX)) / 2
-    for (const n of nodes) n.x -= centerX
-  }
+  // Center the canvas on the focus person
+  const focusX = xPos.get(focusId) ?? 0
+  for (const n of nodes) n.x -= focusX
 
   // ── Place pets orbiting their owner ──────────────────────────────────────
   const nodeById     = new Map(nodes.map(n => [n.id, n]))
