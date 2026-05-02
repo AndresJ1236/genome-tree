@@ -409,7 +409,7 @@ export function PersonEditor({
 
       <div style={{ display: 'grid', gap: 22 }}>
 
-        {mode === 'create' && (
+        {mode === 'create' && form.nodeKind !== 'PET' && (
           <section style={cardStyle}>
             <p style={{ margin: '0 0 16px', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8B9E94', fontFamily: 'Georgia, serif' }}>
               Conexión inicial
@@ -543,7 +543,7 @@ export function PersonEditor({
                 {form.nodeKind !== 'PET' && <option value="OTHER">Otro</option>}
               </select>
             </Field>
-            <Field label={form.nodeKind === 'PET' ? 'Dueño 1' : 'Padre'} help={form.nodeKind === 'PET' ? 'Primera persona responsable de la mascota.' : 'Padre biológico o adoptivo registrado en el árbol.'}>
+            <Field label={form.nodeKind === 'PET' ? 'Dueño/a' : 'Padre'} help={form.nodeKind === 'PET' ? 'Persona responsable de la mascota. La mascota orbitará su nodo en el árbol.' : 'Padre biológico o adoptivo registrado en el árbol.'}>
               <select
                 value={form.fatherId}
                 onChange={e => updateField('fatherId', e.target.value)}
@@ -556,19 +556,21 @@ export function PersonEditor({
                 ))}
               </select>
             </Field>
-            <Field label={form.nodeKind === 'PET' ? 'Dueño 2' : 'Madre'} help={form.nodeKind === 'PET' ? 'Segunda persona responsable de la mascota.' : 'Madre biológica o adoptiva registrada en el árbol.'}>
-              <select
-                value={form.motherId}
-                onChange={e => updateField('motherId', e.target.value)}
-                style={canChangeRel ? inputStyle : disabledInputStyle}
-                disabled={!canChangeRel}
-              >
-                <option value="">Sin asignar</option>
-                {parentOptions.map(option => (
-                  <option key={option.id} value={option.id}>{option.label}</option>
-                ))}
-              </select>
-            </Field>
+            {form.nodeKind !== 'PET' && (
+              <Field label="Madre" help="Madre biológica o adoptiva registrada en el árbol.">
+                <select
+                  value={form.motherId}
+                  onChange={e => updateField('motherId', e.target.value)}
+                  style={canChangeRel ? inputStyle : disabledInputStyle}
+                  disabled={!canChangeRel}
+                >
+                  <option value="">Sin asignar</option>
+                  {parentOptions.map(option => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+              </Field>
+            )}
           </div>
 
           <div style={{ marginTop: 18 }}>
@@ -719,7 +721,7 @@ export function PersonEditor({
           </div>
         </section>
 
-        {mode === 'edit' && isAdmin && (
+        {mode === 'edit' && isAdmin && form.nodeKind !== 'PET' && (
           <section style={cardStyle}>
             <div style={{ marginBottom: 18 }}>
               <h2 style={{ margin: '0 0 6px', fontFamily: 'Georgia, serif', fontSize: 22, color: '#2D4A3E' }}>Pareja / Cónyuge</h2>

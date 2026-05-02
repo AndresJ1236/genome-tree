@@ -1,21 +1,21 @@
 'use client'
 
 import { NODE_W, NODE_H } from '@/lib/tree-layout'
-import type { LayoutNode, FamilyUnit } from '@/lib/tree-types'
+import type { LayoutNode, FamilyUnit, PetLink } from '@/lib/tree-types'
 
 const BRANCH_COLOR = '#B5C4BC'
-const BRANCH_HOVER = '#7aad95'
 const BRANCH_ACTIVE = '#2D4A3E'
 const BRANCH_WIDTH = 1.6
 
 interface FamilyEdgesProps {
   nodes: LayoutNode[]
   familyUnits: FamilyUnit[]
+  petLinks: PetLink[]
   selectedId: string | null
   visibleIds: Set<string> | null
 }
 
-export function FamilyEdges({ nodes, familyUnits, selectedId, visibleIds }: FamilyEdgesProps) {
+export function FamilyEdges({ nodes, familyUnits, petLinks, selectedId, visibleIds }: FamilyEdgesProps) {
   const byId = new Map(nodes.map(n => [n.id, n]))
 
   const units = visibleIds === null ? familyUnits : familyUnits.filter(u =>
@@ -31,6 +31,31 @@ export function FamilyEdges({ nodes, familyUnits, selectedId, visibleIds }: Fami
 
   return (
     <g>
+      {/* ── Pet tether lines ───────────────────────────────────────────────── */}
+      {petLinks.map(({ petId, ownerId }) => {
+        const pet   = byId.get(petId)
+        const owner = byId.get(ownerId)
+        if (!pet || !owner) return null
+        const isActive = selectedId === petId || selectedId === ownerId
+        const ox = owner.x + NODE_W / 2
+        const oy = owner.y + NODE_H / 2
+        const px = pet.x  + NODE_W / 2
+        const py = pet.y  + NODE_H / 2
+        return (
+          <line
+            key={petId + '-tether'}
+            x1={ox} y1={oy}
+            x2={px} y2={py}
+            stroke={isActive ? BRANCH_ACTIVE : '#C4B8A8'}
+            strokeWidth={isActive ? 1.8 : 1.2}
+            strokeDasharray="4 4"
+            strokeLinecap="round"
+            opacity={isActive ? 0.9 : 0.55}
+            style={{ transition: 'stroke 0.25s, stroke-width 0.25s, opacity 0.25s' }}
+          />
+        )
+      })}
+
       {units.map(unit => {
         const p1 = byId.get(unit.parent1Id)
         const p2 = unit.parent2Id ? byId.get(unit.parent2Id) : null

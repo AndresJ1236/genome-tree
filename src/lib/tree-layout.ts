@@ -1,15 +1,26 @@
-import type { PersonData, RelationshipData, LayoutNode, FamilyUnit, TreeLayout } from './tree-types'
+import type { PersonData, RelationshipData, LayoutNode, FamilyUnit, PetLink, TreeLayout } from './tree-types'
 
 export const NODE_W = 72
 export const NODE_H = 72
 const GEN_H      = 250
 const H_GAP      = 150
 const COUPLE_GAP = 120
+const ORBIT_R    = 110
+// Preferred orbit angles (degrees, 0=right, clockwise in screen space)
+const ORBIT_ANGLES = [80, 35, 125, -35, 145, -80, 170]
 
 export function computeTreeLayout(persons: PersonData[], relationships: RelationshipData[] = []): TreeLayout {
   if (persons.length === 0) {
-    return { nodes: [], familyUnits: [], bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 } }
+    return { nodes: [], familyUnits: [], petLinks: [], bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 } }
   }
+
+  // Separate pets — they don't participate in the generation grid
+  const pets    = persons.filter(p => p.nodeKind === 'PET')
+  const nonPets = persons.filter(p => p.nodeKind !== 'PET')
+
+  // Run the rest of the algorithm on non-pets only, then re-join
+  const persons_orig = persons
+  persons = nonPets
 
   const personSet = new Set(persons.map(p => p.id))
   const personMap = new Map(persons.map(p => [p.id, p]))
@@ -249,6 +260,61 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
   const centerX = (Math.min(...allX) + Math.max(...allX)) / 2
   for (const n of nodes) n.x -= centerX
 
+  // ── Place pets orbiting their owner ─────────────────────────────────────────
+  const nodeById = new Map(nodes.map(n => [n.id, n]))
+  const petsByOwner = new Map<string, string[]>()
+  for (const pet of pets) {
+    const ownerId = pet.fatherId ?? pet.motherId
+    if (!ownerId || !nodeById.has(ownerId)) continue
+    if (!petsByOwner.has(ownerId)) petsByOwner.set(ownerId, [])
+    petsByOwner.get(ownerId)!.push(pet.id)
+  }
+
+  const petLinks: PetLink[] = []
+  const petXOverride = new Map<string, number>()
+  const petYOverride = new Map<string, number>()
+
+  for (const [ownerId, petIds] of petsByOwner.entries()) {
+    const owner = nodeById.get(ownerId)!
+    const ownerCx = owner.x + NODE_W / 2
+    const ownerCy = owner.y + NODE_H / 2
+
+    for (let i = 0; i < petIds.length; i++) {
+      const angleDeg = ORBIT_ANGLES[i % ORBIT_ANGLES.length]
+      const angleRad = (angleDeg * Math.PI) / 180
+      petXOverride.set(petIds[i], ownerCx + ORBIT_R * Math.cos(angleRad) - NODE_W / 2)
+      petYOverride.set(petIds[i], ownerCy + ORBIT_R * Math.sin(angleRad) - NODE_H / 2)
+    }
+  }
+
+  // Pets without a known owner: stack at top-left corner of canvas
+  const leftmostX = nodes.length > 0 ? Math.min(...nodes.map(n => n.x)) : 0
+  let orphanPetIndex = 0
+  for (const pet of pets) {
+    const ownerId = pet.fatherId ?? pet.motherId
+    if (!ownerId || !nodeById.has(ownerId)) {
+      petXOverride.set(pet.id, leftmostX - 120 - orphanPetIndex * 80)
+      petYOverride.set(pet.id, 0)
+      orphanPetIndex++
+    }
+  }
+
+  for (const pet of pets) {
+    const ownerId = pet.fatherId ?? pet.motherId
+    if (ownerId && personSet.has(ownerId)) {
+      petLinks.push({ petId: pet.id, ownerId })
+    }
+    nodes.push({
+      ...pet,
+      x:          petXOverride.get(pet.id) ?? 0,
+      y:          petYOverride.get(pet.id) ?? 0,
+      generation: gen.get(pet.fatherId ?? pet.motherId ?? '') ?? 0,
+    })
+  }
+
+  // Restore full person list reference for any future use
+  void persons_orig
+
   const familyUnits: FamilyUnit[] = []
   const processedUnits = new Set<string>()
 
@@ -305,6 +371,7 @@ export function computeTreeLayout(persons: PersonData[], relationships: Relation
   return {
     nodes,
     familyUnits,
+    petLinks,
     bounds: {
       minX: Math.min(...xs),
       minY: Math.min(...ys),
