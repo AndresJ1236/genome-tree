@@ -40,18 +40,20 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
   const fullName  = getPersonDisplayName(person)
   const initials  = (person.firstName[0] ?? '') + (person.lastName[0] ?? '')
 
+  const isPet = person.nodeKind === 'PET'
+
   const tabs: TabDef[] = useMemo(() => [
     ...(modules.moduleMedia ? [{ id: 'fotos' as const, label: 'Fotos', count: mediaCount }] : []),
     ...(modules.moduleStories ? [{ id: 'historias' as const, label: 'Historias', count: person.counts.stories }] : []),
-    ...(modules.moduleRecipes ? [{ id: 'recetas' as const, label: 'Recetas', count: person.counts.recipes }] : []),
+    ...(!isPet && modules.moduleRecipes ? [{ id: 'recetas' as const, label: 'Recetas', count: person.counts.recipes }] : []),
     ...(modules.moduleObjects ? [{ id: 'objetos' as const, label: 'Objetos', count: person.counts.objects }] : []),
-    ...(modules.moduleDiary ? [
+    ...(!isPet && modules.moduleDiary ? [
       { id: 'diario' as const, label: 'Diario', count: person.counts.diary },
       { id: 'entrevistas' as const, label: 'Entrevistas', count: person.counts.interviews },
     ] : []),
     ...(modules.moduleStories ? [{ id: 'fuentes' as const, label: 'Fuentes', count: person.counts.sources }] : []),
-    ...(modules.moduleLinks ? [{ id: 'relaciones' as const, label: 'Relaciones', count: person.counts.importantLinks }] : []),
-  ], [mediaCount, modules, person.counts.diary, person.counts.importantLinks, person.counts.interviews, person.counts.objects, person.counts.recipes, person.counts.sources, person.counts.stories])
+    ...(!isPet && modules.moduleLinks ? [{ id: 'relaciones' as const, label: 'Relaciones', count: person.counts.importantLinks }] : []),
+  ], [isPet, mediaCount, modules, person.counts.diary, person.counts.importantLinks, person.counts.interviews, person.counts.objects, person.counts.recipes, person.counts.sources, person.counts.stories])
 
   const resolvedActiveTab = tabs.some(tab => tab.id === activeTab)
     ? activeTab
@@ -162,28 +164,28 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
           )}
           {person.canManage && (
             <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <HeaderActionLink href={`/${familySlug}/person/${person.id}/edit`} label="Editar persona" />
-              <HeaderActionLink href={`/${familySlug}/person/new`} label="Nueva persona" />
+              <HeaderActionLink href={`/${familySlug}/person/${person.id}/edit`} label="Editar" />
+              <HeaderActionLink href={`/${familySlug}/person/new`} label="Nuevo" />
             </div>
           )}
 
           {/* Familia directa */}
           {(person.parents.length > 0 || person.spouses.length > 0 || person.children.length > 0) && (
             <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {person.spouses.map(p => (
+              {!isPet && person.spouses.map(p => (
                 <FamilyBadge key={p.id} person={p} label="Pareja" familySlug={familySlug} />
               ))}
               {person.parents.map(p => (
-                <FamilyBadge key={p.id} person={p} label="Padre/Madre" familySlug={familySlug} />
+                <FamilyBadge key={p.id} person={p} label={isPet ? 'Dueño/a' : 'Padre/Madre'} familySlug={familySlug} />
               ))}
-              {person.children.map(p => (
+              {!isPet && person.children.map(p => (
                 <FamilyBadge key={p.id} person={p} label="Hijo/a" familySlug={familySlug} />
               ))}
             </div>
           )}
 
           {/* Afiliación a unidad */}
-          {(person.unitAffiliationLabel || person.claimedRelation) && (
+          {!isPet && (person.unitAffiliationLabel || person.claimedRelation) && (
             <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {person.unitAffiliationLabel && (
                 <span style={{
@@ -456,8 +458,19 @@ function PhotosTab({
   // ── Subir uno o varios archivos ────────────────────────────────────────────
   const handleFiles = useCallback(async (files: FileList) => {
     if (!files.length) return
-    setUpl(true)
     setError(null)
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    for (const file of Array.from(files)) {
+      if (!allowed.includes(file.type)) {
+        setError(`Archivo no permitido: "${file.name}". Solo se aceptan JPG, PNG, WebP o GIF.`)
+        return
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setError(`"${file.name}" supera el límite de 10 MB.`)
+        return
+      }
+    }
+    setUpl(true)
     for (const file of Array.from(files)) {
       const fd = new FormData()
       fd.append('file', file)
@@ -474,8 +487,7 @@ function PhotosTab({
       setMedia(prev => [...prev, newItem])
     }
     setUpl(false)
-    router.refresh()
-  }, [personId, router])
+  }, [personId])
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDrag(false)

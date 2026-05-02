@@ -84,6 +84,7 @@ function serializeDate(d: Date | null | undefined): string | null {
 function toPersonBasic(p: {
   id: string; firstName: string; middleName: string | null; lastName: string
   birthDate: Date | null; deathDate: Date | null; coverPhoto: string | null
+  gender: import('@prisma/client').Gender
 }): PersonBasic {
   return {
     id:         p.id,
@@ -93,6 +94,7 @@ function toPersonBasic(p: {
     birthDate:  serializeDate(p.birthDate),
     deathDate:  serializeDate(p.deathDate),
     coverPhoto: p.coverPhoto,
+    gender:     p.gender as import('@/lib/content-types').Gender,
   }
 }
 
@@ -168,7 +170,7 @@ export async function getPersonProfile(
     canViewPersonMedia(session, personId),
     canViewPrivatePersonData(session, personId),
   ])
-  const personSelect = { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, coverPhoto: true }
+  const personSelect = { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, coverPhoto: true, gender: true }
 
   const [person, children, contentCounts, importantLinksCount, canManage, modules] = await Promise.all([
     prisma.person.findUnique({
@@ -243,6 +245,7 @@ export async function getPersonProfile(
     deathDate:  serializeDate(person.deathDate),
     birthPlace: canViewPrivate ? person.birthPlace : null,
     gender:     person.gender,
+    nodeKind:   (person.nodeKind ?? 'PERSON') as import('@/lib/content-types').PersonKind,
     bio:        canViewPrivate ? person.bio : null,
     coverPhoto: person.coverPhoto,
     isCore:     person.isCore,
@@ -311,7 +314,7 @@ export async function getPersonFull(
     prisma.importantLink.findMany({
       where:   visibilityIn.length > 0 ? { personId, visibility: { in: visibilityIn } } : { personId, id: '__none__' },
       include: {
-        relatedPerson: { select: { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, coverPhoto: true } },
+        relatedPerson: { select: { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, coverPhoto: true, gender: true } },
       },
       orderBy: { createdAt: 'desc' },
     }),
