@@ -32,6 +32,7 @@ export interface PersonOption {
   lastName: string
   birthDate: string | null
   deathDate: string | null
+  gender: Gender
 }
 
 export interface MediaItem {
@@ -224,6 +225,8 @@ export interface CreateImportantLinkInput {
   externalName?: string
 }
 
+export type PersonKind = 'PERSON' | 'PET'
+
 export interface PersonFormData {
   id: string
   firstName: string
@@ -235,6 +238,7 @@ export interface PersonFormData {
   deathDate: string
   birthPlace: string
   gender: Gender
+  nodeKind: PersonKind
   bio: string
   fatherId: string
   motherId: string
@@ -250,6 +254,14 @@ export interface ManagedUnitOption {
   label: string
 }
 
+export interface RelationshipItem {
+  id: string
+  type: 'SPOUSE' | 'PARTNER'
+  partnerId: string
+  partnerName: string
+  endDate: string | null
+}
+
 export interface PersonEditorPayload {
   familySlug: string
   person: PersonFormData | null
@@ -258,12 +270,13 @@ export interface PersonEditorPayload {
   viewerMode: 'ADMIN' | 'REPRESENTATIVE' | 'MEMBER'
   canChangeRelationships: boolean
   managedUnits: ManagedUnitOption[]
+  relationships: RelationshipItem[]
 }
 
 export interface AdminUserItem {
   id: string
   name: string
-  email: string
+  username: string
   role: UserRole
   scope: UserScope
   branchRootId: string | null
@@ -284,7 +297,7 @@ export interface ManagedFamilyUnitItem {
   parentB: ManagedFamilyUnitPreviewPerson | null
   representativeUserId: string | null
   representativeUserName: string | null
-  representativeUserEmail: string | null
+  representativeUserUsername: string | null
   primarySurname: string | null
   secondarySurname: string | null
   canInviteUsers: boolean

@@ -17,6 +17,11 @@ enum Gender {
   UNKNOWN
 }
 
+enum PersonKind {
+  PERSON
+  PET
+}
+
 enum RelationshipType {
   SPOUSE
   PARTNER
@@ -131,7 +136,8 @@ model Person {
   birthDate  DateTime?
   deathDate  DateTime?
   birthPlace String?
-  gender     Gender    @default(UNKNOWN)
+  gender     Gender     @default(UNKNOWN)
+  nodeKind   PersonKind @default(PERSON)
   bio        String?
   coverPhoto String?
 
@@ -191,6 +197,7 @@ model Relationship {
   person1Id String
   person2Id String
   type      RelationshipType
+  endDate   DateTime?
   createdAt DateTime         @default(now())
 
   family  Family @relation(fields: [familyId], references: [id])
@@ -206,7 +213,7 @@ model Relationship {
 
 model User {
   id           String    @id @default(cuid())
-  email        String    @unique
+  username     String    @unique
   passwordHash String
   name         String
   familyId     String

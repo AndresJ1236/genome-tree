@@ -26,6 +26,7 @@ async function main() {
     birthDate: p.birthDate?.toISOString() ?? null,
     deathDate: p.deathDate?.toISOString() ?? null,
     gender: p.gender,
+    nodeKind: (p.nodeKind ?? 'PERSON') as 'PERSON' | 'PET',
     coverPhoto: p.coverPhoto,
     fatherId: p.fatherId,
     motherId: p.motherId,

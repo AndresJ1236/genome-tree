@@ -6,6 +6,7 @@ export interface PersonData {
   birthDate:  string | null   // ISO string
   deathDate:  string | null   // ISO string
   gender:     'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN'
+  nodeKind:   'PERSON' | 'PET'
   coverPhoto: string | null
   // Parentesco directo (nuevo modelo)
   fatherId:   string | null
@@ -17,6 +18,7 @@ export interface RelationshipData {
   person1Id: string
   person2Id: string
   type: 'SPOUSE' | 'PARTNER'
+  endDate: string | null
 }
 
 export interface LayoutNode extends PersonData {
@@ -26,10 +28,11 @@ export interface LayoutNode extends PersonData {
 }
 
 export interface FamilyUnit {
-  id:        string
-  parent1Id: string
-  parent2Id: string | null
-  childIds:  string[]
+  id:         string
+  parent1Id:  string
+  parent2Id:  string | null
+  childIds:   string[]
+  isExCouple?: boolean
 }
 
 export interface TreeLayout {
