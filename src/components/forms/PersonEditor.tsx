@@ -80,6 +80,7 @@ function emptyForm(): PersonFormData {
     deathDate: '',
     birthPlace: '',
     gender: 'UNKNOWN',
+    nodeKind: 'PERSON',
     bio: '',
     fatherId: '',
     motherId: '',
@@ -522,6 +523,12 @@ export function PersonEditor({
                 <option value="MALE">Masculino</option>
                 <option value="FEMALE">Femenino</option>
                 <option value="OTHER">Otro</option>
+              </select>
+            </Field>
+            <Field label="Tipo" help="Persona: aparece como nodo normal en el árbol. Mascota: aparece como nodo pequeño y discreto.">
+              <select value={form.nodeKind} onChange={e => updateField('nodeKind', e.target.value as PersonFormData['nodeKind'])} style={inputStyle}>
+                <option value="PERSON">Persona</option>
+                <option value="PET">Mascota</option>
               </select>
             </Field>
             <Field label="Padre" help="Padre biológico o adoptivo registrado en el árbol. Solo puedes vincular personas que ya existan.">
