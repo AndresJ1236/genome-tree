@@ -79,15 +79,29 @@ function findAutoFocus(
   childrenOf: Map<string, Set<string>>,
   gen: Map<string, number>,
 ): string {
-  let bestId   = persons[0].id
+  let bestId    = persons[0].id
   let bestScore = -Infinity
 
+  // Phase 1: prefer someone with BOTH known parents AND at least one child.
+  // Among those, pick the deepest (higher generation = deeper = more interior).
   for (const p of persons) {
     const parentCount = parentsOf.get(p.id)?.length ?? 0
     const childCount  = childrenOf.get(p.id)?.size  ?? 0
-    const depth       = gen.get(p.id) ?? 0
-    // Primary: prefer deeper generations; secondary: needs both parents + children
-    const s = depth * 100 + (parentCount > 0 ? 50 : 0) + childCount * 10 + parentCount
+    if (parentCount === 0 || childCount === 0) continue  // must be a bridge
+    const depth = gen.get(p.id) ?? 0
+    const s = depth * 100 + parentCount * 10 + childCount
+    if (s > bestScore) { bestScore = s; bestId = p.id }
+  }
+  if (bestScore > -Infinity) return bestId
+
+  // Phase 2 fallback: deepest person with any known parent (a leaf with parents
+  // is still better than a root with no parents).
+  bestScore = -Infinity
+  for (const p of persons) {
+    const parentCount = parentsOf.get(p.id)?.length ?? 0
+    if (parentCount === 0) continue
+    const depth = gen.get(p.id) ?? 0
+    const s = depth * 100 + parentCount
     if (s > bestScore) { bestScore = s; bestId = p.id }
   }
 
