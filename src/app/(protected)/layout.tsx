@@ -48,6 +48,15 @@ export default async function ProtectedLayout({
                 Administracion
               </a>
             )}
+            {session.role !== 'ADMIN' && (
+              <a
+                href={`/${session.familySlug}/settings/proposals`}
+                className="text-xs tracking-widest uppercase transition-colors"
+                style={{ color: '#6B6B6B' }}
+              >
+                Mis propuestas
+              </a>
+            )}
           </nav>
         </div>
 

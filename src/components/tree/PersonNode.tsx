@@ -79,7 +79,8 @@ export function PersonNode({ node, selected, highlighted, onSelect, animDelay }:
           fontFamily: 'Georgia, Cambria, serif',
           color: '#3a3a3a',
           lineHeight: 1.35,
-          whiteSpace: 'nowrap',
+          maxWidth: NODE_W + 24,
+          wordBreak: 'break-word',
         }}
       >
         {node.firstName}

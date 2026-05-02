@@ -7,7 +7,7 @@ import { logAudit } from '@/lib/audit'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { notifyAdminsAndRepresentatives, notifyUser } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
-import type { ActionResult, PersonProposalItem } from '@/lib/content-types'
+import type { ActionResult, PersonProposalItem, ProposalStatus } from '@/lib/content-types'
 import type { Gender } from '@prisma/client'
 
 // null = no se propone cambio en ese campo
@@ -356,6 +356,64 @@ export async function getPendingProposals(): Promise<ActionResult<PersonProposal
         personName:      getPersonDisplayName(p.person),
         proposedByName:  p.proposedBy.name,
         status:          p.status as 'PENDING',
+        createdAt:       p.createdAt.toISOString(),
+        reviewedAt:      p.reviewedAt?.toISOString() ?? null,
+        rejectionReason: p.rejectionReason,
+        fields,
+      }
+    })
+
+    return { ok: true, data: items }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+// ─────────────────────────────────────────────
+// OBTENER PROPUESTAS DEL USUARIO ACTUAL
+// ─────────────────────────────────────────────
+
+export async function getOwnProposals(): Promise<ActionResult<PersonProposalItem[]>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    const proposals = await prisma.personUpdateProposal.findMany({
+      where: { familyId: session.familyId, proposedById: session.userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, personId: true, status: true,
+        createdAt: true, reviewedAt: true, rejectionReason: true,
+        firstName: true, middleName: true, lastName: true,
+        gender: true, birthDate: true, deathDate: true,
+        birthPlace: true, bio: true,
+        currentValues: true,
+        person:     { select: { firstName: true, middleName: true, lastName: true } },
+        proposedBy: { select: { name: true } },
+      },
+    })
+
+    const items: PersonProposalItem[] = proposals.map(p => {
+      const current = p.currentValues as Record<string, unknown>
+      const proposed: Record<string, unknown> = {
+        firstName:  p.firstName, middleName: p.middleName, lastName: p.lastName,
+        gender:     p.gender,
+        birthDate:  p.birthDate?.toISOString() ?? null,
+        deathDate:  p.deathDate?.toISOString() ?? null,
+        birthPlace: p.birthPlace, bio: p.bio,
+      }
+      const fields = Object.entries(FIELD_LABELS)
+        .filter(([key]) => proposed[key] !== null)
+        .map(([key, label]) => ({
+          key, label,
+          currentValue:  formatFieldValue(key, current[key]),
+          proposedValue: formatFieldValue(key, proposed[key]),
+        }))
+      return {
+        id: p.id, personId: p.personId,
+        personName:      getPersonDisplayName(p.person),
+        proposedByName:  p.proposedBy.name,
+        status:          p.status as ProposalStatus,
         createdAt:       p.createdAt.toISOString(),
         reviewedAt:      p.reviewedAt?.toISOString() ?? null,
         rejectionReason: p.rejectionReason,

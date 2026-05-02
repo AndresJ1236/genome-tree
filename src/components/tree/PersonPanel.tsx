@@ -25,6 +25,7 @@ interface PersonPanelProps {
 export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps) {
   const [profile, setProfile]   = useState<PersonProfile | null>(null)
   const [error, setError]       = useState<string | null>(null)
+  const [bioExpanded, setBioExpanded] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps)
     }
 
     setError(null)
+    setBioExpanded(false)
     startTransition(async () => {
       const res = await getPersonProfile(personId)
       if (res.ok) {
@@ -129,6 +131,8 @@ export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps)
             <PanelContent
               profile={visibleProfile}
               familySlug={familySlug}
+              bioExpanded={bioExpanded}
+              onToggleBio={() => setBioExpanded(v => !v)}
             />
           )}
         </div>
@@ -163,25 +167,20 @@ export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps)
             </Link>
 
             {visibleProfile.canManage && (
-              <Link
-                href={`/${familySlug}/person/${visibleProfile.id}/edit`}
-                style={{
-                  display: 'block',
-                  textAlign: 'center',
-                  padding: '10px 0',
-                  background: '#F5F0E8',
-                  color: '#2D4A3E',
-                  fontFamily: 'Georgia, serif',
-                  fontSize: 12,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  textDecoration: 'none',
-                  borderRadius: 2,
-                  border: '1px solid #D8D3CA',
-                }}
-              >
-                Editar persona
-              </Link>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <Link
+                  href={`/${familySlug}/person/${visibleProfile.id}/edit`}
+                  style={secondaryLinkStyle}
+                >
+                  Editar datos
+                </Link>
+                <Link
+                  href={`/${familySlug}/person/${visibleProfile.id}/content/new`}
+                  style={secondaryLinkStyle}
+                >
+                  + Agregar contenido
+                </Link>
+              </div>
             )}
           </div>
         )}
@@ -190,11 +189,31 @@ export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps)
   )
 }
 
+const secondaryLinkStyle: React.CSSProperties = {
+  display: 'block',
+  textAlign: 'center',
+  padding: '10px 0',
+  background: '#F5F0E8',
+  color: '#2D4A3E',
+  fontFamily: 'Georgia, serif',
+  fontSize: 12,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  textDecoration: 'none',
+  borderRadius: 2,
+  border: '1px solid #D8D3CA',
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Contenido del panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PanelContent({ profile, familySlug }: { profile: PersonProfile; familySlug: string }) {
+function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
+  profile: PersonProfile
+  familySlug: string
+  bioExpanded: boolean
+  onToggleBio: () => void
+}) {
   const birthYear = profile.birthDate ? new Date(profile.birthDate).getFullYear() : null
   const deathYear = profile.deathDate ? new Date(profile.deathDate).getFullYear() : null
   const fullName  = getPersonDisplayName(profile)
@@ -260,10 +279,22 @@ function PanelContent({ profile, familySlug }: { profile: PersonProfile; familyS
       {profile.bio && (
         <section>
           <SectionLabel>Sobre {profile.firstName}</SectionLabel>
-          <p style={{ fontSize: 13, color: '#4a4a4a', lineHeight: 1.65, margin: 0,
-            display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <p style={{
+            fontSize: 13, color: '#4a4a4a', lineHeight: 1.65, margin: 0,
+            ...(bioExpanded ? {} : {
+              display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }),
+          }}>
             {profile.bio}
           </p>
+          {profile.bio.length > 180 && (
+            <button
+              onClick={onToggleBio}
+              style={{ marginTop: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#2D4A3E', padding: 0, letterSpacing: '0.04em' }}
+            >
+              {bioExpanded ? 'Ver menos ↑' : 'Ver más ↓'}
+            </button>
+          )}
         </section>
       )}
 
