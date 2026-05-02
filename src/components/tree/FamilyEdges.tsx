@@ -119,56 +119,23 @@ export function FamilyEdges({ nodes, familyUnits, petLinks, selectedId, visibleI
               />
             )}
 
-            {/* ── Sibling bar + drops ─────────────────────────────────────── */}
-            {children.length === 1 && (() => {
-              const cx = children[0].x + NODE_W / 2
-              const cy = children[0].y
+            {/* Junction → each child */}
+            {children.map(child => {
+              const cx = child.x + NODE_W / 2
+              const cy = child.y
               return (
                 <path
-                  key={children[0].id + '-branch'}
+                  key={child.id}
                   d={branchDown(jx, jy, cx, cy)}
                   pathLength={1}
                   fill="none"
                   stroke={stroke}
                   strokeWidth={strokeW}
                   strokeLinecap="round"
-                  style={branchStyle(children[0].id + '-branch', active)}
+                  style={branchStyle(child.id + '-branch', active)}
                 />
               )
-            })()}
-
-            {children.length > 1 && (() => {
-              const xs  = children.map(c => c.x + NODE_W / 2)
-              const minX = Math.min(...xs)
-              const maxX = Math.max(...xs)
-              return (
-                <>
-                  {/* Horizontal sibling bar */}
-                  <line
-                    x1={minX} y1={jy}
-                    x2={maxX} y2={jy}
-                    stroke={stroke}
-                    strokeWidth={strokeW}
-                    strokeLinecap="round"
-                    opacity={active ? 1 : 0.85}
-                    style={{ transition: 'stroke 0.25s, stroke-width 0.25s' }}
-                  />
-                  {/* Vertical drop from bar to each child */}
-                  {children.map(child => (
-                    <line
-                      key={child.id + '-drop'}
-                      x1={child.x + NODE_W / 2} y1={jy}
-                      x2={child.x + NODE_W / 2} y2={child.y}
-                      stroke={stroke}
-                      strokeWidth={strokeW}
-                      strokeLinecap="round"
-                      opacity={active ? 1 : 0.85}
-                      style={{ transition: 'stroke 0.25s, stroke-width 0.25s' }}
-                    />
-                  ))}
-                </>
-              )
-            })()}
+            })}
 
             {/* Junction dot */}
             {children.length > 0 && (

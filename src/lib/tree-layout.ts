@@ -60,6 +60,35 @@ function computeFocusLateralScores(
     }
   }
 
+  // Score siblings of the focus person: spread them around the focus (score=0)
+  // by birth order, so the focus person ends up in the middle of their siblings.
+  const fp = personMap.get(focusId)
+  if (fp) {
+    const sibIds: string[] = []
+    for (const id of personSet) {
+      if (id === focusId || scores.has(id)) continue
+      const p = personMap.get(id)
+      if (!p) continue
+      if ((fp.fatherId && p.fatherId === fp.fatherId) ||
+          (fp.motherId && p.motherId === fp.motherId)) {
+        sibIds.push(id)
+      }
+    }
+    if (sibIds.length > 0) {
+      const getYear = (id: string) => {
+        const bd = id === focusId ? fp.birthDate : personMap.get(id)?.birthDate
+        return bd ? new Date(bd).getFullYear() : 9999
+      }
+      const allOrdered = [...sibIds, focusId].sort((a, b) => getYear(a) - getYear(b))
+      const focusIdx = allOrdered.indexOf(focusId)
+      for (let i = 0; i < allOrdered.length; i++) {
+        const id = allOrdered[i]
+        if (id === focusId) continue
+        scores.set(id, (i - focusIdx) * 0.45)
+      }
+    }
+  }
+
   // Unscored people default to 0
   for (const id of personSet) {
     if (!scores.has(id)) scores.set(id, 0)
