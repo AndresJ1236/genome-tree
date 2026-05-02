@@ -451,6 +451,16 @@ export interface PersonProposalItem {
   }[]
 }
 
+export interface NotificationItem {
+  id: string
+  type: string
+  title: string
+  body: string | null
+  href: string | null
+  read: boolean
+  createdAt: string
+}
+
 export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string }

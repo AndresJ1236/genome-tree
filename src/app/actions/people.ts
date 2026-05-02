@@ -11,6 +11,8 @@ import {
   getVisiblePersonIds,
 } from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
+import { notifyFamilyMembers } from '@/lib/notifications'
+import { getPersonDisplayName } from '@/lib/person-name'
 import { CLAIMED_RELATION_REQUIRES_REF } from '@/lib/content-types'
 import type {
   ActionResult,
@@ -304,6 +306,14 @@ export async function createPerson(input: Omit<PersonFormData, 'id' | 'coverPhot
         fatherId: person.fatherId,
         motherId: person.motherId,
       },
+    })
+
+    void notifyFamilyMembers({
+      familyId: session.familyId,
+      type:     'NEW_PERSON_ADDED',
+      title:    'Nueva persona añadida al árbol',
+      body:     getPersonDisplayName(person),
+      href:     `/${session.familySlug}/person/${person.id}`,
     })
 
     revalidateFamilyPaths(session.familySlug, person.id)

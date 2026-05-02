@@ -5,6 +5,7 @@ import { getSession } from '@/lib/session'
 import { assertPersonAccess, getManagedPersonIdSet, userManagesPerson } from '@/lib/permissions'
 import { logAudit } from '@/lib/audit'
 import { getPersonDisplayName } from '@/lib/person-name'
+import { notifyAdminsAndRepresentatives, notifyUser } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult, PersonProposalItem } from '@/lib/content-types'
 import type { Gender } from '@prisma/client'
@@ -120,6 +121,14 @@ export async function proposePeopleUpdate(input: {
       newValue:   input.fields,
     })
 
+    void notifyAdminsAndRepresentatives({
+      familyId: session.familyId,
+      type:     'PROPOSAL_SUBMITTED',
+      title:    'Nueva propuesta de cambio',
+      body:     `en ${getPersonDisplayName(person)}`,
+      href:     `/${session.familySlug}/admin`,
+    })
+
     return { ok: true, data: { proposalId: proposal.id } }
   } catch (error: unknown) {
     return { ok: false, error: (error as Error).message }
@@ -141,9 +150,11 @@ export async function approveProposal(
       where: { id: proposalId },
       select: {
         familyId: true, personId: true, status: true,
+        proposedById: true,
         firstName: true, middleName: true, lastName: true,
         gender: true, birthDate: true, deathDate: true,
         birthPlace: true, bio: true,
+        person: { select: { firstName: true, middleName: true, lastName: true } },
       },
     })
     if (!proposal)                            return { ok: false, error: 'Propuesta no encontrada' }
@@ -184,6 +195,14 @@ export async function approveProposal(
       newValue:   updateData,
     })
 
+    void notifyUser(proposal.proposedById, {
+      familyId: session.familyId,
+      type:     'PROPOSAL_APPROVED',
+      title:    'Propuesta aprobada',
+      body:     `Tus cambios en ${getPersonDisplayName(proposal.person)} fueron aprobados`,
+      href:     `/${session.familySlug}/person/${proposal.personId}`,
+    })
+
     revalidatePath(`/${session.familySlug}/person/${proposal.personId}`)
     revalidatePath(`/${session.familySlug}/admin`)
 
@@ -207,7 +226,11 @@ export async function rejectProposal(input: {
   try {
     const proposal = await prisma.personUpdateProposal.findUnique({
       where: { id: input.proposalId },
-      select: { familyId: true, personId: true, status: true },
+      select: {
+        familyId: true, personId: true, status: true,
+        proposedById: true,
+        person: { select: { firstName: true, middleName: true, lastName: true } },
+      },
     })
     if (!proposal)                              return { ok: false, error: 'Propuesta no encontrada' }
     if (proposal.familyId !== session.familyId) return { ok: false, error: 'No autorizado' }
@@ -236,6 +259,15 @@ export async function rejectProposal(input: {
       entityType: 'PersonUpdateProposal',
       entityId:   input.proposalId,
       newValue:   { reason: input.reason },
+    })
+
+    const reason = input.reason.trim()
+    void notifyUser(proposal.proposedById, {
+      familyId: session.familyId,
+      type:     'PROPOSAL_REJECTED',
+      title:    'Propuesta no aprobada',
+      body:     `Tus cambios en ${getPersonDisplayName(proposal.person)}${reason ? `: ${reason}` : ' no fueron aprobados'}`,
+      href:     `/${session.familySlug}/person/${proposal.personId}`,
     })
 
     revalidatePath(`/${session.familySlug}/admin`)
