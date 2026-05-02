@@ -55,6 +55,14 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled }
   const dragRef = useRef({ active: false, lastX: 0, lastY: 0 })
   const [centering, setCentering] = useState(false)
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const centerOnNode = useCallback((personId: string) => {
     const node = nodes.find(n => n.id === personId)
     const el = viewportRef.current

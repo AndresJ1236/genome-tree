@@ -491,13 +491,13 @@ export function PersonEditor({
 
         <section style={cardStyle}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}>
-            <Field label="Nombre">
+            <Field label="Nombre" required>
               <input value={form.firstName} onChange={e => updateField('firstName', e.target.value)} style={inputStyle} />
             </Field>
             <Field label="Segundo nombre">
               <input value={form.middleName} onChange={e => updateField('middleName', e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="Apellido">
+            <Field label="Apellido" required>
               <input value={form.lastName} onChange={e => updateField('lastName', e.target.value)} style={inputStyle} />
             </Field>
             <Field label="Apellido de nacimiento 1">
@@ -897,10 +897,13 @@ export function PersonEditor({
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label>
-      <span style={labelStyle}>{label}</span>
+      <span style={labelStyle}>
+        {label}
+        {required && <span style={{ color: '#9B4444', marginLeft: 3 }}>*</span>}
+      </span>
       {children}
     </label>
   )
