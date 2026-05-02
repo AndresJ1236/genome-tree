@@ -147,7 +147,7 @@ export default async function TreePage({
               color: '#8B9E94',
             }}
           >
-            Explora el arbol y agrega nuevas ramas desde aqui.
+            Explora el árbol y agrega nuevas ramas desde aquí.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -217,7 +217,8 @@ function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
   const birthYear = profile.birthDate ? new Date(profile.birthDate).getFullYear() : null
   const deathYear = profile.deathDate ? new Date(profile.deathDate).getFullYear() : null
   const fullName  = getPersonDisplayName(profile)
-  const initials  = (profile.firstName[0] ?? '') + (profile.lastName[0] ?? '')
+  const isPet     = profile.nodeKind === 'PET'
+  const initials  = ((profile.firstName[0] ?? '') + (profile.lastName[0] ?? '')).toUpperCase() || '?'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -248,8 +249,8 @@ function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
             border: '2.5px solid #2D4A3E',
             flexShrink: 0,
           }}>
-            <span style={{ fontSize: 22, fontFamily: 'Georgia, serif', fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
-              {initials.toUpperCase()}
+            <span style={{ fontSize: isPet ? 18 : 22, fontFamily: 'Georgia, serif', fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+              {isPet ? '◉' : initials}
             </span>
           </div>
         )}
@@ -272,13 +273,13 @@ function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
       {/* ── Familia directa ──────────────────────────────────────────────── */}
       <FamilySection profile={profile} />
 
-      {/* ── Fotos destacadas 3×3 ─────────────────────────────────────────── */}
-      <FeaturedGrid media={profile.featuredMedia} />
+      {/* ── Fotos destacadas ─────────────────────────────────────────────── */}
+      <FeaturedGrid media={profile.featuredMedia} isPet={isPet} />
 
       {/* ── Bio ──────────────────────────────────────────────────────────── */}
       {profile.bio && (
         <section>
-          <SectionLabel>Sobre {profile.firstName}</SectionLabel>
+          <SectionLabel>{isPet ? 'Historia' : `Sobre ${profile.firstName}`}</SectionLabel>
           <p style={{
             fontSize: 13, color: '#4a4a4a', lineHeight: 1.65, margin: 0,
             ...(bioExpanded ? {} : {
@@ -299,7 +300,7 @@ function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
       )}
 
       {/* ── Contadores de archivo ─────────────────────────────────────────── */}
-      <ArchiveCounts counts={profile.counts} />
+      <ArchiveCounts counts={profile.counts} isPet={isPet} />
 
       {/* ── Botón perfil completo ─────────────────────────────────────────── */}
     </div>
@@ -417,9 +418,23 @@ function FamilyChip({ person, relation }: { person: PersonBasic; relation: strin
 // Grid 3×3 de fotos destacadas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function FeaturedGrid({ media }: { media: PersonProfile['featuredMedia'] }) {
-  // Siempre mostrar 9 celdas — las vacías son placeholders
-  const cells = Array.from({ length: 9 }, (_, i) => media[i] ?? null)
+function FeaturedGrid({ media, isPet }: { media: PersonProfile['featuredMedia']; isPet: boolean }) {
+  if (media.length === 0) {
+    return (
+      <section>
+        <SectionLabel>Fotos destacadas</SectionLabel>
+        <p style={{ fontSize: 11, color: '#9BA89F', margin: 0, textAlign: 'center', padding: '8px 0' }}>
+          Sin fotos aún
+        </p>
+      </section>
+    )
+  }
+
+  // Mascotas: mostrar solo las fotos reales, sin placeholders
+  // Personas: rellenar hasta 9 celdas con placeholders
+  const cells = isPet
+    ? media.slice(0, 9)
+    : Array.from({ length: 9 }, (_, i) => media[i] ?? null)
 
   return (
     <section>
@@ -436,21 +451,11 @@ function FeaturedGrid({ media }: { media: PersonProfile['featuredMedia'] }) {
           ) : (
             <div
               key={i}
-              style={{
-                aspectRatio:  '1',
-                borderRadius: 2,
-                background:   '#EEE9E0',
-                border:       '1.5px dashed #C8C0B4',
-              }}
+              style={{ aspectRatio: '1', borderRadius: 2, background: '#EEE9E0', border: '1.5px dashed #C8C0B4' }}
             />
           )
         )}
       </div>
-      {media.length === 0 && (
-        <p style={{ fontSize: 11, color: '#9BA89F', marginTop: 6, textAlign: 'center' }}>
-          Sin fotos aún
-        </p>
-      )}
     </section>
   )
 }
@@ -459,23 +464,26 @@ function FeaturedGrid({ media }: { media: PersonProfile['featuredMedia'] }) {
 // Contadores del archivo
 // ─────────────────────────────────────────────────────────────────────────────
 
-const COUNTER_ITEMS: { key: keyof PersonProfile['counts']; label: string; symbol: string }[] = [
-  { key: 'stories',        label: 'Historias',             symbol: '◈' },
-  { key: 'recipes',        label: 'Recetas',               symbol: '◉' },
-  { key: 'diary',          label: 'Diario',                symbol: '◎' },
-  { key: 'interviews',     label: 'Entrevistas',           symbol: '◌' },
-  { key: 'objects',        label: 'Objetos',               symbol: '◇' },
+const COUNTER_ITEMS: { key: keyof PersonProfile['counts']; label: string; symbol: string; petOnly?: false }[] = [
+  { key: 'stories',        label: 'Historias',              symbol: '◈' },
+  { key: 'recipes',        label: 'Recetas',                symbol: '◉' },
+  { key: 'diary',          label: 'Diario',                 symbol: '◎' },
+  { key: 'interviews',     label: 'Entrevistas',            symbol: '◌' },
+  { key: 'objects',        label: 'Objetos',                symbol: '◇' },
   { key: 'importantLinks', label: 'Relaciones importantes', symbol: '◆' },
 ]
 
-function ArchiveCounts({ counts }: { counts: PersonProfile['counts'] }) {
-  const hasAny = COUNTER_ITEMS.some(({ key }) => counts[key] > 0)
+const PET_COUNTER_KEYS = new Set<keyof PersonProfile['counts']>(['stories', 'objects'])
+
+function ArchiveCounts({ counts, isPet }: { counts: PersonProfile['counts']; isPet: boolean }) {
+  const items  = isPet ? COUNTER_ITEMS.filter(i => PET_COUNTER_KEYS.has(i.key)) : COUNTER_ITEMS
+  const hasAny = items.some(({ key }) => counts[key] > 0)
 
   return (
     <section>
       <SectionLabel>Archivo</SectionLabel>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {COUNTER_ITEMS.map(({ key, label, symbol }) => {
+        {items.map(({ key, label, symbol }) => {
           const count   = counts[key]
           const isEmpty = count === 0
           return (
