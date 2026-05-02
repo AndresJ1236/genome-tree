@@ -92,16 +92,37 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
   const ox = -bounds.minX + CANVAS_PAD
   const oy = -bounds.minY + CANVAS_PAD
 
+  // The focus node is the one the layout centered on (n.x === 0 after centering).
+  // If focusPersonId was passed, look it up; otherwise find the node with x closest to 0.
+  const focusNode = useMemo(() => {
+    if (nodes.length === 0) return null
+    if (focusPersonId) {
+      const n = nodes.find(n => n.id === focusPersonId)
+      if (n) return n
+    }
+    return nodes.reduce((best, n) => Math.abs(n.x) < Math.abs(best.x) ? n : best, nodes[0])
+  }, [nodes, focusPersonId])
+
   useEffect(() => {
     const el = viewportRef.current
     if (!el || nodes.length === 0) return
     const vw = el.clientWidth
     const vh = el.clientHeight
     const s = Math.min(1, Math.min((vw * 0.9) / canvasW, (vh * 0.9) / canvasH))
-    const init = { x: (vw - canvasW * s) / 2, y: (vh - canvasH * s) / 2, scale: s }
+
+    let init: { x: number; y: number; scale: number }
+    if (focusNode) {
+      // Place the focus person at the horizontal center and ~40% from the top
+      // (so ancestors above and children below are both visible)
+      const fcx = focusNode.x + ox + NODE_W / 2
+      const fcy = focusNode.y + oy + NODE_H / 2
+      init = { x: vw / 2 - fcx * s, y: vh * 0.4 - fcy * s, scale: s }
+    } else {
+      init = { x: (vw - canvasW * s) / 2, y: (vh - canvasH * s) / 2, scale: s }
+    }
     setTransform(init)
     transformRef.current = init
-  }, [canvasW, canvasH, nodes.length])
+  }, [canvasW, canvasH, nodes.length, focusNode, ox, oy])
 
   useEffect(() => {
     const el = viewportRef.current
