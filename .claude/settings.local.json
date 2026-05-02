@@ -10,7 +10,8 @@
       "Bash(npx tsc *)",
       "Read(/USER_HOME/Documents/New project/genome-tree/**)",
       "Bash(powershell -File \".\\\\scripts\\\\verify-runtime.ps1\")",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(netstat -ano)"
     ]
   }
 }

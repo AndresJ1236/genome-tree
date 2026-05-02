@@ -1,17 +1,27 @@
 import type { NextConfig } from 'next'
 
-const nextConfig: NextConfig = {
-  ...(process.env.BUILD_STANDALONE === '1' ? { output: 'standalone' } : {}),
-  allowedDevOrigins: ['127.0.0.1'],
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'http',
-        hostname: process.env.MINIO_ENDPOINT ?? 'localhost',
-        port: process.env.MINIO_PORT ?? '9000',
-      },
-    ],
+const remotePatterns: NonNullable<NextConfig['images']>['remotePatterns'] = [
+  // Desarrollo: MinIO local
+  {
+    protocol: 'http',
+    hostname: process.env.MINIO_ENDPOINT ?? 'localhost',
+    port:     process.env.MINIO_PORT ?? '9000',
   },
+]
+
+// Producción: imágenes servidas a través de nginx en /media/
+if (process.env.APP_HOSTNAME) {
+  remotePatterns.push({
+    protocol: 'https',
+    hostname: process.env.APP_HOSTNAME,
+    pathname: '/media/**',
+  })
+}
+
+const nextConfig: NextConfig = {
+  output: process.env.BUILD_STANDALONE === '1' ? 'standalone' : undefined,
+  allowedDevOrigins: ['127.0.0.1'],
+  images: { remotePatterns },
 }
 
 export default nextConfig
