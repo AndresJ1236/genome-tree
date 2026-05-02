@@ -1,5 +1,7 @@
 ﻿import { getSession } from '@/lib/session'
 import { logout } from '@/app/actions/auth'
+import { getUnreadCount } from '@/lib/notifications'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { redirect } from 'next/navigation'
 
 export default async function ProtectedLayout({
@@ -9,6 +11,8 @@ export default async function ProtectedLayout({
 }) {
   const session = await getSession()
   if (!session) redirect('/login')
+
+  const unreadCount = await getUnreadCount(session.userId)
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -47,17 +51,16 @@ export default async function ProtectedLayout({
           </nav>
         </div>
 
-        <div className="flex items-center gap-4">
-          <span className="text-xs" style={{ color: '#6B6B6B' }}>
-            {session.role === 'ADMIN' && (
-              <span
-                className="mr-2 px-1.5 py-0.5 text-xs rounded-sm"
-                style={{ background: '#EAF0ED', color: '#2D4A3E' }}
-              >
-                Admin
-              </span>
-            )}
-          </span>
+        <div className="flex items-center gap-3">
+          {session.role === 'ADMIN' && (
+            <span
+              className="px-1.5 py-0.5 text-xs rounded-sm"
+              style={{ background: '#EAF0ED', color: '#2D4A3E' }}
+            >
+              Admin
+            </span>
+          )}
+          <NotificationBell initialUnreadCount={unreadCount} />
           <form action={logout}>
             <button
               type="submit"
