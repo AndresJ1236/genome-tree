@@ -13,11 +13,11 @@ export async function setupFamily(_prev: SetupResult, formData: FormData): Promi
   const familyName = (formData.get('familyName') as string ?? '').trim()
   const familySlug = (formData.get('familySlug') as string ?? '').trim()
   const adminName  = (formData.get('adminName')  as string ?? '').trim()
-  const adminEmail = (formData.get('adminEmail') as string ?? '').trim().toLowerCase()
-  const password   = (formData.get('password')   as string ?? '')
-  const confirm    = (formData.get('confirm')    as string ?? '')
+  const adminUsername = (formData.get('adminUsername') as string ?? '').trim().toLowerCase()
+  const password      = (formData.get('password')      as string ?? '')
+  const confirm       = (formData.get('confirm')       as string ?? '')
 
-  if (!familyName || !familySlug || !adminName || !adminEmail || !password) {
+  if (!familyName || !familySlug || !adminName || !adminUsername || !password) {
     return { error: 'Todos los campos son obligatorios.' }
   }
   if (!/^[a-z0-9-]+$/.test(familySlug)) {
@@ -45,7 +45,7 @@ export async function setupFamily(_prev: SetupResult, formData: FormData): Promi
       users: {
         create: {
           name:         adminName,
-          email:        adminEmail,
+          username:     adminUsername,
           passwordHash,
           role:         'ADMIN',
           scope:        'ADMIN',

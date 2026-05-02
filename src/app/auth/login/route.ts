@@ -18,15 +18,15 @@ function shouldUseSecureCookieForRequest(req: Request) {
 
 export async function POST(req: Request) {
   const formData = await req.formData()
-  const email = String(formData.get('email') ?? '')
+  const username = String(formData.get('username') ?? '')
   const password = String(formData.get('password') ?? '')
 
-  if (!email || !password) {
+  if (!username || !password) {
     return NextResponse.redirect(buildUrl(req, '/login?error=missing'), 303)
   }
 
   const user = await prisma.user.findUnique({
-    where: { email },
+    where: { username },
     include: { family: true },
   })
 

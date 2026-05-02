@@ -1,0 +1,25 @@
+◇ injected env (1) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (6) from .env.local // tip: ⌘ suppress logs { quiet: true }
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma\schema.prisma.
+
+✔ Generated Prisma Client (v7.8.0) to .\node_modules\@prisma\client in 402ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+
+
+> genome-tree@0.1.0 db:seed
+> tsx prisma/seed.ts
+
+◇ injected env (1) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (6) from .env.local // tip: ◈ secrets for agents [www.dotenvx.com]
+Seed completado:
+  13 personas, 3 generaciones (parentesco via fatherId/motherId)
+  2 historias (Carlos), 1 receta (Ana)
+  1 diario (Carmen), 1 entrevista (Jorge)
+  1 objeto (Carlos), 1 fuente (Jorge)
+  2 relaciones importantes (Carlos, Luis)
+  1 FamilyConfig con defaults
+  Usuario: admin@demo.com / admin123
