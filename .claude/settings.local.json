@@ -6,7 +6,11 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git config *)",
-      "Bash(npx prisma *)"
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Read(//c/Users/andre/Documents/New project/genome-tree/**)",
+      "Bash(powershell -File \".\\\\scripts\\\\verify-runtime.ps1\")",
+      "Bash(xargs grep *)"
     ]
   }
 }
