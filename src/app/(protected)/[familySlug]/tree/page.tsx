@@ -158,24 +158,22 @@ export default async function TreePage({
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          {session?.role === 'ADMIN' && (
-            <a
-              href="/api/relations/export"
-              style={{
-                textDecoration: 'none',
-                border: '1px solid #C8D4CE',
-                color: '#2D4A3E',
-                padding: '9px 12px',
-                borderRadius: 2,
-                fontSize: 12,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                background: '#FFFDF9',
-              }}
-            >
-              Exportar relaciones JSON
-            </a>
-          )}
+          <a
+            href="/api/relations/export"
+            style={{
+              textDecoration: 'none',
+              border: '1px solid #C8D4CE',
+              color: '#2D4A3E',
+              padding: '9px 12px',
+              borderRadius: 2,
+              fontSize: 12,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              background: '#FFFDF9',
+            }}
+          >
+            Exportar relaciones JSON
+          </a>
           {session?.role === 'ADMIN' && (
             <Link
               href={`/${familySlug}/person/new`}

@@ -311,6 +311,7 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
                   node={node}
                   selected={node.id === selectedId}
                   highlighted={highlighted.has(node.id)}
+                  isCurrentUser={focusPersonId === node.id}
                   onSelect={id => setSelectedId(prev => (prev === id ? null : id))}
                   animDelay={i * 60}
                 />
