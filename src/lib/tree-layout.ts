@@ -516,17 +516,18 @@ export function computeTreeLayout(
       if (Math.abs(sa - sb) > 1e-9) return sa - sb
       return a.sortKey - b.sortKey
     })
-    // SIDE_GAP_PX: extra horizontal space inserted ONCE in this generation,
-    // at the boundary where unit scores cross from non-positive (paternal/center)
-    // to positive (maternal). Creates a clear visual valley between the two
-    // family branches. Propagates upward through desiredCenterForUnit.
-    const SIDE_GAP_PX = 250
+    // SIDE_GAP_PX: extra horizontal space inserted at EVERY sign transition
+    // in the sorted unit list (negative→neutral, neutral→positive, or
+    // negative→positive). Creates clear visual valleys between paternal,
+    // neutral (focus + disconnected), and maternal clusters. Propagates
+    // upward through desiredCenterForUnit which midpoints child positions.
+    const SIDE_GAP_PX = 500
     let extraGap = 0
-    let prevSign = -1  // start as if previous was paternal so first positive triggers gap
+    let prevSign: number | null = null
     orderedByFallback.forEach((unit, index) => {
       const us = unitScore(unit.members)
       const sign = us > 0.001 ? 1 : (us < -0.001 ? -1 : 0)
-      if (prevSign <= 0 && sign === 1) extraGap += SIDE_GAP_PX
+      if (prevSign !== null && prevSign !== sign) extraGap += SIDE_GAP_PX
       fallbackCenters.set(unit, index * H_GAP + extraGap)
       prevSign = sign
     })
