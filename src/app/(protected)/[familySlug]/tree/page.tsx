@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { PersonData, RelationshipData } from '@/lib/tree-types'
 import { FamilyTree } from '@/components/tree/FamilyTree'
 import { getFamilyModules } from '@/lib/family-config'
+import { getVisiblePersonIds } from '@/lib/permissions'
 
 export default async function TreePage({
   params,
@@ -18,8 +19,14 @@ export default async function TreePage({
   if (!family || family.id !== session?.familyId) notFound()
   const modules = await getFamilyModules(session.familyId)
 
+  const visibleIds = await getVisiblePersonIds(session)
   const [rawPersons, rawRelationships] = await Promise.all([
-    prisma.person.findMany({ where: { familyId: family.id } }),
+    prisma.person.findMany({
+      where: {
+        familyId: family.id,
+        ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
+      },
+    }),
     prisma.relationship.findMany({
       where: { person1: { familyId: family.id } },
       select: { person1Id: true, person2Id: true, type: true, endDate: true },
@@ -151,38 +158,42 @@ export default async function TreePage({
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <a
-            href="/api/relations/export"
-            style={{
-              textDecoration: 'none',
-              border: '1px solid #C8D4CE',
-              color: '#2D4A3E',
-              padding: '9px 12px',
-              borderRadius: 2,
-              fontSize: 12,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              background: '#FFFDF9',
-            }}
-          >
-            Exportar relaciones JSON
-          </a>
-          <Link
-            href={`/${familySlug}/person/new`}
-            style={{
-              textDecoration: 'none',
-              border: '1px solid #C8D4CE',
-              color: '#2D4A3E',
-              padding: '9px 12px',
-              borderRadius: 2,
-              fontSize: 12,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              background: '#F8F5EE',
-            }}
-          >
-            Nuevo
-          </Link>
+          {session?.role === 'ADMIN' && (
+            <a
+              href="/api/relations/export"
+              style={{
+                textDecoration: 'none',
+                border: '1px solid #C8D4CE',
+                color: '#2D4A3E',
+                padding: '9px 12px',
+                borderRadius: 2,
+                fontSize: 12,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                background: '#FFFDF9',
+              }}
+            >
+              Exportar relaciones JSON
+            </a>
+          )}
+          {session?.role === 'ADMIN' && (
+            <Link
+              href={`/${familySlug}/person/new`}
+              style={{
+                textDecoration: 'none',
+                border: '1px solid #C8D4CE',
+                color: '#2D4A3E',
+                padding: '9px 12px',
+                borderRadius: 2,
+                fontSize: 12,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                background: '#F8F5EE',
+              }}
+            >
+              Nuevo
+            </Link>
+          )}
         </div>
       </div>
       <div className="flex-1 min-h-0">

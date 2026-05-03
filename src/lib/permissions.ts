@@ -157,6 +157,8 @@ export async function userManagesPerson(
   if (await hasRule(session, 'EDIT_PERSON', 'DENY', personId)) return false
   if (await hasRule(session, 'EDIT_PERSON', 'ALLOW', personId)) return true
   if (session.personId === personId) return true
+  // FAMILY-scope members can create/edit content for any person in the family
+  if (capability === 'content' && session.scope === 'FAMILY') return true
 
   const units = await getManagedUnitsForUser(session, capability)
   if (units.length === 0) return false

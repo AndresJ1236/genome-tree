@@ -861,6 +861,7 @@ export async function createInviteLink(input: {
   role: UserRole
   scope: UserScope
   branchRootId: string
+  personId?: string
 }): Promise<ActionResult<{ url: string }>> {
   const session = await getSession()
   if (!session) return { ok: false, error: 'No autenticado' }
@@ -871,12 +872,16 @@ export async function createInviteLink(input: {
     const branchRootId = input.scope === 'BRANCH' ? (input.branchRootId || null) : null
     if (branchRootId) await assertPersonAccess(branchRootId, session)
 
+    const personId = input.personId || null
+    if (personId) await assertPersonAccess(personId, session)
+
     const { token } = await signInviteToken({
       familyId: session.familyId,
       familySlug: session.familySlug,
       role: input.role,
       scope: input.scope,
       branchRootId,
+      personId,
     })
 
     await logAudit({
@@ -889,6 +894,7 @@ export async function createInviteLink(input: {
         role: input.role,
         scope: input.scope,
         branchRootId,
+        personId: personId ?? undefined,
       },
     })
 

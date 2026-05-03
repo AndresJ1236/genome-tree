@@ -128,7 +128,9 @@ export function PersonEditor({
   const [quickTargetId, setQuickTargetId] = useState('')
   const [quickParentRole, setQuickParentRole] = useState<'father' | 'mother'>('father')
   const [quickPartnerType, setQuickPartnerType] = useState<'SPOUSE' | 'PARTNER'>('SPOUSE')
-  // Track whether lastName was manually edited (to allow auto-fill)
+  // Track whether surname fields were manually touched
+  const [birthSurname1Touched, setBirthSurname1Touched] = useState(mode === 'edit' && !!form.birthSurname1)
+  const [birthSurname2Touched, setBirthSurname2Touched] = useState(mode === 'edit' && !!form.birthSurname2)
   const [lastNameTouched, setLastNameTouched] = useState(mode === 'edit' && !!form.lastName)
 
   const isMember = payload.viewerMode === 'MEMBER'
@@ -151,24 +153,59 @@ export function PersonEditor({
     [payload.candidates]
   )
 
-  // Auto-derive lastName from first surname of father + first surname of mother
+  // Auto-derive individual surnames from parents
+  const autoSurname1 = useMemo(() => {
+    const father = parentOptions.find(p => p.id === form.fatherId)
+    return father?.lastName?.split(' ')[0] ?? ''
+  }, [form.fatherId, parentOptions])
+
+  const autoSurname2 = useMemo(() => {
+    const mother = parentOptions.find(p => p.id === form.motherId)
+    return mother?.lastName?.split(' ')[0] ?? ''
+  }, [form.motherId, parentOptions])
+
+  // In CREATE mode: apply auto surnames to birthSurname1/2 when parents change
+  useEffect(() => {
+    if (mode !== 'create') return
+    if (!birthSurname1Touched && autoSurname1) {
+      setForm(prev => ({ ...prev, birthSurname1: autoSurname1 }))
+    }
+  }, [autoSurname1, birthSurname1Touched, mode])
+
+  useEffect(() => {
+    if (mode !== 'create') return
+    if (!birthSurname2Touched && autoSurname2) {
+      setForm(prev => ({ ...prev, birthSurname2: autoSurname2 }))
+    }
+  }, [autoSurname2, birthSurname2Touched, mode])
+
+  // Combined auto last name (used in EDIT mode)
   const autoLastName = useMemo(() => {
     const father = parentOptions.find(p => p.id === form.fatherId)
     const mother = parentOptions.find(p => p.id === form.motherId)
     if (!father && !mother) return ''
-    const parts = [
-      father?.lastName?.split(' ')[0],
-      mother?.lastName?.split(' ')[0],
-    ].filter(Boolean)
+    const parts = [father?.lastName?.split(' ')[0], mother?.lastName?.split(' ')[0]].filter(Boolean)
     return parts.join(' ')
   }, [form.fatherId, form.motherId, parentOptions])
 
-  // Apply auto last name when parents change (only if lastName not manually typed)
+  // In EDIT mode: apply auto lastName when parents change
   useEffect(() => {
-    if (!lastNameTouched && autoLastName) {
+    if (mode === 'edit' && !lastNameTouched && autoLastName) {
       setForm(prev => ({ ...prev, lastName: autoLastName }))
     }
-  }, [autoLastName, lastNameTouched])
+  }, [autoLastName, lastNameTouched, mode])
+
+  // Couple inference: build map personId → known partner from children's parent data
+  const coupleMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of payload.candidates) {
+      if (p.fatherId && p.motherId) {
+        if (!map.has(p.fatherId)) map.set(p.fatherId, p.motherId)
+        if (!map.has(p.motherId)) map.set(p.motherId, p.fatherId)
+      }
+    }
+    return map
+  }, [payload.candidates])
 
   function updateField<K extends keyof PersonFormData>(key: K, value: PersonFormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -213,6 +250,10 @@ export function PersonEditor({
       if (mode === 'create') {
         // Pre-fill parent fields from quick connections
         const formToSend = { ...form }
+        // In create mode, lastName is derived from the two biological surnames
+        if (!formToSend.lastName) {
+          formToSend.lastName = [formToSend.birthSurname1, formToSend.birthSurname2].filter(Boolean).join(' ')
+        }
         if (quickRelType === 'child-of' && quickTargetId) {
           const target = parentOptions.find(p => p.id === quickTargetId)
           const role = target?.gender === 'MALE' ? 'fatherId' : target?.gender === 'FEMALE' ? 'motherId' : quickParentRole === 'father' ? 'fatherId' : 'motherId'
@@ -451,6 +492,8 @@ export function PersonEditor({
                     if (type !== 'sibling-of') {
                       setForm(prev => ({ ...prev, fatherId: '', motherId: '' }))
                       setLastNameTouched(false)
+                      setBirthSurname1Touched(false)
+                      setBirthSurname2Touched(false)
                     }
                   }}
                   style={{
@@ -510,6 +553,8 @@ export function PersonEditor({
                           motherId: sib.motherId ?? '',
                         }))
                         setLastNameTouched(false)
+                        setBirthSurname1Touched(false)
+                        setBirthSurname2Touched(false)
                       }
                     }}
                     options={parentOptions}
@@ -585,31 +630,48 @@ export function PersonEditor({
                 <input value={form.middleName} onChange={e => updateField('middleName', e.target.value)} style={inputStyle} />
               </Field>
             )}
-            {form.nodeKind !== 'PET' && (
+            {/* CREATE mode: show individual biological surnames, not combined lastName */}
+            {form.nodeKind !== 'PET' && mode === 'create' && (
+              <Field
+                label="Apellido paterno"
+                help={autoSurname1 && !birthSurname1Touched ? 'Auto-derivado del padre. Edita para cambiar.' : 'Primer apellido (paternal).'}
+              >
+                <input
+                  value={form.birthSurname1}
+                  onChange={e => { setBirthSurname1Touched(true); updateField('birthSurname1', e.target.value) }}
+                  style={{ ...inputStyle, background: autoSurname1 && !birthSurname1Touched ? '#F3F7F4' : '#FFFCF8' }}
+                  placeholder={autoSurname1 || 'Ej: Apellido1'}
+                />
+              </Field>
+            )}
+            {form.nodeKind !== 'PET' && mode === 'create' && (
+              <Field
+                label="Apellido materno"
+                help={autoSurname2 && !birthSurname2Touched ? 'Auto-derivado de la madre. Edita para cambiar.' : 'Segundo apellido (maternal).'}
+              >
+                <input
+                  value={form.birthSurname2}
+                  onChange={e => { setBirthSurname2Touched(true); updateField('birthSurname2', e.target.value) }}
+                  style={{ ...inputStyle, background: autoSurname2 && !birthSurname2Touched ? '#F3F7F4' : '#FFFCF8' }}
+                  placeholder={autoSurname2 || 'Ej: Apellido2'}
+                />
+              </Field>
+            )}
+            {/* EDIT mode: show combined lastName + individual birth surnames */}
+            {form.nodeKind !== 'PET' && mode === 'edit' && (
               <Field
                 label="Apellidos"
                 required
-                help={
-                  autoLastName && !lastNameTouched
-                    ? `Auto-derivado de los padres. Edita para personalizar.`
-                    : 'Apellido(s) de la persona tal como aparecen en el árbol.'
-                }
+                help={autoLastName && !lastNameTouched ? 'Auto-derivado de los padres. Edita para personalizar.' : 'Apellido(s) de la persona tal como aparecen en el árbol.'}
               >
                 <input
                   value={form.lastName}
-                  onChange={e => {
-                    setLastNameTouched(true)
-                    updateField('lastName', e.target.value)
-                  }}
-                  style={{
-                    ...inputStyle,
-                    background: autoLastName && !lastNameTouched ? '#F3F7F4' : '#FFFCF8',
-                  }}
+                  onChange={e => { setLastNameTouched(true); updateField('lastName', e.target.value) }}
+                  style={{ ...inputStyle, background: autoLastName && !lastNameTouched ? '#F3F7F4' : '#FFFCF8' }}
                   placeholder={autoLastName || 'Ej: Apellido1 Apellido2'}
                 />
               </Field>
             )}
-            {/* birthSurname1 / birthSurname2 only in edit mode (historical data) */}
             {form.nodeKind !== 'PET' && mode === 'edit' && (
               <Field label="Apellido de nacimiento 1">
                 <input value={form.birthSurname1} onChange={e => updateField('birthSurname1', e.target.value)} style={inputStyle} />
@@ -640,7 +702,15 @@ export function PersonEditor({
             <Field label={form.nodeKind === 'PET' ? 'Dueño/a' : 'Padre'} help={form.nodeKind === 'PET' ? 'Persona responsable de la mascota. La mascota orbitará su nodo en el árbol.' : 'Padre biológico o adoptivo registrado en el árbol.'}>
               <SearchablePersonSelect
                 value={form.fatherId}
-                onChange={id => { updateField('fatherId', id); setLastNameTouched(false) }}
+                onChange={id => {
+                  updateField('fatherId', id)
+                  if (id && !form.motherId) {
+                    const inferred = coupleMap.get(id)
+                    if (inferred) updateField('motherId', inferred)
+                  }
+                  setBirthSurname1Touched(false)
+                  setLastNameTouched(false)
+                }}
                 options={parentOptions}
                 placeholder="Sin asignar"
                 disabled={!canChangeRel}
@@ -650,7 +720,15 @@ export function PersonEditor({
               <Field label="Madre" help="Madre biológica o adoptiva registrada en el árbol.">
                 <SearchablePersonSelect
                   value={form.motherId}
-                  onChange={id => { updateField('motherId', id); setLastNameTouched(false) }}
+                  onChange={id => {
+                    updateField('motherId', id)
+                    if (id && !form.fatherId) {
+                      const inferred = coupleMap.get(id)
+                      if (inferred) updateField('fatherId', inferred)
+                    }
+                    setBirthSurname2Touched(false)
+                    setLastNameTouched(false)
+                  }}
                   options={parentOptions}
                   placeholder="Sin asignar"
                   disabled={!canChangeRel}

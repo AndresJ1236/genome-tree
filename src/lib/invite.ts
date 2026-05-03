@@ -9,6 +9,7 @@ export interface InvitePayload {
   role: UserRole
   scope: UserScope
   branchRootId: string | null
+  personId: string | null
   expiresAt: string
 }
 

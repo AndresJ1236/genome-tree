@@ -668,7 +668,14 @@ function StoriesTab({
               <ItemEditLink href={`/${familySlug}/person/${personId}/content/${s.id}/edit`} />
             </div>
           )}
-          <CardTitle>{s.title}</CardTitle>
+          <CardTitle>
+            {s.title}
+            {!s.isLocked && (
+              <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', background: '#FFF8E6', color: '#8B6914', border: '1px solid #E8D68A', borderRadius: 2, padding: '2px 6px', marginLeft: 8, verticalAlign: 'middle' }}>
+                bajo revisión
+              </span>
+            )}
+          </CardTitle>
           <CardMeta>
             {s.approximateDate && s.approximateDate + ' · '}
             {s.authorName && 'por ' + s.authorName + ' · '}
@@ -722,7 +729,14 @@ function RecipesTab({
               <ItemEditLink href={`/${familySlug}/person/${personId}/content/${r.id}/edit`} />
             </div>
           )}
-          <CardTitle>{r.title}</CardTitle>
+          <CardTitle>
+            {r.title}
+            {!r.isLocked && (
+              <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', background: '#FFF8E6', color: '#8B6914', border: '1px solid #E8D68A', borderRadius: 2, padding: '2px 6px', marginLeft: 8, verticalAlign: 'middle' }}>
+                bajo revisión
+              </span>
+            )}
+          </CardTitle>
           <CardMeta>
             {new Date(r.createdAt).toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' })}
           </CardMeta>
@@ -821,7 +835,14 @@ function ObjectsTab({
               />
             )}
             <div style={{ flex: 1 }}>
-              <CardTitle>{obj.title}</CardTitle>
+              <CardTitle>
+                {obj.title}
+                {!obj.isLocked && (
+                  <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', background: '#FFF8E6', color: '#8B6914', border: '1px solid #E8D68A', borderRadius: 2, padding: '2px 6px', marginLeft: 8, verticalAlign: 'middle' }}>
+                    bajo revisión
+                  </span>
+                )}
+              </CardTitle>
               <CardMeta>
                 {new Date(obj.createdAt).toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' })}
               </CardMeta>
@@ -874,7 +895,14 @@ function DiaryTab({
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
-            <CardTitle>{d.title}</CardTitle>
+            <CardTitle>
+              {d.title}
+              {!d.isLocked && (
+                <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', background: '#FFF8E6', color: '#8B6914', border: '1px solid #E8D68A', borderRadius: 2, padding: '2px 6px', marginLeft: 8, verticalAlign: 'middle' }}>
+                  bajo revisión
+                </span>
+              )}
+            </CardTitle>
             {d.entryDate && (
               <span style={{ fontSize: 11, color: '#9BA89F', flexShrink: 0 }}>
                 {new Date(d.entryDate).toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' })}
@@ -921,7 +949,14 @@ function InterviewsTab({
               <ItemEditLink href={`/${familySlug}/person/${personId}/content/${iv.id}/edit`} />
             </div>
           )}
-          <CardTitle>{iv.title}</CardTitle>
+          <CardTitle>
+            {iv.title}
+            {!iv.isLocked && (
+              <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', background: '#FFF8E6', color: '#8B6914', border: '1px solid #E8D68A', borderRadius: 2, padding: '2px 6px', marginLeft: 8, verticalAlign: 'middle' }}>
+                bajo revisión
+              </span>
+            )}
+          </CardTitle>
           <CardMeta>
             {iv.approximateDate && iv.approximateDate + ' · '}
             {iv.authorName && 'Entrevistador: ' + iv.authorName}
@@ -972,7 +1007,14 @@ function SourcesTab({
               <ItemEditLink href={`/${familySlug}/person/${personId}/content/${src.id}/edit`} />
             </div>
           )}
-          <CardTitle>{src.title}</CardTitle>
+          <CardTitle>
+            {src.title}
+            {!src.isLocked && (
+              <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', background: '#FFF8E6', color: '#8B6914', border: '1px solid #E8D68A', borderRadius: 2, padding: '2px 6px', marginLeft: 8, verticalAlign: 'middle' }}>
+                bajo revisión
+              </span>
+            )}
+          </CardTitle>
           <CardMeta>
             {new Date(src.createdAt).toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' })}
           </CardMeta>
@@ -1056,6 +1098,11 @@ function LinksTab({
                   </span>
                   {lnk.relatedPerson === null && (
                     <span style={{ fontSize: 10, color: '#9BA89F' }}>externo al árbol</span>
+                  )}
+                  {!lnk.isLocked && (
+                    <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', background: '#FFF8E6', color: '#8B6914', border: '1px solid #E8D68A', borderRadius: 2, padding: '2px 6px', marginLeft: 8, verticalAlign: 'middle' }}>
+                      bajo revisión
+                    </span>
                   )}
                 </div>
                 {lnk.notes && (

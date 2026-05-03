@@ -73,6 +73,10 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
   const [isPending, startTransition] = useTransition()
   const [config, setConfig] = useState<FamilyConfigData>(data.config)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [inviteRole, setInviteRole] = useState<string>('MEMBER')
+  const [inviteScope, setInviteScope] = useState<string>('FAMILY')
+  const [inviteBranchRootId, setInviteBranchRootId] = useState<string>('')
+  const [invitePersonId, setInvitePersonId] = useState<string>('')
   const [relationsJsonText, setRelationsJsonText] = useState('')
   const [importPreview, setImportPreview] = useState<RelationsImportPreview | null>(null)
   const [bulkJsonText, setBulkJsonText] = useState('')
@@ -115,13 +119,14 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
     })
   }
 
-  function handleInvite(formData: FormData) {
+  function handleInvite() {
     clear()
     startTransition(async () => {
       const result = await createInviteLink({
-        role: formData.get('role') as UserRole,
-        scope: formData.get('scope') as UserScope,
-        branchRootId: String(formData.get('branchRootId') ?? ''),
+        role: inviteRole as UserRole,
+        scope: inviteScope as UserScope,
+        branchRootId: inviteBranchRootId,
+        personId: invitePersonId || undefined,
       })
       if (!result.ok) { setError(result.error); return }
       setInviteUrl(result.data.url)
@@ -842,35 +847,52 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         {activeTab === 'invitaciones' && isAdminView && (
           <TabSection title="Invitaciones" description="Genera enlaces de invitación para que nuevos miembros se unan a la familia.">
             <div style={rowCardStyle}>
-              <form action={handleInvite} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: 14, alignItems: 'end' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 14, alignItems: 'end' }}>
                 <Field label="Rol">
-                  <select name="role" defaultValue="MEMBER" style={inputStyle}>
+                  <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={inputStyle}>
                     <option value="MEMBER">Miembro</option>
                     <option value="ADMIN">Admin</option>
                   </select>
                 </Field>
                 <Field label="Alcance">
-                  <select name="scope" defaultValue="FAMILY" style={inputStyle}>
+                  <select value={inviteScope} onChange={e => { setInviteScope(e.target.value); if (e.target.value !== 'BRANCH') setInviteBranchRootId('') }} style={inputStyle}>
                     <option value="FAMILY">Familia</option>
                     <option value="BRANCH">Rama</option>
                     <option value="ADMIN">Admin</option>
                   </select>
                 </Field>
+                <Field label="Persona vinculada">
+                  <select value={invitePersonId} onChange={e => setInvitePersonId(e.target.value)} style={inputStyle}>
+                    <option value="">Sin vincular</option>
+                    {data.people.map(person => (
+                      <option key={person.id} value={person.id}>{getPersonDisplayName(person)}</option>
+                    ))}
+                  </select>
+                </Field>
                 <Field label="Raíz de rama">
-                  <select name="branchRootId" defaultValue="" style={inputStyle}>
+                  <select value={inviteBranchRootId} onChange={e => setInviteBranchRootId(e.target.value)} disabled={inviteScope !== 'BRANCH'} style={{ ...inputStyle, opacity: inviteScope !== 'BRANCH' ? 0.5 : 1 }}>
                     <option value="">Sin raíz específica</option>
                     {data.people.map(person => (
                       <option key={person.id} value={person.id}>{getPersonDisplayName(person)}</option>
                     ))}
                   </select>
                 </Field>
-                <button type="submit" disabled={isPending} style={primaryBtn}>Generar enlace</button>
-              </form>
+                <button type="button" onClick={handleInvite} disabled={isPending} style={primaryBtn}>Generar enlace</button>
+              </div>
 
               {inviteUrl && (
                 <div style={{ marginTop: 18, padding: '14px 16px', background: '#F3F7F4', border: '1px solid #BFD0C7', borderRadius: 4 }}>
-                  <div style={{ fontSize: 12, color: '#6B6B6B', marginBottom: 8 }}>Comparte este enlace de invitación:</div>
+                  <div style={{ fontSize: 12, color: '#6B6B6B', marginBottom: 8 }}>
+                    Comparte este enlace{invitePersonId ? ` (vinculado a ${getPersonDisplayName(data.people.find(p => p.id === invitePersonId)!)})` : ''}:
+                  </div>
                   <code style={{ fontSize: 13, color: '#2D4A3E', wordBreak: 'break-all', display: 'block' }}>{inviteUrl}</code>
+                  <button
+                    type="button"
+                    onClick={() => { navigator.clipboard.writeText(inviteUrl); setMessage('Enlace copiado.') }}
+                    style={{ marginTop: 10, border: '1px solid #C8D4CE', background: '#fff', borderRadius: 2, color: '#2D4A3E', padding: '7px 14px', cursor: 'pointer', fontSize: 12 }}
+                  >
+                    Copiar enlace
+                  </button>
                 </div>
               )}
             </div>
