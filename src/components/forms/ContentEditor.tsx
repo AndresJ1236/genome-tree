@@ -28,12 +28,14 @@ export function ContentEditor({
   personId,
   contentId,
   people,
+  isAdmin = false,
 }: {
   initialData: ContentEditorData
   familySlug: string
   personId: string
   contentId?: string
   people: PersonOption[]
+  isAdmin?: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -290,7 +292,7 @@ export function ContentEditor({
       </div>
 
       <div style={cardStyle}>
-        {renderFields(form, update, people)}
+        {renderFields(form, update, people, isAdmin)}
 
         {isEdit && (form.type === 'RECIPE' || form.type === 'OBJECT') && (
           <div style={{ marginTop: 24, borderTop: '1px solid #EAE5DB', paddingTop: 22 }}>
@@ -350,7 +352,8 @@ export function ContentEditor({
 function renderFields(
   form: ContentEditorData,
   update: <K extends keyof ContentEditorData>(key: K, value: ContentEditorData[K]) => void,
-  people: PersonOption[]
+  people: PersonOption[],
+  isAdmin: boolean
 ) {
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -441,13 +444,15 @@ function renderFields(
         </>
       )}
 
-      <Field label="Visibilidad">
-        <select value={form.visibility} onChange={e => update('visibility', e.target.value as ContentVisibility)} style={inputStyle}>
-          {visibilityOptions.map(option => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-      </Field>
+      {isAdmin && (
+        <Field label="Visibilidad">
+          <select value={form.visibility} onChange={e => update('visibility', e.target.value as ContentVisibility)} style={inputStyle}>
+            {visibilityOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </Field>
+      )}
     </div>
   )
 }

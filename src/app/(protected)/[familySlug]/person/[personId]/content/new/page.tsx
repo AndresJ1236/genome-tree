@@ -59,7 +59,7 @@ export default async function NewContentPage({
   const people = await prisma.person.findMany({
     where: { familyId: session.familyId },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-    select: { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, gender: true, fatherId: true, motherId: true },
+    select: { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, gender: true, fatherId: true, motherId: true, nodeKind: true },
   })
 
   return (
@@ -67,6 +67,7 @@ export default async function NewContentPage({
       initialData={emptyData(type as ContentEditorData['type'], familySlug, personId)}
       familySlug={familySlug}
       personId={personId}
+      isAdmin={session.role === 'ADMIN'}
       people={people.map(person => ({
         id: person.id,
         firstName: person.firstName,
@@ -77,6 +78,7 @@ export default async function NewContentPage({
         gender: person.gender,
         fatherId: person.fatherId ?? null,
         motherId: person.motherId ?? null,
+        nodeKind: person.nodeKind,
       }))}
     />
   )

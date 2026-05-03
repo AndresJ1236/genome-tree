@@ -69,6 +69,7 @@ type FamilyPersonRecord = {
   birthDate: Date | null
   deathDate: Date | null
   gender: import('@prisma/client').Gender
+  nodeKind: import('@prisma/client').PersonKind
 }
 
 type ManagedUnitDashboardRecord = {
@@ -104,6 +105,7 @@ async function getFamilyPeople(familyId: string) {
       birthDate: true,
       deathDate: true,
       gender: true,
+      nodeKind: true,
     },
   })
 }
@@ -406,6 +408,7 @@ export async function getAdminDashboard(): Promise<ActionResult<AdminDashboardDa
         gender: person.gender,
         fatherId: person.fatherId ?? null,
         motherId: person.motherId ?? null,
+        nodeKind: person.nodeKind,
       })),
       managedUnits: managedUnitsSummary,
       accessRules: accessRules.map(rule => ({

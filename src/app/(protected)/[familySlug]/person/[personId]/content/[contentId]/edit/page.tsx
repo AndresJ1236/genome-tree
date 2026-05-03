@@ -35,7 +35,7 @@ export default async function EditContentPage({
     prisma.person.findMany({
       where: { familyId: session.familyId },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-      select: { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, gender: true, fatherId: true, motherId: true },
+      select: { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, gender: true, fatherId: true, motherId: true, nodeKind: true },
     }),
   ])
 
@@ -118,6 +118,7 @@ export default async function EditContentPage({
       familySlug={familySlug}
       personId={personId}
       contentId={contentId}
+      isAdmin={session.role === 'ADMIN'}
       people={people.map(person => ({
         id: person.id,
         firstName: person.firstName,
@@ -128,6 +129,7 @@ export default async function EditContentPage({
         gender: person.gender,
         fatherId: person.fatherId ?? null,
         motherId: person.motherId ?? null,
+        nodeKind: person.nodeKind,
       }))}
     />
   )

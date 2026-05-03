@@ -95,13 +95,17 @@ function emptyForm(): PersonFormData {
 export function PersonEditor({
   payload,
   mode,
+  defaultNodeKind = 'PERSON',
 }: {
   payload: PersonEditorPayload
   mode: 'create' | 'edit'
+  defaultNodeKind?: 'PERSON' | 'PET'
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [form, setForm] = useState<PersonFormData>(payload.person ?? emptyForm())
+  const [form, setForm] = useState<PersonFormData>(
+    payload.person ?? { ...emptyForm(), nodeKind: defaultNodeKind }
+  )
   const [media, setMedia] = useState<MediaItem[]>(payload.media)
   const [relationships, setRelationships] = useState<RelationshipItem[]>(payload.relationships)
   const [newPartnerType, setNewPartnerType] = useState<'SPOUSE' | 'PARTNER'>('SPOUSE')
@@ -111,7 +115,7 @@ export function PersonEditor({
   const [uploadCount, setUploadCount] = useState(0)
   const [uploadTotal, setUploadTotal] = useState(0)
 
-  const initialFormRef = useRef<string>(JSON.stringify(payload.person ?? emptyForm()))
+  const initialFormRef = useRef<string>(JSON.stringify(payload.person ?? { ...emptyForm(), nodeKind: defaultNodeKind }))
   const isDirty = JSON.stringify(form) !== initialFormRef.current
 
   useEffect(() => {
@@ -148,6 +152,7 @@ export function PersonEditor({
 
   const parentOptions = useMemo(
     () => [...payload.candidates]
+      .filter(person => person.nodeKind !== 'PET')
       .map(person => ({ ...person, label: getPersonDisplayName(person) }))
       .sort((a, b) => a.label.localeCompare(b.label, 'es')),
     [payload.candidates]
