@@ -10,6 +10,7 @@ import {
   recordSuccess,
   recordUsernameSuccess,
 } from '@/lib/rate-limit'
+import { notifyLoginBlock } from '@/lib/notifications'
 
 function buildUrl(req: Request, path: string) {
   const url = new URL(req.url)
@@ -68,9 +69,15 @@ export async function POST(req: Request) {
     include: { family: true },
   })
 
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+  // Always run bcrypt even when user doesn't exist to prevent timing-based
+  // username enumeration (compare vs non-compare is ~100ms measurable delta).
+  const DUMMY_HASH = '$2b$12$invalidhashfortimingprotection0000000000000000000000'
+  const passwordValid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH)
+
+  if (!user || !passwordValid) {
     recordFailure(ip)
-    recordUsernameFailure(username)
+    const { justBlocked } = recordUsernameFailure(username)
+    if (justBlocked) notifyLoginBlock(username).catch(() => {})
     return NextResponse.redirect(buildUrl(req, '/login?error=invalid'), 303)
   }
 

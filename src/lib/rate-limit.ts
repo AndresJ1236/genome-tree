@@ -88,8 +88,12 @@ export function recordFailure(ip: string): void {
   recordEntryFailure(ipStore, ip)
 }
 
-export function recordUsernameFailure(username: string): void {
-  recordEntryFailure(usernameStore, username.toLowerCase())
+export function recordUsernameFailure(username: string): { justBlocked: boolean } {
+  const key = username.toLowerCase()
+  const wasBlocked = (getEntry(usernameStore, key)).blockedUntil !== null
+  recordEntryFailure(usernameStore, key)
+  const isNowBlocked = (getEntry(usernameStore, key)).blockedUntil !== null
+  return { justBlocked: !wasBlocked && isNowBlocked }
 }
 
 export function recordSuccess(ip: string): void {
