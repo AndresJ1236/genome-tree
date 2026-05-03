@@ -271,6 +271,11 @@ export function computeTreeLayout(
   // different depths (e.g. one side has more recorded generations than the other).
   // Push the shallower person DOWN to match their spouse (use max generation).
   // Then re-derive children so nothing is left at a stale level.
+  //
+  // IMPORTANT: re-derivation only INCREASES generations, never decreases.
+  // Without this, a couple-aligned person (pushed up to their spouse's deeper
+  // generation) would be pulled back down to gen(their own parents)+1, causing
+  // the loop to oscillate and the safety counter to abort with wrong results.
   {
     let changed = true
     let safety = 15
@@ -285,12 +290,13 @@ export function computeTreeLayout(
         if ((gen.get(p1) ?? 0) !== aligned) { gen.set(p1, aligned); changed = true }
         if ((gen.get(p2) ?? 0) !== aligned) { gen.set(p2, aligned); changed = true }
       }
-      // Re-derive children so they follow their (now-adjusted) parents
+      // Re-derive children — only increase, never decrease.
+      // Couple alignment always wins over parent-depth constraints.
       for (const p of persons) {
         const parents = parentsOf.get(p.id)
         if (!parents || parents.length === 0) continue
         const expected = Math.max(...parents.map(pid => (gen.get(pid) ?? 0))) + 1
-        if ((gen.get(p.id) ?? 0) !== expected) { gen.set(p.id, expected); changed = true }
+        if (expected > (gen.get(p.id) ?? 0)) { gen.set(p.id, expected); changed = true }
       }
     }
   }
