@@ -18,15 +18,6 @@ if (process.env.APP_HOSTNAME) {
   })
 }
 
-const appHostname = process.env.APP_HOSTNAME ?? ''
-const minioEndpoint = process.env.MINIO_ENDPOINT ?? 'localhost'
-const minioPort = process.env.MINIO_PORT ?? '9000'
-
-// img-src: self + data URIs + production hostname (for /media/) + dev MinIO
-const imgSrc = appHostname
-  ? `img-src 'self' data: blob: https://${appHostname};`
-  : `img-src 'self' data: blob: http://${minioEndpoint}:${minioPort};`
-
 // CSP is set per-request in proxy.ts (with per-request nonces).
 // These static headers cover everything else.
 const securityHeaders = [
