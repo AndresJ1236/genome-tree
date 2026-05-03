@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   bulkCreatePeopleJson,
+  bulkAutoCreateFamilyUnits,
   createAccessRule,
   createInviteLink,
   createManagedFamilyUnit,
@@ -563,7 +564,31 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
               </>
             )}
 
-            <SectionLabel>Núcleos existentes</SectionLabel>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8B9E94' }}>Núcleos existentes</div>
+              {isAdminView && (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => {
+                    startTransition(async () => {
+                      const result = await bulkAutoCreateFamilyUnits()
+                      if (result.ok) {
+                        setMessage(result.data.created > 0
+                          ? `${result.data.created} núcleo(s) creado(s) automáticamente.`
+                          : 'Todas las parejas ya tienen núcleo familiar.')
+                        router.refresh()
+                      } else {
+                        setMessage(`Error: ${result.error}`)
+                      }
+                    })
+                  }}
+                  style={{ ...secondaryBtn, fontSize: 11, padding: '6px 12px' }}
+                >
+                  ↻ Auto-crear desde parejas
+                </button>
+              )}
+            </div>
             {data.managedUnits.length === 0 ? (
               <EmptyState>No hay núcleos familiares configurados aún.</EmptyState>
             ) : (

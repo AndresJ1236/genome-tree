@@ -38,7 +38,7 @@ export default async function TreePage({
       <div className="h-full flex flex-col">
         <div style={{ padding: '18px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <p style={{ fontFamily: 'Georgia, serif', fontSize: 18, color: '#2D4A3E', margin: 0 }}>
-            {family.name}
+            {family.name.startsWith('Familia ') ? family.name : `Familia ${family.name}`}
           </p>
           {session?.role === 'ADMIN' && (
             <Link
@@ -145,7 +145,7 @@ export default async function TreePage({
               color: '#2D4A3E',
             }}
           >
-            {family.name}
+            {family.name.startsWith('Familia ') ? family.name : `Familia ${family.name}`}
           </p>
           <p
             style={{
