@@ -24,7 +24,7 @@ interface FamilyTreeProps {
 }
 
 export function FamilyTree({ persons, relationships, familySlug, searchEnabled, focusPersonId }: FamilyTreeProps) {
-  const { nodes, familyUnits, petLinks, bounds } = useMemo(
+  const { nodes, familyUnits, petLinks, siblingLinks, bounds } = useMemo(
     () => computeTreeLayout(persons, relationships, { focusPersonId }),
     [persons, relationships, focusPersonId]
   )
@@ -296,6 +296,7 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
                 nodes={nodes}
                 familyUnits={familyUnits}
                 petLinks={petLinks}
+                siblingLinks={siblingLinks}
                 selectedId={selectedId}
                 visibleIds={visibleIds}
               />

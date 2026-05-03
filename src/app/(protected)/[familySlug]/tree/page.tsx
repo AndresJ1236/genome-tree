@@ -107,7 +107,7 @@ export default async function TreePage({
   const relationships: RelationshipData[] = rawRelationships.map(r => ({
     person1Id: r.person1Id,
     person2Id: r.person2Id,
-    type: r.type as 'SPOUSE' | 'PARTNER',
+    type: r.type as 'SPOUSE' | 'PARTNER' | 'SIBLING',
     endDate: r.endDate ? r.endDate.toISOString() : null,
   }))
 

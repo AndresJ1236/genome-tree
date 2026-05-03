@@ -1,7 +1,7 @@
 'use client'
 
 import { NODE_W, NODE_H } from '@/lib/tree-layout'
-import type { LayoutNode, FamilyUnit, PetLink } from '@/lib/tree-types'
+import type { LayoutNode, FamilyUnit, PetLink, SiblingLink } from '@/lib/tree-types'
 
 const BRANCH_COLOR = '#B5C4BC'
 const BRANCH_ACTIVE = '#2D4A3E'
@@ -11,11 +11,12 @@ interface FamilyEdgesProps {
   nodes: LayoutNode[]
   familyUnits: FamilyUnit[]
   petLinks: PetLink[]
+  siblingLinks?: SiblingLink[]
   selectedId: string | null
   visibleIds: Set<string> | null
 }
 
-export function FamilyEdges({ nodes, familyUnits, petLinks, selectedId, visibleIds }: FamilyEdgesProps) {
+export function FamilyEdges({ nodes, familyUnits, petLinks, siblingLinks = [], selectedId, visibleIds }: FamilyEdgesProps) {
   const byId = new Map(nodes.map(n => [n.id, n]))
 
   const units = visibleIds === null ? familyUnits : familyUnits.filter(u =>
@@ -31,6 +32,34 @@ export function FamilyEdges({ nodes, familyUnits, petLinks, selectedId, visibleI
 
   return (
     <g>
+      {/* ── Explicit sibling links (siblings without recorded shared parents) ── */}
+      {siblingLinks.map(({ person1Id, person2Id }) => {
+        const a = byId.get(person1Id)
+        const b = byId.get(person2Id)
+        if (!a || !b) return null
+        const active = selectedId === person1Id || selectedId === person2Id
+        const ax = a.x + NODE_W / 2
+        const ay = a.y + NODE_H / 2
+        const bx = b.x + NODE_W / 2
+        const by = b.y + NODE_H / 2
+        // Gentle arc above the row to suggest a non-blood connection
+        const mx = (ax + bx) / 2
+        const my = Math.min(ay, by) - 18
+        return (
+          <path
+            key={`sib-${person1Id}-${person2Id}`}
+            d={`M ${ax} ${ay} Q ${mx} ${my}, ${bx} ${by}`}
+            fill="none"
+            stroke={active ? BRANCH_ACTIVE : '#C8D4CE'}
+            strokeWidth={active ? 1.4 : 1}
+            strokeDasharray="3 4"
+            strokeLinecap="round"
+            opacity={active ? 0.85 : 0.5}
+            style={{ transition: 'stroke 0.25s, stroke-width 0.25s, opacity 0.25s' }}
+          />
+        )
+      })}
+
       {/* ── Pet tether lines ───────────────────────────────────────────────── */}
       {petLinks.map(({ petId, ownerId }) => {
         const pet   = byId.get(petId)

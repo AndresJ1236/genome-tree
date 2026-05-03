@@ -273,7 +273,7 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
         const partner = r.person1Id === personId ? r.person2 : r.person1
         return {
           id: r.id,
-          type: r.type as 'SPOUSE' | 'PARTNER',
+          type: r.type as 'SPOUSE' | 'PARTNER' | 'SIBLING',
           partnerId: partner.id,
           partnerName: getPersonDisplayName(partner),
           endDate: r.endDate ? r.endDate.toISOString().slice(0, 10) : null,
@@ -286,17 +286,17 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
 export async function createRelationship(input: {
   personId: string
   partnerId: string
-  type: 'SPOUSE' | 'PARTNER'
+  type: 'SPOUSE' | 'PARTNER' | 'SIBLING'
 }): Promise<ActionResult<{ id: string }>> {
   const session = await getSession()
   if (!session) return { ok: false, error: 'No autenticado' }
 
   try {
     const isAdmin = session.role === 'ADMIN' || session.scope === 'ADMIN'
-    if (!isAdmin) return { ok: false, error: 'Solo administradores pueden gestionar relaciones de pareja.' }
+    if (!isAdmin) return { ok: false, error: 'Solo administradores pueden gestionar relaciones.' }
 
     if (input.personId === input.partnerId) {
-      return { ok: false, error: 'Una persona no puede ser pareja de sí misma.' }
+      return { ok: false, error: 'Una persona no puede tener relación consigo misma.' }
     }
 
     const [p1, p2] = await Promise.all([
@@ -309,6 +309,13 @@ export async function createRelationship(input: {
     const rel = await prisma.relationship.create({
       data: { familyId: session.familyId, person1Id: id1, person2Id: id2, type: input.type },
     })
+
+    // Sibling relationships: no managed family unit, just revalidate and return
+    if (input.type === 'SIBLING') {
+      revalidatePath(`/${session.familySlug}/person/${input.personId}/edit`)
+      revalidatePath(`/${session.familySlug}/tree`)
+      return { ok: true, data: { id: rel.id } }
+    }
 
     // Auto-create managed family unit if one doesn't exist for this couple
     const existingUnit = await prisma.managedFamilyUnit.findFirst({

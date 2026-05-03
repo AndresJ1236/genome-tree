@@ -108,7 +108,7 @@ export function PersonEditor({
   )
   const [media, setMedia] = useState<MediaItem[]>(payload.media)
   const [relationships, setRelationships] = useState<RelationshipItem[]>(payload.relationships)
-  const [newPartnerType, setNewPartnerType] = useState<'SPOUSE' | 'PARTNER'>('SPOUSE')
+  const [newPartnerType, setNewPartnerType] = useState<'SPOUSE' | 'PARTNER' | 'SIBLING'>('SPOUSE')
   const [newPartnerId, setNewPartnerId] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -921,12 +921,12 @@ export function PersonEditor({
               <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
                 {relationships.map(rel => (
                   <div key={rel.id} style={{ padding: '10px 14px', background: '#F8F5EE', borderRadius: 3, border: '1px solid #E0DAD0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: rel.endDate !== undefined ? 8 : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: rel.type !== 'SIBLING' ? 8 : 0 }}>
                       <span style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8B9E94', minWidth: 60 }}>
-                        {rel.type === 'SPOUSE' ? 'Cónyuge' : 'Pareja'}
+                        {rel.type === 'SPOUSE' ? 'Cónyuge' : rel.type === 'SIBLING' ? 'Hermano/a' : 'Pareja'}
                       </span>
                       <span style={{ fontSize: 14, color: '#2C2C2C', flex: 1 }}>{rel.partnerName}</span>
-                      {rel.endDate && (
+                      {rel.endDate && rel.type !== 'SIBLING' && (
                         <span style={{ fontSize: 11, color: '#8B9E94' }}>Fin: {rel.endDate}</span>
                       )}
                       <button
@@ -938,6 +938,7 @@ export function PersonEditor({
                         Eliminar
                       </button>
                     </div>
+                    {rel.type !== 'SIBLING' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <label style={{ fontSize: 11, color: '#8B9E94', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                         Fecha de separación
@@ -972,6 +973,7 @@ export function PersonEditor({
                         </button>
                       )}
                     </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -979,9 +981,10 @@ export function PersonEditor({
 
             <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr auto', gap: 10, alignItems: 'end' }}>
               <Field label="Tipo">
-                <select value={newPartnerType} onChange={e => setNewPartnerType(e.target.value as 'SPOUSE' | 'PARTNER')} style={inputStyle}>
+                <select value={newPartnerType} onChange={e => setNewPartnerType(e.target.value as 'SPOUSE' | 'PARTNER' | 'SIBLING')} style={inputStyle}>
                   <option value="SPOUSE">Cónyuge</option>
                   <option value="PARTNER">Pareja</option>
+                  <option value="SIBLING">Hermano/a</option>
                 </select>
               </Field>
               <Field label="Persona">

@@ -262,7 +262,7 @@ export interface ManagedUnitOption {
 
 export interface RelationshipItem {
   id: string
-  type: 'SPOUSE' | 'PARTNER'
+  type: 'SPOUSE' | 'PARTNER' | 'SIBLING'
   partnerId: string
   partnerName: string
   endDate: string | null

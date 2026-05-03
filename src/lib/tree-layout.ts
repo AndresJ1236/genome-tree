@@ -253,7 +253,7 @@ export function computeTreeLayout(
   options?: TreeLayoutOptions,
 ): TreeLayout {
   if (persons.length === 0) {
-    return { nodes: [], familyUnits: [], petLinks: [], bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 } }
+    return { nodes: [], familyUnits: [], petLinks: [], siblingLinks: [], bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 } }
   }
 
   // Separate pets — they don't participate in the generation grid
@@ -311,9 +311,16 @@ export function computeTreeLayout(
   }
 
   const explicitCoupleData = new Map<string, { isEx: boolean }>()
+  // Sibling relationships are explicit lateral links (no couple semantics).
+  // Stored separately so they don't pollute inferredCouples / spousesOf.
+  const explicitSiblings = new Map<string, { p1: string; p2: string }>()
   for (const rel of relationships) {
     if (!personSet.has(rel.person1Id) || !personSet.has(rel.person2Id)) continue
     const k = coupleKey(rel.person1Id, rel.person2Id)
+    if (rel.type === 'SIBLING') {
+      explicitSiblings.set(k, { p1: rel.person1Id, p2: rel.person2Id })
+      continue
+    }
     explicitCoupleData.set(k, { isEx: rel.endDate !== null })
     if (!inferredCouples.has(k)) {
       inferredCouples.set(k, { p1: rel.person1Id, p2: rel.person2Id })
@@ -326,6 +333,15 @@ export function computeTreeLayout(
     if (!spousesOf.has(p2)) spousesOf.set(p2, [])
     if (!spousesOf.get(p1)!.includes(p2)) spousesOf.get(p1)!.push(p2)
     if (!spousesOf.get(p2)!.includes(p1)) spousesOf.get(p2)!.push(p1)
+  }
+
+  // Bidirectional sibling lookup for BFS generation traversal.
+  const explicitSiblingsOf = new Map<string, string[]>()
+  for (const { p1, p2 } of explicitSiblings.values()) {
+    if (!explicitSiblingsOf.has(p1)) explicitSiblingsOf.set(p1, [])
+    if (!explicitSiblingsOf.has(p2)) explicitSiblingsOf.set(p2, [])
+    explicitSiblingsOf.get(p1)!.push(p2)
+    explicitSiblingsOf.get(p2)!.push(p1)
   }
 
   const minParentYear = (id: string): number => {
@@ -401,6 +417,15 @@ export function computeTreeLayout(
 
       // Spouses → same generation
       for (const sid of spousesOf.get(id) ?? []) {
+        if (personSet.has(sid) && !gen.has(sid)) {
+          gen.set(sid, g)
+          queue.push(sid)
+        }
+      }
+
+      // Explicit siblings → same generation (lets us connect siblings even
+      // when their common parents aren't recorded yet).
+      for (const sid of explicitSiblingsOf.get(id) ?? []) {
         if (personSet.has(sid) && !gen.has(sid)) {
           gen.set(sid, g)
           queue.push(sid)
@@ -699,6 +724,20 @@ export function computeTreeLayout(
     }
   }
 
+  // Sibling links to render — only emit for pairs not already connected
+  // through a shared parent unit (those already get a junction edge).
+  const siblingLinks: { person1Id: string; person2Id: string }[] = []
+  for (const { p1, p2 } of explicitSiblings.values()) {
+    const a = personMap.get(p1)
+    const b = personMap.get(p2)
+    if (!a || !b) continue
+    const shareParent =
+      (a.fatherId && a.fatherId === b.fatherId) ||
+      (a.motherId && a.motherId === b.motherId)
+    if (shareParent) continue  // already connected via family unit edges
+    siblingLinks.push({ person1Id: p1, person2Id: p2 })
+  }
+
   const xs = nodes.map(n => n.x)
   const ys = nodes.map(n => n.y)
 
@@ -706,6 +745,7 @@ export function computeTreeLayout(
     nodes,
     familyUnits,
     petLinks,
+    siblingLinks,
     bounds: {
       minX: Math.min(...xs),
       minY: Math.min(...ys),
