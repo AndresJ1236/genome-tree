@@ -217,17 +217,19 @@ model Relationship {
 // ─────────────────────────────────────────────
 
 model User {
-  id           String    @id @default(cuid())
-  username     String    @unique
-  passwordHash String
-  name         String
-  familyId     String
-  personId     String?   @unique
-  role         UserRole  @default(MEMBER)
-  scope        UserScope @default(FAMILY)
-  branchRootId String?   // para scope BRANCH: ID de la persona raíz de su subárbol
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  username        String    @unique
+  passwordHash    String
+  name            String
+  familyId        String
+  personId        String?   @unique
+  role            UserRole  @default(MEMBER)
+  scope           UserScope @default(FAMILY)
+  branchRootId    String?   // para scope BRANCH: ID de la persona raíz de su subárbol
+  // JTI del token de invitación usado para crear esta cuenta (single-use enforcement)
+  inviteTokenJti  String?   @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   family         Family          @relation(fields: [familyId], references: [id])
   person         Person?         @relation(fields: [personId], references: [id])

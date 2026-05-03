@@ -29,6 +29,14 @@ export async function acceptInvite(input: {
     return { ok: false, error: 'La familia asociada a la invitacion no existe.' }
   }
 
+  // Enforce single-use: reject if this invite token was already consumed
+  if (payload.jti) {
+    const alreadyUsed = await prisma.user.findUnique({ where: { inviteTokenJti: payload.jti } })
+    if (alreadyUsed) {
+      return { ok: false, error: 'Esta invitacion ya fue utilizada.' }
+    }
+  }
+
   const existing = await prisma.user.findUnique({ where: { username } })
   if (existing) {
     return { ok: false, error: 'Ya existe una cuenta con ese usuario.' }
@@ -45,6 +53,7 @@ export async function acceptInvite(input: {
       scope: payload.scope,
       branchRootId: payload.branchRootId,
       personId: payload.personId ?? null,
+      inviteTokenJti: payload.jti ?? null,
     },
   })
 
