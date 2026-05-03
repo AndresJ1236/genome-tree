@@ -16,7 +16,7 @@ import {
   updateManagedFamilyUnit,
   updateUserAccess,
 } from '@/app/actions/admin'
-import { approveProposal, rejectProposal } from '@/app/actions/proposals'
+import { approveCreationProposal, approveProposal, rejectCreationProposal, rejectProposal } from '@/app/actions/proposals'
 import type {
   AccessEffect,
   AccessPermission,
@@ -90,7 +90,10 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
   const [copiedResetId, setCopiedResetId] = useState<string | null>(null)
   const isAdminView = data.viewerMode === 'ADMIN'
 
-  const pendingProposals = data.proposals.length
+  const [rejectingCreationId, setRejectingCreationId] = useState<string | null>(null)
+  const [rejectCreationReason, setRejectCreationReason] = useState('')
+
+  const pendingProposals = data.proposals.length + data.creationProposals.length
 
   const allTabs: { id: AdminTab; label: string; badge?: number; adminOnly?: boolean }[] = [
     { id: 'usuarios',    label: 'Usuarios',       adminOnly: true },
@@ -244,6 +247,28 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
       if (!result.ok) { setError(result.error); return }
       setRejectingId(null)
       setRejectReason('')
+      setMessage('Propuesta rechazada.')
+      router.refresh()
+    })
+  }
+
+  function handleApproveCreationProposal(proposalId: string) {
+    clear()
+    startTransition(async () => {
+      const result = await approveCreationProposal(proposalId)
+      if (!result.ok) { setError(result.error); return }
+      setMessage('Persona añadida al árbol.')
+      router.refresh()
+    })
+  }
+
+  function handleRejectCreationProposal(proposalId: string) {
+    clear()
+    startTransition(async () => {
+      const result = await rejectCreationProposal({ proposalId, reason: rejectCreationReason })
+      if (!result.ok) { setError(result.error); return }
+      setRejectingCreationId(null)
+      setRejectCreationReason('')
       setMessage('Propuesta rechazada.')
       router.refresh()
     })
@@ -602,11 +627,71 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         {activeTab === 'propuestas' && (
           <TabSection
             title="Propuestas pendientes"
-            description="Cambios biográficos enviados por miembros. Revísalos y aprueba o rechaza cada uno."
+            description="Personas nuevas y cambios biográficos enviados por miembros."
           >
-            {data.proposals.length === 0 ? (
+            {data.creationProposals.length > 0 && (
+              <>
+                <SectionLabel>Personas nuevas sugeridas</SectionLabel>
+                <div style={{ display: 'grid', gap: 12, marginBottom: 24 }}>
+                  {data.creationProposals.map(p => {
+                    const name = [p.firstName, p.lastName].filter(Boolean).join(' ')
+                    const date = new Date(p.createdAt).toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' })
+                    return (
+                      <div key={p.id} style={{ ...rowCardStyle, display: 'block' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                          <div>
+                            <p style={{ margin: '0 0 2px', fontFamily: 'Georgia, serif', fontSize: 14, color: '#2C2C2C' }}>
+                              {name} {p.nodeKind === 'PET' && <span style={{ fontSize: 11, color: '#8B9E94' }}>mascota</span>}
+                            </p>
+                            {(p.fatherName || p.motherName) && (
+                              <p style={{ margin: '0 0 2px', fontSize: 12, color: '#6B6B6B' }}>
+                                {p.fatherName && `Padre: ${p.fatherName}`}{p.fatherName && p.motherName && ' · '}{p.motherName && `Madre: ${p.motherName}`}
+                              </p>
+                            )}
+                            {p.notes && <p style={{ margin: '0 0 2px', fontSize: 12, color: '#6B6B6B' }}>Notas: {p.notes}</p>}
+                            <p style={{ margin: 0, fontSize: 11, color: '#8B9E94' }}>{p.proposedByName} · {date}</p>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => handleApproveCreationProposal(p.id)}
+                              disabled={isPending}
+                              style={primaryBtn}
+                            >
+                              Aprobar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setRejectingCreationId(p.id); setRejectCreationReason('') }}
+                              disabled={isPending}
+                              style={dangerBtn}
+                            >
+                              Rechazar
+                            </button>
+                          </div>
+                        </div>
+                        {rejectingCreationId === p.id && (
+                          <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                            <input
+                              value={rejectCreationReason}
+                              onChange={e => setRejectCreationReason(e.target.value)}
+                              placeholder="Motivo del rechazo (opcional)"
+                              style={{ ...inputStyle, flex: 1 }}
+                            />
+                            <button type="button" onClick={() => handleRejectCreationProposal(p.id)} disabled={isPending} style={dangerBtn}>Confirmar</button>
+                            <button type="button" onClick={() => setRejectingCreationId(null)} style={secondaryBtn}>Cancelar</button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+            {data.proposals.length > 0 && <SectionLabel>Cambios biográficos</SectionLabel>}
+            {data.proposals.length === 0 && data.creationProposals.length === 0 ? (
               <EmptyState>No hay propuestas pendientes.</EmptyState>
-            ) : (
+            ) : data.proposals.length === 0 ? null : (
               <div style={{ display: 'grid', gap: 14 }}>
                 {data.proposals.map(proposal => (
                   <ProposalCard

@@ -377,6 +377,7 @@ export interface AdminDashboardData {
   config: FamilyConfigData
   auditLogs: AuditLogItem[]
   proposals: PersonProposalItem[]
+  creationProposals: PersonCreationProposalItem[]
 }
 
 export interface ContentEditorData {
@@ -478,6 +479,24 @@ export interface NotificationItem {
   href: string | null
   read: boolean
   createdAt: string
+}
+
+export interface PersonCreationProposalItem {
+  id: string
+  proposedByName: string
+  status: ProposalStatus
+  createdAt: string
+  reviewedAt: string | null
+  rejectionReason: string | null
+  firstName: string
+  lastName: string | null
+  middleName: string | null
+  gender: string | null
+  birthDate: string | null
+  nodeKind: PersonKind
+  notes: string | null
+  fatherName: string | null
+  motherName: string | null
 }
 
 export type ActionResult<T = void> =

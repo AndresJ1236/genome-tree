@@ -19,6 +19,7 @@ import type {
   FamilyConfigData,
   ManagedFamilyUnitItem,
   ManagedFamilyUnitPreviewPerson,
+  PersonCreationProposalItem,
   PersonProposalItem,
   RelationsImportPreview,
   UserRole,
@@ -148,14 +149,22 @@ function buildManagedPeoplePreview(
 }
 
 function buildSuggestedManagedUnitLabel(
-  parentA: Pick<FamilyPersonRecord, 'lastName'>,
-  parentB: Pick<FamilyPersonRecord, 'lastName'> | null
+  parentA: Pick<FamilyPersonRecord, 'lastName' | 'gender'>,
+  parentB: Pick<FamilyPersonRecord, 'lastName' | 'gender'> | null
 ) {
-  if (parentB?.lastName && parentB.lastName !== parentA.lastName) {
-    return `Familia ${parentA.lastName} ${parentB.lastName}`
+  // Order: male surname first, female second; unknown → keep as-is (parentA first)
+  let first = parentA
+  let second = parentB
+  if (parentB && parentA.gender !== 'MALE' && parentB.gender === 'MALE') {
+    first = parentB
+    second = parentA
   }
-
-  return `Familia ${parentA.lastName}`
+  const surnameA = first.lastName.split(' ')[0]
+  const surnameB = second?.lastName.split(' ')[0]
+  if (surnameB && surnameB !== surnameA) {
+    return `Familia ${surnameA} ${surnameB}`
+  }
+  return `Familia ${surnameA}`
 }
 
 async function buildManagedUnitSummary(
@@ -337,23 +346,37 @@ export async function getAdminDashboard(): Promise<ActionResult<AdminDashboardDa
     ? users
     : users.filter(user => user.personId && representedManagedPersonIds.has(user.personId))
 
-  const proposalsRaw = await prisma.personUpdateProposal.findMany({
-    where: {
-      familyId: session.familyId,
-      status: 'PENDING',
-      ...(isAdmin ? {} : { personId: { in: [...representedManagedPersonIds] } }),
-    },
-    orderBy: { createdAt: 'asc' },
-    select: {
-      id: true, personId: true, status: true,
-      createdAt: true, reviewedAt: true, rejectionReason: true,
-      firstName: true, middleName: true, lastName: true,
-      gender: true, birthDate: true, deathDate: true,
-      birthPlace: true, bio: true, currentValues: true,
-      person:     { select: { firstName: true, middleName: true, lastName: true } },
-      proposedBy: { select: { name: true } },
-    },
-  })
+  const [proposalsRaw, creationProposalsRaw] = await Promise.all([
+    prisma.personUpdateProposal.findMany({
+      where: {
+        familyId: session.familyId,
+        status: 'PENDING',
+        ...(isAdmin ? {} : { personId: { in: [...representedManagedPersonIds] } }),
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true, personId: true, status: true,
+        createdAt: true, reviewedAt: true, rejectionReason: true,
+        firstName: true, middleName: true, lastName: true,
+        gender: true, birthDate: true, deathDate: true,
+        birthPlace: true, bio: true, currentValues: true,
+        person:     { select: { firstName: true, middleName: true, lastName: true } },
+        proposedBy: { select: { name: true } },
+      },
+    }),
+    isAdmin ? prisma.personCreationProposal.findMany({
+      where: { familyId: session.familyId, status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true, status: true, createdAt: true, reviewedAt: true, rejectionReason: true,
+        firstName: true, lastName: true, middleName: true, gender: true,
+        birthDate: true, nodeKind: true, notes: true,
+        proposedBy: { select: { name: true } },
+        father: { select: { firstName: true, middleName: true, lastName: true } },
+        mother: { select: { firstName: true, middleName: true, lastName: true } },
+      },
+    }) : Promise.resolve([]),
+  ])
 
   const proposals: PersonProposalItem[] = proposalsRaw.map(p => {
     const current = p.currentValues as Record<string, unknown>
@@ -447,6 +470,23 @@ export async function getAdminDashboard(): Promise<ActionResult<AdminDashboardDa
         newValue: log.newValue,
       })),
       proposals,
+      creationProposals: creationProposalsRaw.map(p => ({
+        id: p.id,
+        proposedByName: p.proposedBy.name,
+        status: p.status as 'PENDING',
+        createdAt: p.createdAt.toISOString(),
+        reviewedAt: p.reviewedAt?.toISOString() ?? null,
+        rejectionReason: p.rejectionReason,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        middleName: p.middleName,
+        gender: p.gender as string | null,
+        birthDate: p.birthDate?.toISOString() ?? null,
+        nodeKind: p.nodeKind as 'PERSON' | 'PET',
+        notes: p.notes,
+        fatherName: p.father ? getPersonDisplayName(p.father) : null,
+        motherName: p.mother ? getPersonDisplayName(p.mother) : null,
+      })) satisfies PersonCreationProposalItem[],
     },
   }
 }
