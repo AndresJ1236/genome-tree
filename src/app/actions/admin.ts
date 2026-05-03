@@ -1314,22 +1314,33 @@ export async function previewRelationsImport(input: {
 
 // ── Auto-create ManagedFamilyUnit for all existing couples without one ─────────
 
+type PersonMinimal = { id: string; firstName: string; lastName: string; gender: string }
+
+function buildUnitLabel(p1: PersonMinimal, p2: PersonMinimal) {
+  const male   = p1.gender === 'MALE'   ? p1 : p2.gender === 'MALE'   ? p2 : null
+  const female = p1.gender === 'FEMALE' ? p1 : p2.gender === 'FEMALE' ? p2 : null
+  const parentA = male ?? (p1.lastName <= p2.lastName ? p1 : p2)
+  const parentB = parentA.id === p1.id ? p2 : p1
+  const surnameA = parentA.lastName.split(' ')[0]
+  const surnameB = parentB.lastName.split(' ')[0]
+  const label = surnameB && surnameB !== surnameA
+    ? `Familia ${surnameA} ${surnameB}`
+    : `Familia ${surnameA}`
+  return { parentA, parentB, label }
+}
+
 export async function bulkAutoCreateFamilyUnits(): Promise<ActionResult<{ created: number }>> {
   const session = await getSession()
   if (!session) return { ok: false, error: 'No autenticado' }
   try {
     ensureAdmin(session)
 
-    // Fetch all relationships for this family with person gender + lastName
-    const relationships = await prisma.relationship.findMany({
-      where: { person1: { familyId: session.familyId } },
-      select: {
-        person1Id: true,
-        person2Id: true,
-        person1: { select: { id: true, firstName: true, lastName: true, gender: true } },
-        person2: { select: { id: true, firstName: true, lastName: true, gender: true } },
-      },
+    // Build a map of all persons in this family
+    const allPersons = await prisma.person.findMany({
+      where: { familyId: session.familyId },
+      select: { id: true, firstName: true, lastName: true, gender: true, fatherId: true, motherId: true },
     })
+    const byId = new Map(allPersons.map(p => [p.id, p]))
 
     // Fetch all existing units so we can skip already-covered pairs
     const existingUnits = await prisma.managedFamilyUnit.findMany({
@@ -1340,23 +1351,36 @@ export async function bulkAutoCreateFamilyUnits(): Promise<ActionResult<{ create
       existingUnits.map(u => [u.parentAId, u.parentBId].sort().join('|'))
     )
 
-    let created = 0
+    // Collect all couple pairs:
+    // 1) Explicit Relationship records
+    const relationships = await prisma.relationship.findMany({
+      where: { person1: { familyId: session.familyId } },
+      select: { person1Id: true, person2Id: true },
+    })
+    const pairs = new Map<string, [string, string]>()
     for (const rel of relationships) {
       const key = [rel.person1Id, rel.person2Id].sort().join('|')
+      pairs.set(key, [rel.person1Id, rel.person2Id])
+    }
+    // 2) Implicit pairs derived from children with both fatherId + motherId
+    for (const person of allPersons) {
+      if (person.fatherId && person.motherId) {
+        // Only include if both parents belong to this family
+        if (byId.has(person.fatherId) && byId.has(person.motherId)) {
+          const key = [person.fatherId, person.motherId].sort().join('|')
+          pairs.set(key, [person.fatherId, person.motherId])
+        }
+      }
+    }
+
+    let created = 0
+    for (const [key, [id1, id2]] of pairs) {
       if (covered.has(key)) continue
+      const p1 = byId.get(id1)
+      const p2 = byId.get(id2)
+      if (!p1 || !p2) continue
 
-      const p1 = rel.person1
-      const p2 = rel.person2
-      const male   = p1.gender === 'MALE'   ? p1 : p2.gender === 'MALE'   ? p2 : null
-      const female = p1.gender === 'FEMALE' ? p1 : p2.gender === 'FEMALE' ? p2 : null
-      const parentA = male ?? (p1.lastName <= p2.lastName ? p1 : p2)
-      const parentB = parentA.id === p1.id ? p2 : p1
-
-      const surnameA = parentA.lastName.split(' ')[0]
-      const surnameB = parentB.lastName.split(' ')[0]
-      const label = surnameB && surnameB !== surnameA
-        ? `Familia ${surnameA} ${surnameB}`
-        : `Familia ${surnameA}`
+      const { parentA, parentB, label } = buildUnitLabel(p1, p2)
 
       await prisma.managedFamilyUnit.create({
         data: {
