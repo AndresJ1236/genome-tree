@@ -574,9 +574,11 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
                     startTransition(async () => {
                       const result = await bulkAutoCreateFamilyUnits()
                       if (result.ok) {
-                        setMessage(result.data.created > 0
-                          ? `${result.data.created} núcleo(s) creado(s) automáticamente.`
-                          : 'Todas las parejas ya tienen núcleo familiar.')
+                        const { created, fixed } = result.data
+                        const parts = []
+                        if (created > 0) parts.push(`${created} núcleo(s) creado(s)`)
+                        if (fixed > 0)   parts.push(`${fixed} orden(es) corregido(s)`)
+                        setMessage(parts.length > 0 ? parts.join(', ') + '.' : 'Todo ya estaba en orden.')
                         router.refresh()
                       } else {
                         setMessage(`Error: ${result.error}`)

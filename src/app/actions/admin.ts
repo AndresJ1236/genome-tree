@@ -1339,7 +1339,7 @@ function buildUnitLabel(p1: PersonMinimal, p2: PersonMinimal) {
   return { parentA, parentB, label }
 }
 
-export async function bulkAutoCreateFamilyUnits(): Promise<ActionResult<{ created: number }>> {
+export async function bulkAutoCreateFamilyUnits(): Promise<ActionResult<{ created: number; fixed: number }>> {
   const session = await getSession()
   if (!session) return { ok: false, error: 'No autenticado' }
   try {
@@ -1352,11 +1352,29 @@ export async function bulkAutoCreateFamilyUnits(): Promise<ActionResult<{ create
     })
     const byId = new Map(allPersons.map(p => [p.id, p]))
 
-    // Fetch all existing units so we can skip already-covered pairs
+    // ── Step 1: fix order of existing units where FEMALE is parentA ───────────
     const existingUnits = await prisma.managedFamilyUnit.findMany({
       where: { familyId: session.familyId },
-      select: { parentAId: true, parentBId: true },
+      select: { id: true, parentAId: true, parentBId: true },
     })
+    let fixed = 0
+    for (const unit of existingUnits) {
+      const pA = byId.get(unit.parentAId)
+      const pB = unit.parentBId ? byId.get(unit.parentBId) : null
+      if (!pA || !pB) continue
+      const [correctA, correctB] = orderParents(pA, pB)
+      if (correctA.id !== unit.parentAId) {
+        // parentA and parentB are swapped — fix them and regenerate label
+        const { label } = buildUnitLabel(pA, pB)
+        await prisma.managedFamilyUnit.update({
+          where: { id: unit.id },
+          data: { parentAId: correctA.id, parentBId: correctB.id, label },
+        })
+        fixed++
+      }
+    }
+
+    // ── Step 2: create missing units ───────────────────────────────────────────
     const covered = new Set(
       existingUnits.map(u => [u.parentAId, u.parentBId].sort().join('|'))
     )
@@ -1375,7 +1393,6 @@ export async function bulkAutoCreateFamilyUnits(): Promise<ActionResult<{ create
     // 2) Implicit pairs derived from children with both fatherId + motherId
     for (const person of allPersons) {
       if (person.fatherId && person.motherId) {
-        // Only include if both parents belong to this family
         if (byId.has(person.fatherId) && byId.has(person.motherId)) {
           const key = [person.fatherId, person.motherId].sort().join('|')
           pairs.set(key, [person.fatherId, person.motherId])
@@ -1408,7 +1425,7 @@ export async function bulkAutoCreateFamilyUnits(): Promise<ActionResult<{ create
       created++
     }
 
-    return { ok: true, data: { created } }
+    return { ok: true, data: { created, fixed } }
   } catch (error: unknown) {
     return { ok: false, error: (error as Error).message }
   }
