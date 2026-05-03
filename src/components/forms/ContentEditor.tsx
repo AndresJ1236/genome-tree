@@ -19,6 +19,7 @@ import {
 import { deleteMedia, uploadContentMedia } from '@/app/actions/media'
 import type { ContentEditorData, ContentVisibility, MediaItem, PersonOption } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
+import { ConfirmButton } from '@/components/ui/ConfirmButton'
 
 const visibilityOptions: ContentVisibility[] = ['BRANCH', 'FAMILY', 'ADMIN']
 
@@ -211,7 +212,6 @@ export function ContentEditor({
 
   function handleDelete() {
     if (!contentId) return
-    if (!confirm('Eliminar este contenido?')) return
     setError(null)
     startTransition(async () => {
       const result = form.type === 'IMPORTANT_LINK'
@@ -263,7 +263,6 @@ export function ContentEditor({
   }
 
   function handleDeleteMedia(mediaId: string) {
-    if (!confirm('Eliminar esta imagen del contenido?')) return
     setError(null)
 
     startTransition(async () => {
@@ -286,7 +285,7 @@ export function ContentEditor({
 
       <div style={{ marginTop: 10, marginBottom: 22 }}>
         <h1 style={{ margin: '0 0 6px', fontFamily: 'Georgia, serif', fontSize: 30, color: '#2D4A3E' }}>
-          {isEdit ? 'Editar contenido' : 'Nuevo contenido'}
+          {isEdit ? `Editar ${typeLabel(form.type).toLowerCase()}` : `Nueva ${typeLabel(form.type).toLowerCase()}`}
         </h1>
         <p style={{ margin: 0, fontSize: 13, color: '#6B6B6B' }}>{typeLabel(form.type)}</p>
       </div>
@@ -315,9 +314,13 @@ export function ContentEditor({
                   <div key={item.id} style={{ border: '1px solid #E0DAD0', borderRadius: 3, overflow: 'hidden', background: '#FFFCF8' }}>
                     <img src={item.url} alt={item.alt ?? ''} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
                     <div style={{ padding: 10 }}>
-                      <button type="button" onClick={() => handleDeleteMedia(item.id)} disabled={isPending} style={dangerButtonStyle}>
-                        Eliminar imagen
-                      </button>
+                      <ConfirmButton
+                        label="Eliminar imagen"
+                        confirmLabel="¿Seguro?"
+                        onConfirm={() => handleDeleteMedia(item.id)}
+                        disabled={isPending}
+                        style={{ padding: '8px 12px', fontSize: 13, borderRadius: 2, width: '100%' }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -339,9 +342,13 @@ export function ContentEditor({
             {isPending ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear'}
           </button>
           {isEdit && (
-            <button type="button" onClick={handleDelete} disabled={isPending} style={dangerButtonStyle}>
-              Eliminar
-            </button>
+            <ConfirmButton
+              label="Eliminar"
+              confirmLabel="¿Seguro? No se puede deshacer"
+              onConfirm={handleDelete}
+              disabled={isPending}
+              style={{ padding: '12px 20px', fontSize: 15, borderRadius: 2 }}
+            />
           )}
         </div>
       </div>
@@ -362,7 +369,12 @@ function renderFields(
           <Field label="Titulo">
             <input value={form.title} onChange={e => update('title', e.target.value)} style={inputStyle} />
           </Field>
-          <Field label={form.type === 'INTERVIEW' ? 'Respuesta' : 'Cuerpo'}>
+          {form.type === 'INTERVIEW' && (
+            <Field label="Pregunta">
+              <textarea value={form.question} onChange={e => update('question', e.target.value)} style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }} />
+            </Field>
+          )}
+          <Field label={form.type === 'INTERVIEW' ? 'Respuesta' : 'Escribe aquí'}>
             <textarea value={form.body} onChange={e => update('body', e.target.value)} style={{ ...inputStyle, minHeight: 150, resize: 'vertical' }} />
           </Field>
         </>
@@ -381,12 +393,6 @@ function renderFields(
             <textarea value={form.stepsText} onChange={e => update('stepsText', e.target.value)} style={{ ...inputStyle, minHeight: 110, resize: 'vertical' }} />
           </Field>
         </>
-      )}
-
-      {form.type === 'INTERVIEW' && (
-        <Field label="Pregunta">
-          <textarea value={form.question} onChange={e => update('question', e.target.value)} style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }} />
-        </Field>
       )}
 
       {form.type === 'DIARY' && (
@@ -430,15 +436,20 @@ function renderFields(
 
       {form.type !== 'DIARY' && (
         <>
-          <Field label="Fuente">
-            <input value={form.source} onChange={e => update('source', e.target.value)} style={inputStyle} />
+          <Field label="Referencia (opcional)">
+            <input
+              value={form.source}
+              onChange={e => update('source', e.target.value)}
+              placeholder="Ej: foto familiar, carta de 1953, recuerdo propio, entrevista con abuela..."
+              style={inputStyle}
+            />
           </Field>
-          <Field label="Confianza">
+          <Field label="¿Qué tan seguro es esto?">
             <select value={form.confidence} onChange={e => update('confidence', e.target.value as ContentEditorData['confidence'])} style={inputStyle}>
-              <option value="">Sin especificar</option>
-              <option value="HIGH">Alta</option>
-              <option value="MEDIUM">Media</option>
-              <option value="LOW">Baja</option>
+              <option value="">No sé / Prefiero no indicar</option>
+              <option value="HIGH">Seguro — lo sé con certeza</option>
+              <option value="MEDIUM">Probable — creo que es correcto</option>
+              <option value="LOW">Incierto — podría estar equivocado</option>
             </select>
           </Field>
         </>
@@ -472,7 +483,7 @@ function typeLabel(type: ContentEditorData['type']) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label>
-      <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8B9E94', fontFamily: 'Georgia, serif', marginBottom: 8 }}>
+      <div style={{ fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#6B7B70', fontFamily: 'Georgia, serif', marginBottom: 8 }}>
         {label}
       </div>
       {children}
@@ -502,11 +513,9 @@ const primaryButtonStyle: React.CSSProperties = {
   background: '#2D4A3E',
   color: '#fff',
   borderRadius: 2,
-  padding: '11px 16px',
+  padding: '12px 20px',
   cursor: 'pointer',
-  fontSize: 12,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
+  fontSize: 15,
 }
 
 const dangerButtonStyle: React.CSSProperties = {
@@ -514,11 +523,9 @@ const dangerButtonStyle: React.CSSProperties = {
   background: '#FFF5F5',
   color: '#8B4444',
   borderRadius: 2,
-  padding: '11px 16px',
+  padding: '12px 20px',
   cursor: 'pointer',
-  fontSize: 12,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
+  fontSize: 15,
 }
 
 const secondaryButtonStyle: React.CSSProperties = {
@@ -526,9 +533,7 @@ const secondaryButtonStyle: React.CSSProperties = {
   background: '#F8F5EE',
   color: '#2D4A3E',
   borderRadius: 2,
-  padding: '11px 14px',
+  padding: '12px 16px',
   cursor: 'pointer',
-  fontSize: 12,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
+  fontSize: 14,
 }

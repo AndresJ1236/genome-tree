@@ -10,6 +10,7 @@ import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF } from '@/lib/co
 import type { ClaimedRelation, MediaItem, PersonEditorPayload, PersonFormData, RelationshipItem } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { HelpTooltip } from '@/components/ui/HelpTooltip'
+import { ConfirmButton } from '@/components/ui/ConfirmButton'
 
 const shellStyle: React.CSSProperties = {
   maxWidth: 880,
@@ -42,10 +43,10 @@ const stickyActionsStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
-  fontSize: 11,
-  letterSpacing: '0.1em',
+  fontSize: 13,
+  letterSpacing: '0.06em',
   textTransform: 'uppercase',
-  color: '#8B9E94',
+  color: '#6B7B70',
   fontFamily: 'Georgia, serif',
   marginBottom: 8,
 }
@@ -373,7 +374,6 @@ export function PersonEditor({
   }
 
   function handleDeleteMedia(mediaId: string) {
-    if (!confirm('Eliminar esta foto de la galeria?')) return
     setError(null)
     setMessage(null)
     startTransition(async () => {
@@ -415,7 +415,6 @@ export function PersonEditor({
 
   function handleRemoveRelationship(relId: string) {
     if (!form.id) return
-    if (!confirm('Eliminar esta relación de pareja?')) return
     setError(null)
     setMessage(null)
     startTransition(async () => {
@@ -428,7 +427,6 @@ export function PersonEditor({
 
   function handleDeletePerson() {
     if (!form.id) return
-    if (!confirm('Eliminar esta persona? Esta accion no se puede deshacer.')) return
     setError(null)
     setMessage(null)
     startTransition(async () => {
@@ -875,35 +873,22 @@ export function PersonEditor({
                 color: '#fff',
                 border: 'none',
                 borderRadius: 2,
-                padding: '11px 16px',
+                padding: '12px 20px',
                 cursor: 'pointer',
-                fontSize: 12,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
+                fontSize: 15,
               }}
             >
               {submitLabel}
             </button>
-            <span style={{ fontSize: 12, color: '#7A847E' }}>{submitHint}</span>
+            <span style={{ fontSize: 13, color: '#7A847E' }}>{submitHint}</span>
             {mode === 'edit' && !isMember && (
-              <button
-                type="button"
-                onClick={handleDeletePerson}
+              <ConfirmButton
+                label="Eliminar persona"
+                confirmLabel="¿Seguro? No se puede deshacer"
+                onConfirm={handleDeletePerson}
                 disabled={isPending}
-                style={{
-                  background: '#FFF5F5',
-                  color: '#8B4444',
-                  border: '1px solid #E6C1C1',
-                  borderRadius: 2,
-                  padding: '11px 16px',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Eliminar persona
-              </button>
+                style={{ padding: '12px 20px', fontSize: 15, borderRadius: 2 }}
+              />
             )}
           </div>
         </section>
@@ -929,14 +914,13 @@ export function PersonEditor({
                       {rel.endDate && rel.type !== 'SIBLING' && (
                         <span style={{ fontSize: 11, color: '#8B9E94' }}>Fin: {rel.endDate}</span>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveRelationship(rel.id)}
+                      <ConfirmButton
+                        label="Eliminar"
+                        confirmLabel="¿Seguro?"
+                        onConfirm={() => handleRemoveRelationship(rel.id)}
                         disabled={isPending}
-                        style={{ border: '1px solid #E6C1C1', background: '#FFF5F5', color: '#8B4444', borderRadius: 2, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}
-                      >
-                        Eliminar
-                      </button>
+                        style={{ padding: '4px 10px', fontSize: 13, borderRadius: 2 }}
+                      />
                     </div>
                     {rel.type !== 'SIBLING' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1080,21 +1064,12 @@ export function PersonEditor({
                     >
                       {form.coverPhoto === item.url ? 'Portada actual' : 'Usar como portada'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteMedia(item.id)}
-                      style={{
-                        border: '1px solid #E6C1C1',
-                        background: '#FFF5F5',
-                        color: '#8B4444',
-                        borderRadius: 2,
-                        padding: '8px 10px',
-                        cursor: 'pointer',
-                        fontSize: 12,
-                      }}
-                    >
-                      Eliminar foto
-                    </button>
+                    <ConfirmButton
+                      label="Eliminar foto"
+                      confirmLabel="¿Seguro?"
+                      onConfirm={() => handleDeleteMedia(item.id)}
+                      style={{ padding: '8px 10px', fontSize: 13, borderRadius: 2 }}
+                    />
                   </div>
                 </div>
               )) : (
