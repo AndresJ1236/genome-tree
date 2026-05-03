@@ -324,11 +324,14 @@ export async function createRelationship(input: {
     })
 
     if (!existingUnit) {
-      // Determine order: male first, female second; unknown → alphabetical by lastName
-      const male   = p1.gender === 'MALE'   ? p1 : p2.gender === 'MALE'   ? p2 : null
-      const female = p1.gender === 'FEMALE' ? p1 : p2.gender === 'FEMALE' ? p2 : null
-      const parentA = male ?? (p1.lastName <= p2.lastName ? p1 : p2)
-      const parentB = (parentA.id === p1.id ? p2 : p1)
+      // Determine order: MALE first, FEMALE second; if one is FEMALE+other UNKNOWN → UNKNOWN first
+      // alphabetical only when both genders are unknown
+      let parentA: typeof p1, parentB: typeof p1
+      if (p1.gender === 'MALE')        { parentA = p1; parentB = p2 }
+      else if (p2.gender === 'MALE')   { parentA = p2; parentB = p1 }
+      else if (p1.gender === 'FEMALE') { parentA = p2; parentB = p1 }
+      else if (p2.gender === 'FEMALE') { parentA = p1; parentB = p2 }
+      else { parentA = p1.lastName <= p2.lastName ? p1 : p2; parentB = parentA.id === p1.id ? p2 : p1 }
 
       const surnameA = parentA.lastName.split(' ')[0]
       const surnameB = parentB.lastName.split(' ')[0]

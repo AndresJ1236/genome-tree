@@ -149,15 +149,18 @@ function buildManagedPeoplePreview(
 }
 
 function buildSuggestedManagedUnitLabel(
-  parentA: Pick<FamilyPersonRecord, 'lastName' | 'gender'>,
-  parentB: Pick<FamilyPersonRecord, 'lastName' | 'gender'> | null
+  pA: Pick<FamilyPersonRecord, 'lastName' | 'gender'>,
+  pB: Pick<FamilyPersonRecord, 'lastName' | 'gender'> | null
 ) {
-  // Order: male surname first, female second; unknown → keep as-is (parentA first)
-  let first = parentA
-  let second = parentB
-  if (parentB && parentA.gender !== 'MALE' && parentB.gender === 'MALE') {
-    first = parentB
-    second = parentA
+  // MALE first, FEMALE second; if one FEMALE+other UNKNOWN → UNKNOWN first; else alphabetical
+  let first = pA
+  let second = pB
+  if (pB) {
+    if (pA.gender === 'MALE')        { first = pA; second = pB }
+    else if (pB.gender === 'MALE')   { first = pB; second = pA }
+    else if (pA.gender === 'FEMALE') { first = pB; second = pA }
+    else if (pB.gender === 'FEMALE') { first = pA; second = pB }
+    else { first = pA.lastName <= pB.lastName ? pA : pB; second = first === pA ? pB : pA }
   }
   const surnameA = first.lastName.split(' ')[0]
   const surnameB = second?.lastName.split(' ')[0]
@@ -1316,11 +1319,18 @@ export async function previewRelationsImport(input: {
 
 type PersonMinimal = { id: string; firstName: string; lastName: string; gender: string }
 
+function orderParents<T extends { id: string; lastName: string; gender: string }>(
+  p1: T, p2: T
+): [T, T] {
+  if (p1.gender === 'MALE')        return [p1, p2]
+  if (p2.gender === 'MALE')        return [p2, p1]
+  if (p1.gender === 'FEMALE')      return [p2, p1]
+  if (p2.gender === 'FEMALE')      return [p1, p2]
+  return p1.lastName <= p2.lastName ? [p1, p2] : [p2, p1]
+}
+
 function buildUnitLabel(p1: PersonMinimal, p2: PersonMinimal) {
-  const male   = p1.gender === 'MALE'   ? p1 : p2.gender === 'MALE'   ? p2 : null
-  const female = p1.gender === 'FEMALE' ? p1 : p2.gender === 'FEMALE' ? p2 : null
-  const parentA = male ?? (p1.lastName <= p2.lastName ? p1 : p2)
-  const parentB = parentA.id === p1.id ? p2 : p1
+  const [parentA, parentB] = orderParents(p1, p2)
   const surnameA = parentA.lastName.split(' ')[0]
   const surnameB = parentB.lastName.split(' ')[0]
   const label = surnameB && surnameB !== surnameA
