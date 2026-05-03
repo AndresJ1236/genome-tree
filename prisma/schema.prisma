@@ -228,6 +228,8 @@ model User {
   branchRootId    String?   // para scope BRANCH: ID de la persona raíz de su subárbol
   // JTI del token de invitación usado para crear esta cuenta (single-use enforcement)
   inviteTokenJti  String?   @unique
+  // JTI del token de reset de contraseña ya consumido (single-use enforcement)
+  resetTokenJti   String?   @unique
   // Incrementar para invalidar todas las sesiones activas del usuario
   sessionVersion  Int       @default(0)
   createdAt       DateTime  @default(now())

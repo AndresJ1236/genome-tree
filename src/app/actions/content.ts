@@ -790,6 +790,14 @@ export async function updateContent(
     },
   })
 
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'UPDATE_CONTENT',
+    entityType: 'CONTENT',
+    entityId:   id,
+    newValue:   { type: content.type, personId: content.personId, fields: Object.keys(data) },
+  })
   revalidateContentPaths(session.familySlug, content.personId)
   return { ok: true, data: undefined }
 }
@@ -823,6 +831,14 @@ export async function deleteContent(id: string): Promise<ActionResult> {
     prisma.content.delete({ where: { id } }),
   ])
 
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'DELETE_CONTENT',
+    entityType: 'CONTENT',
+    entityId:   id,
+    oldValue:   { personId: content.personId },
+  })
   revalidateContentPaths(session.familySlug, content.personId)
   return { ok: true, data: undefined }
 }
@@ -951,6 +967,15 @@ export async function deleteImportantLink(id: string): Promise<ActionResult> {
   }
 
   await prisma.importantLink.delete({ where: { id } })
+
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'DELETE_IMPORTANT_LINK',
+    entityType: 'ImportantLink',
+    entityId:   id,
+    oldValue:   { personId: link.personId },
+  })
   revalidateContentPaths(session.familySlug, link.personId)
   return { ok: true, data: undefined }
 }

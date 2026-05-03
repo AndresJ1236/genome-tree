@@ -5,6 +5,7 @@ import { getSession } from '@/lib/session'
 import { uploadFile, deleteFile, generateKey } from '@/lib/storage'
 import { assertCanManagePerson } from '@/lib/permissions'
 import { assertModuleEnabled, getModuleForContentType } from '@/lib/family-config'
+import { logAudit } from '@/lib/audit'
 import type { ActionResult } from '@/lib/content-types'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,6 +23,20 @@ const ALLOWED_MIME_TYPES = [
   'image/webp',
   'image/gif',
 ]
+
+async function validateMagicBytes(file: File): Promise<boolean> {
+  const buf = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return true
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true
+  // GIF: 47 49 46 38
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return true
+  // WebP: RIFF....WEBP
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true
+  return false
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Subir imagen para una persona
@@ -45,7 +60,7 @@ export async function uploadMedia(
     return { ok: false, error: 'Faltan datos: file y personId son requeridos.' }
   }
 
-  // Validar tipo
+  // Validar tipo MIME declarado
   if (!ALLOWED_MIME_TYPES.includes(file.type)) {
     return { ok: false, error: 'Formato no permitido. Usa JPG, PNG, WebP o GIF.' }
   }
@@ -53,6 +68,11 @@ export async function uploadMedia(
   // Validar tamaño
   if (file.size > MAX_FILE_SIZE) {
     return { ok: false, error: 'La imagen no puede superar los 10 MB.' }
+  }
+
+  // Validar magic bytes (el tipo real del archivo, no solo el Content-Type)
+  if (!(await validateMagicBytes(file))) {
+    return { ok: false, error: 'El archivo no es una imagen válida.' }
   }
 
   // Verificar acceso a la persona
@@ -149,6 +169,10 @@ export async function uploadContentMedia(
 
   if (file.size > MAX_FILE_SIZE) {
     return { ok: false, error: 'La imagen no puede superar los 10 MB.' }
+  }
+
+  if (!(await validateMagicBytes(file))) {
+    return { ok: false, error: 'El archivo no es una imagen válida.' }
   }
 
   try {
@@ -265,6 +289,15 @@ export async function deleteMedia(
   deleteFile(media.key).catch(err =>
     console.error('[deleteMedia] Error eliminando archivo:', err)
   )
+
+  void logAudit({
+    familyId: session.familyId,
+    userId: session.userId,
+    action: 'DELETE_MEDIA',
+    entityType: 'Media',
+    entityId: mediaId,
+    oldValue: { key: media.key, personId: media.personId },
+  })
 
   return { ok: true, data: undefined }
 }

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { decrypt } from '@/lib/session'
+import { decrypt, createSessionToken, shouldUseSecureCookies } from '@/lib/session'
 
 const PUBLIC_PATHS = ['/login', '/auth/login', '/setup']
 const PUBLIC_PREFIXES = ['/invite/', '/reset/']
+
+// Renovar la sesión si le quedan menos de 3 días de los 7 totales
+const RENEW_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
@@ -21,6 +24,32 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(
       new URL(`/${session.familySlug}/tree`, req.nextUrl)
     )
+  }
+
+  // Rolling session: si le quedan < 3 días, emitir un nuevo token transparentemente
+  if (session) {
+    const remainingMs = new Date(session.expiresAt).getTime() - Date.now()
+    if (remainingMs > 0 && remainingMs < RENEW_THRESHOLD_MS) {
+      const { token: newToken, expiresAt } = await createSessionToken({
+        userId:         session.userId,
+        familyId:       session.familyId,
+        familySlug:     session.familySlug,
+        role:           session.role,
+        scope:          session.scope,
+        personId:       session.personId,
+        branchRootId:   session.branchRootId,
+        sessionVersion: session.sessionVersion,
+      })
+      const response = NextResponse.next()
+      response.cookies.set('session', newToken, {
+        httpOnly: true,
+        secure:   shouldUseSecureCookies(),
+        expires:  expiresAt,
+        sameSite: 'lax',
+        path:     '/',
+      })
+      return response
+    }
   }
 
   return NextResponse.next()
