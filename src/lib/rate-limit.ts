@@ -1,7 +1,8 @@
 import 'server-only'
 
 // In-memory rate limiter for login attempts (single-container deployment).
-// Tracks failed attempts per IP; blocks after MAX_FAILURES in WINDOW_MS.
+// Tracks failed attempts per IP and per username independently.
+// Blocks after MAX_FAILURES failures in WINDOW_MS.
 
 const MAX_FAILURES = 5
 const WINDOW_MS    = 15 * 60 * 1000  // 15 minutes
@@ -13,54 +14,56 @@ interface Entry {
   blockedUntil: number | null
 }
 
-const store = new Map<string, Entry>()
+const ipStore       = new Map<string, Entry>()
+const usernameStore = new Map<string, Entry>()
 
-// Periodically evict stale entries to avoid unbounded memory growth.
-// Runs every 30 minutes; entries older than WINDOW_MS with no block are removed.
-setInterval(() => {
+function evict(store: Map<string, Entry>) {
   const now = Date.now()
-  for (const [ip, entry] of store) {
-    const blocked   = entry.blockedUntil !== null && entry.blockedUntil > now
+  for (const [key, entry] of store) {
+    const blocked        = entry.blockedUntil !== null && entry.blockedUntil > now
     const recentActivity = now - entry.windowStart < WINDOW_MS * 2
-    if (!blocked && !recentActivity) store.delete(ip)
+    if (!blocked && !recentActivity) store.delete(key)
   }
+}
+
+setInterval(() => {
+  evict(ipStore)
+  evict(usernameStore)
 }, 30 * 60 * 1000)
 
-function getEntry(ip: string): Entry {
-  let entry = store.get(ip)
+function getEntry(store: Map<string, Entry>, key: string): Entry {
+  let entry = store.get(key)
   if (!entry) {
     entry = { failures: 0, windowStart: Date.now(), blockedUntil: null }
-    store.set(ip, entry)
+    store.set(key, entry)
   }
   return entry
 }
 
-export function checkRateLimit(ip: string): { allowed: boolean; retryAfterMs?: number } {
-  const entry = getEntry(ip)
+function checkEntry(store: Map<string, Entry>, key: string): { allowed: boolean; retryAfterMs?: number } {
+  const entry = getEntry(store, key)
   const now   = Date.now()
 
   if (entry.blockedUntil !== null && entry.blockedUntil > now) {
     return { allowed: false, retryAfterMs: entry.blockedUntil - now }
   }
 
-  // Reset window if it has expired
   if (now - entry.windowStart > WINDOW_MS) {
-    entry.failures    = 0
-    entry.windowStart = now
+    entry.failures     = 0
+    entry.windowStart  = now
     entry.blockedUntil = null
   }
 
   return { allowed: true }
 }
 
-export function recordFailure(ip: string): void {
-  const entry = getEntry(ip)
+function recordEntryFailure(store: Map<string, Entry>, key: string): void {
+  const entry = getEntry(store, key)
   const now   = Date.now()
 
-  // Reset window if expired before incrementing
   if (now - entry.windowStart > WINDOW_MS) {
-    entry.failures    = 0
-    entry.windowStart = now
+    entry.failures     = 0
+    entry.windowStart  = now
     entry.blockedUntil = null
   }
 
@@ -71,6 +74,28 @@ export function recordFailure(ip: string): void {
   }
 }
 
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+export function checkRateLimit(ip: string): { allowed: boolean; retryAfterMs?: number } {
+  return checkEntry(ipStore, ip)
+}
+
+export function checkUsernameRateLimit(username: string): { allowed: boolean; retryAfterMs?: number } {
+  return checkEntry(usernameStore, username.toLowerCase())
+}
+
+export function recordFailure(ip: string): void {
+  recordEntryFailure(ipStore, ip)
+}
+
+export function recordUsernameFailure(username: string): void {
+  recordEntryFailure(usernameStore, username.toLowerCase())
+}
+
 export function recordSuccess(ip: string): void {
-  store.delete(ip)
+  ipStore.delete(ip)
+}
+
+export function recordUsernameSuccess(username: string): void {
+  usernameStore.delete(username.toLowerCase())
 }

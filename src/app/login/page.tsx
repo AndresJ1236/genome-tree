@@ -2,7 +2,14 @@ interface LoginPageProps {
   searchParams?: Promise<{
     error?: string
     retry?: string
+    from?: string
   }>
+}
+
+function isSafeRedirect(url: string | undefined): string | null {
+  if (!url) return null
+  // Solo rutas relativas internas: empieza con / pero NO con //
+  return url.startsWith('/') && !url.startsWith('//') ? url : null
 }
 
 function getErrorMessage(error?: string, retry?: string): { message: string; isBlock: boolean } | null {
@@ -27,6 +34,7 @@ function getErrorMessage(error?: string, retry?: string): { message: string; isB
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = searchParams ? await searchParams : undefined
   const errorInfo = getErrorMessage(params?.error, params?.retry)
+  const safeFrom = isSafeRedirect(params?.from)
 
   return (
     <div className="min-h-full flex items-center justify-center px-4">
@@ -55,6 +63,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           }}
         >
           <form action="/auth/login" method="post" className="flex flex-col gap-6">
+            {safeFrom && <input type="hidden" name="from" value={safeFrom} />}
             {errorInfo && (
               <p
                 className="text-sm text-center py-2 px-3 rounded-sm"
