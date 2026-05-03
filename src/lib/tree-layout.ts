@@ -89,7 +89,89 @@ function computeFocusLateralScores(
     }
   }
 
-  // Unscored people default to 0
+  // ── Branch propagation through siblings, spouses, children, parents ──
+  // Without this, ancestors' siblings (and their descendants/spouses) end up
+  // at score 0 — placed in the center, mixing paternal & maternal branches.
+  // Propagate the lateral score outward through the family graph so each
+  // connected branch lands fully on one side.
+  const fatherChildren = new Map<string, string[]>()
+  const motherChildren = new Map<string, string[]>()
+  for (const id of personSet) {
+    const p = personMap.get(id)
+    if (!p) continue
+    if (p.fatherId && personSet.has(p.fatherId)) {
+      if (!fatherChildren.has(p.fatherId)) fatherChildren.set(p.fatherId, [])
+      fatherChildren.get(p.fatherId)!.push(id)
+    }
+    if (p.motherId && personSet.has(p.motherId)) {
+      if (!motherChildren.has(p.motherId)) motherChildren.set(p.motherId, [])
+      motherChildren.get(p.motherId)!.push(id)
+    }
+  }
+
+  let propagated = true
+  let safety = 50
+  while (propagated && safety-- > 0) {
+    propagated = false
+
+    // Spouses (married into the family → same side as partner)
+    for (const [id, s] of [...scores.entries()]) {
+      for (const sid of (spousesOf.get(id) ?? [])) {
+        if (!scores.has(sid)) {
+          scores.set(sid, s)
+          propagated = true
+        }
+      }
+    }
+
+    // Siblings (same parents → same side)
+    for (const [id, s] of [...scores.entries()]) {
+      const p = personMap.get(id)
+      if (!p) continue
+      const sibs = new Set<string>()
+      if (p.fatherId) (fatherChildren.get(p.fatherId) ?? []).forEach(c => { if (c !== id) sibs.add(c) })
+      if (p.motherId) (motherChildren.get(p.motherId) ?? []).forEach(c => { if (c !== id) sibs.add(c) })
+      for (const sib of sibs) {
+        if (!scores.has(sib)) {
+          scores.set(sib, s)
+          propagated = true
+        }
+      }
+    }
+
+    // Children inherit from scored parents (avg if both scored)
+    for (const id of personSet) {
+      if (scores.has(id)) continue
+      const p = personMap.get(id)
+      if (!p) continue
+      let inherited: number | null = null
+      if (p.fatherId && scores.has(p.fatherId)) inherited = scores.get(p.fatherId)!
+      if (p.motherId && scores.has(p.motherId)) {
+        const ms = scores.get(p.motherId)!
+        inherited = inherited === null ? ms : (inherited + ms) / 2
+      }
+      if (inherited !== null) {
+        scores.set(id, inherited)
+        propagated = true
+      }
+    }
+
+    // Parents of scored people inherit (catches in-laws of scored relatives)
+    for (const [id, s] of [...scores.entries()]) {
+      const p = personMap.get(id)
+      if (!p) continue
+      if (p.fatherId && personSet.has(p.fatherId) && !scores.has(p.fatherId)) {
+        scores.set(p.fatherId, s)
+        propagated = true
+      }
+      if (p.motherId && personSet.has(p.motherId) && !scores.has(p.motherId)) {
+        scores.set(p.motherId, s)
+        propagated = true
+      }
+    }
+  }
+
+  // Unscored people (truly disconnected) default to 0
   for (const id of personSet) {
     if (!scores.has(id)) scores.set(id, 0)
   }
