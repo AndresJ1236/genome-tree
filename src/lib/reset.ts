@@ -1,9 +1,11 @@
 import 'server-only'
 
 import { SignJWT, jwtVerify } from 'jose'
+import { randomUUID } from 'crypto'
 
 export interface ResetPayload {
   typ: 'reset'
+  jti: string
   userId: string
   familyId: string
   expiresAt: string
@@ -16,10 +18,12 @@ function getKey() {
 }
 
 export async function signResetToken(userId: string, familyId: string, expiresInHours = 24) {
+  const jti = randomUUID()
   const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000)
-  const token = await new SignJWT({ userId, familyId, typ: 'reset', expiresAt: expiresAt.toISOString() })
+  const token = await new SignJWT({ userId, familyId, typ: 'reset', jti, expiresAt: expiresAt.toISOString() })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
+    .setJti(jti)
     .setExpirationTime(`${expiresInHours}h`)
     .sign(getKey())
   return { token, expiresAt: expiresAt.toISOString() }
