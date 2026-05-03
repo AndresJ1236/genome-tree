@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getMyNotifications, markAllNotificationsRead } from '@/app/actions/notifications'
+import { getMyNotifications, getMyUnreadCount, markAllNotificationsRead } from '@/app/actions/notifications'
 import type { NotificationItem } from '@/lib/content-types'
 
 function formatDate(iso: string): string {
@@ -25,6 +25,7 @@ const TYPE_ICON: Record<string, string> = {
   PROPOSAL_REJECTED:  '❌',
   NEW_PERSON_ADDED:   '👤',
   NEW_CONTENT_ADDED:  '📄',
+  PERSON_UPDATED:     '✏️',
 }
 
 export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: number }) {
@@ -43,6 +44,16 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (!open) {
+        const count = await getMyUnreadCount()
+        setUnreadCount(count)
+      }
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [open])
 
   async function handleOpen() {
     if (open) { setOpen(false); return }
