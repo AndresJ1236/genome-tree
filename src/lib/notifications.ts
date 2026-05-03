@@ -149,6 +149,8 @@ export async function fanOutNotificationsFromAudit(entry: {
         href = `/${slug}/person/${personId}`
         break
       }
+      case 'SECURITY_ALERT':
+        return // Security alerts use notifyLoginBlock directly, not fan-out
       default:
         return // No notification for admin/config actions
     }
@@ -185,5 +187,36 @@ export async function fanOutNotificationsFromAudit(entry: {
     })
   } catch {
     // Best-effort — never crash the calling action
+  }
+}
+
+// Called fire-and-forget when a username gets rate-limit-blocked after
+// repeated failed login attempts.
+export async function notifyLoginBlock(username: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: { familyId: true },
+    })
+    if (!user) return
+
+    const admins = await prisma.user.findMany({
+      where: { familyId: user.familyId, scope: 'ADMIN' },
+      select: { id: true },
+    })
+    if (admins.length === 0) return
+
+    await prisma.notification.createMany({
+      data: admins.map(a => ({
+        userId:   a.id,
+        familyId: user.familyId,
+        type:     'SECURITY_ALERT' as import('@prisma/client').NotificationType,
+        title:    `Alerta: cuenta "${username}" bloqueada por intentos fallidos`,
+        body:     'Se detectaron 5+ intentos de acceso fallidos consecutivos.',
+        href:     null,
+      })),
+    })
+  } catch {
+    // Best-effort — never crash the login flow
   }
 }

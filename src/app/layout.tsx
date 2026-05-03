@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -6,10 +7,14 @@ export const metadata: Metadata = {
   description: 'Archivo familiar privado e interactivo',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Next.js reads x-nonce (set by proxy.ts) and applies it to its own inline
+  // scripts. Reading it here also makes it available for any custom <script> tags.
+  const nonce = (await headers()).get('x-nonce') ?? ''
+
   return (
     <html lang="es" className="h-full">
-      <body className="h-full">{children}</body>
+      <body className="h-full" {...(nonce ? { 'data-nonce': nonce } : {})}>{children}</body>
     </html>
   )
 }

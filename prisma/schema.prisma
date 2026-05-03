@@ -97,6 +97,7 @@ enum NotificationType {
   NEW_PERSON_ADDED
   NEW_CONTENT_ADDED
   PERSON_UPDATED
+  SECURITY_ALERT
 }
 
 // ─────────────────────────────────────────────
