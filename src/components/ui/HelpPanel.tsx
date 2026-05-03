@@ -30,10 +30,10 @@ const SECTIONS = [
     ],
   },
   {
-    title: 'Propuestas (miembros)',
+    title: 'Tus cambios pendientes',
     items: [
-      { icon: '◌', text: 'Si no tienes permisos de edición, los cambios que envíes quedan como propuestas pendientes de aprobación.' },
-      { icon: '◆', text: 'Puedes ver el estado de tus propuestas en Mis propuestas (menú superior).' },
+      { icon: '◌', text: 'Si no tienes permisos de edición directa, los cambios que envíes quedan pendientes de aprobación por el administrador.' },
+      { icon: '◆', text: 'Puedes ver el estado de tus cambios en "Mis cambios" (menú superior).' },
     ],
   },
   {
@@ -50,20 +50,23 @@ export function HelpPanel() {
 
   return (
     <>
-      {/* Botón ? en el header */}
+      {/* Botón Ayuda en el header */}
       <button
         onClick={() => setOpen(true)}
         aria-label="Ayuda"
         style={{
-          width: 28, height: 28, borderRadius: '50%',
+          height: 32, borderRadius: 3,
           border: '1.5px solid #C8D0CA',
           background: 'transparent',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 5,
+          padding: '0 10px',
           color: '#6B7B70', fontSize: 13,
-          fontFamily: 'Georgia, serif', fontStyle: 'italic', fontWeight: 700,
+          fontFamily: 'Georgia, serif',
           transition: 'border-color 0.2s, color 0.2s',
           flexShrink: 0,
+          letterSpacing: '0.04em',
         }}
         onMouseEnter={e => {
           const b = e.currentTarget
@@ -76,7 +79,8 @@ export function HelpPanel() {
           b.style.color = '#6B7B70'
         }}
       >
-        ?
+        <span style={{ fontStyle: 'italic', fontWeight: 700, fontSize: 14 }}>?</span>
+        <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ayuda</span>
       </button>
 
       {/* Backdrop */}

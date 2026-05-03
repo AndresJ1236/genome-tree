@@ -115,10 +115,10 @@ export default function SettingsPage() {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11,
-  letterSpacing: '0.1em',
+  fontSize: 13,
+  letterSpacing: '0.06em',
   textTransform: 'uppercase',
-  color: '#8B9E94',
+  color: '#6B7B70',
   fontFamily: 'Georgia, serif',
   marginBottom: 8,
 }
