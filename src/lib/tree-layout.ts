@@ -248,12 +248,41 @@ export function computeTreeLayout(
     return ay === 9999 || by === 9999 || Math.abs(ay - by) <= 35
   }
 
+  // Pass 1: align couples where one lacks parents (original behavior)
   for (const { p1, p2 } of inferredCouples.values()) {
     if (!likelySameGenerationSpouses(p1, p2)) continue
     const g1 = gen.get(p1) ?? 0
     const g2 = gen.get(p2) ?? 0
     if (!hasKnownParents(p1) && hasKnownParents(p2)) gen.set(p1, g2)
     else if (!hasKnownParents(p2) && hasKnownParents(p1)) gen.set(p2, g1)
+  }
+
+  // Pass 2: iterative alignment for couples where BOTH have parents but at
+  // different depths (e.g. one side has more recorded generations than the other).
+  // Push the shallower person DOWN to match their spouse (use max generation).
+  // Then re-derive children so nothing is left at a stale level.
+  {
+    let changed = true
+    let safety = 15
+    while (changed && safety-- > 0) {
+      changed = false
+      for (const { p1, p2 } of inferredCouples.values()) {
+        if (!likelySameGenerationSpouses(p1, p2)) continue
+        const g1 = gen.get(p1) ?? 0
+        const g2 = gen.get(p2) ?? 0
+        if (g1 === g2) continue
+        const aligned = Math.max(g1, g2)
+        if ((gen.get(p1) ?? 0) !== aligned) { gen.set(p1, aligned); changed = true }
+        if ((gen.get(p2) ?? 0) !== aligned) { gen.set(p2, aligned); changed = true }
+      }
+      // Re-derive children so they follow their (now-adjusted) parents
+      for (const p of persons) {
+        const parents = parentsOf.get(p.id)
+        if (!parents || parents.length === 0) continue
+        const expected = Math.max(...parents.map(pid => (gen.get(pid) ?? 0))) + 1
+        if ((gen.get(p.id) ?? 0) !== expected) { gen.set(p.id, expected); changed = true }
+      }
+    }
   }
 
   const byGen = new Map<number, string[]>()

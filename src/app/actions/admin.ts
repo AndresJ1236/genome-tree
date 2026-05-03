@@ -404,6 +404,8 @@ export async function getAdminDashboard(): Promise<ActionResult<AdminDashboardDa
         birthDate: person.birthDate ? person.birthDate.toISOString() : null,
         deathDate: person.deathDate ? person.deathDate.toISOString() : null,
         gender: person.gender,
+        fatherId: person.fatherId ?? null,
+        motherId: person.motherId ?? null,
       })),
       managedUnits: managedUnitsSummary,
       accessRules: accessRules.map(rule => ({

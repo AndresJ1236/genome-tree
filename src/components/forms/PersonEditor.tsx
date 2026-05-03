@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createPerson, createRelationship, deleteRelationship, deletePerson, setParentChild, setPersonCoverPhoto, setRelationshipEndDate, updatePerson } from '@/app/actions/people'
@@ -124,10 +124,12 @@ export function PersonEditor({
   }, [isDirty])
 
   // Quick connection (create mode only)
-  const [quickRelType, setQuickRelType] = useState<'' | 'child-of' | 'parent-of' | 'partner-of'>('')
+  const [quickRelType, setQuickRelType] = useState<'' | 'child-of' | 'sibling-of' | 'parent-of' | 'partner-of'>('')
   const [quickTargetId, setQuickTargetId] = useState('')
   const [quickParentRole, setQuickParentRole] = useState<'father' | 'mother'>('father')
   const [quickPartnerType, setQuickPartnerType] = useState<'SPOUSE' | 'PARTNER'>('SPOUSE')
+  // Track whether lastName was manually edited (to allow auto-fill)
+  const [lastNameTouched, setLastNameTouched] = useState(mode === 'edit' && !!form.lastName)
 
   const isMember = payload.viewerMode === 'MEMBER'
   const isAdmin = payload.viewerMode === 'ADMIN'
@@ -143,12 +145,30 @@ export function PersonEditor({
   const personPath = form.id ? `/${payload.familySlug}/person/${form.id}` : `/${payload.familySlug}/tree`
 
   const parentOptions = useMemo(
-    () => payload.candidates.map(person => ({
-      ...person,
-      label: getPersonDisplayName(person),
-    })),
+    () => [...payload.candidates]
+      .map(person => ({ ...person, label: getPersonDisplayName(person) }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es')),
     [payload.candidates]
   )
+
+  // Auto-derive lastName from first surname of father + first surname of mother
+  const autoLastName = useMemo(() => {
+    const father = parentOptions.find(p => p.id === form.fatherId)
+    const mother = parentOptions.find(p => p.id === form.motherId)
+    if (!father && !mother) return ''
+    const parts = [
+      father?.lastName?.split(' ')[0],
+      mother?.lastName?.split(' ')[0],
+    ].filter(Boolean)
+    return parts.join(' ')
+  }, [form.fatherId, form.motherId, parentOptions])
+
+  // Apply auto last name when parents change (only if lastName not manually typed)
+  useEffect(() => {
+    if (!lastNameTouched && autoLastName) {
+      setForm(prev => ({ ...prev, lastName: autoLastName }))
+    }
+  }, [autoLastName, lastNameTouched])
 
   function updateField<K extends keyof PersonFormData>(key: K, value: PersonFormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -191,13 +211,15 @@ export function PersonEditor({
       }
 
       if (mode === 'create') {
-        // If "child-of", pre-fill parent fields from quick connection
+        // Pre-fill parent fields from quick connections
         const formToSend = { ...form }
         if (quickRelType === 'child-of' && quickTargetId) {
           const target = parentOptions.find(p => p.id === quickTargetId)
           const role = target?.gender === 'MALE' ? 'fatherId' : target?.gender === 'FEMALE' ? 'motherId' : quickParentRole === 'father' ? 'fatherId' : 'motherId'
           formToSend[role] = quickTargetId
         }
+        // sibling-of: parents are already pre-filled in form state by the UI
+
 
         const result = await createPerson(formToSend)
         if (!result.ok) {
@@ -418,11 +440,19 @@ export function PersonEditor({
               Conexión inicial
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: quickRelType ? 16 : 0 }}>
-              {(['', 'child-of', 'parent-of', 'partner-of'] as const).map(type => (
+              {(['', 'child-of', 'sibling-of', 'parent-of', 'partner-of'] as const).map(type => (
                 <button
                   key={type}
                   type="button"
-                  onClick={() => { setQuickRelType(type); setQuickTargetId(''); }}
+                  onClick={() => {
+                    setQuickRelType(type)
+                    setQuickTargetId('')
+                    // Clear parent pre-fills when switching away from sibling-of
+                    if (type !== 'sibling-of') {
+                      setForm(prev => ({ ...prev, fatherId: '', motherId: '' }))
+                      setLastNameTouched(false)
+                    }
+                  }}
                   style={{
                     padding: '7px 14px',
                     borderRadius: 2,
@@ -434,7 +464,11 @@ export function PersonEditor({
                     letterSpacing: '0.04em',
                   }}
                 >
-                  {type === '' ? 'Sin conexión' : type === 'child-of' ? 'Hijo/a de...' : type === 'parent-of' ? 'Padre/Madre de...' : 'Pareja de...'}
+                  {type === '' ? 'Sin conexión'
+                    : type === 'child-of' ? 'Hijo/a de…'
+                    : type === 'sibling-of' ? 'Hermano/a de…'
+                    : type === 'parent-of' ? 'Padre/Madre de…'
+                    : 'Pareja de…'}
                 </button>
               ))}
             </div>
@@ -442,10 +476,12 @@ export function PersonEditor({
             {quickRelType === 'child-of' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end' }}>
                 <Field label="Esta persona es hijo/a de">
-                  <select value={quickTargetId} onChange={e => setQuickTargetId(e.target.value)} style={inputStyle}>
-                    <option value="">Seleccionar padre o madre...</option>
-                    {parentOptions.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
+                  <SearchablePersonSelect
+                    value={quickTargetId}
+                    onChange={setQuickTargetId}
+                    options={parentOptions}
+                    placeholder="Seleccionar padre o madre..."
+                  />
                 </Field>
                 {quickTargetId && parentOptions.find(p => p.id === quickTargetId)?.gender === 'UNKNOWN' && (
                   <Field label="Rol">
@@ -458,13 +494,46 @@ export function PersonEditor({
               </div>
             )}
 
+            {quickRelType === 'sibling-of' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <Field label="Esta persona es hermano/a de">
+                  <SearchablePersonSelect
+                    value={quickTargetId}
+                    onChange={id => {
+                      setQuickTargetId(id)
+                      // Auto-fill parents from selected sibling
+                      const sib = parentOptions.find(p => p.id === id)
+                      if (sib) {
+                        setForm(prev => ({
+                          ...prev,
+                          fatherId: sib.fatherId ?? '',
+                          motherId: sib.motherId ?? '',
+                        }))
+                        setLastNameTouched(false)
+                      }
+                    }}
+                    options={parentOptions}
+                    placeholder="Seleccionar hermano/a..."
+                  />
+                </Field>
+                {quickTargetId && (
+                  <p style={{ margin: 0, fontSize: 12, color: '#6B6B6B' }}>
+                    Se usarán los mismos padres que {parentOptions.find(p => p.id === quickTargetId)?.label}.
+                    Puedes ajustarlos en la sección de parentesco abajo.
+                  </p>
+                )}
+              </div>
+            )}
+
             {quickRelType === 'parent-of' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end' }}>
                 <Field label="Esta persona es padre/madre de">
-                  <select value={quickTargetId} onChange={e => setQuickTargetId(e.target.value)} style={inputStyle}>
-                    <option value="">Seleccionar hijo/a...</option>
-                    {parentOptions.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
+                  <SearchablePersonSelect
+                    value={quickTargetId}
+                    onChange={setQuickTargetId}
+                    options={parentOptions}
+                    placeholder="Seleccionar hijo/a..."
+                  />
                 </Field>
                 <Field label="Como">
                   <select value={quickParentRole} onChange={e => setQuickParentRole(e.target.value as 'father' | 'mother')} style={{ ...inputStyle, width: 'auto' }}>
@@ -478,10 +547,12 @@ export function PersonEditor({
             {quickRelType === 'partner-of' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end' }}>
                 <Field label="Esta persona es pareja de">
-                  <select value={quickTargetId} onChange={e => setQuickTargetId(e.target.value)} style={inputStyle}>
-                    <option value="">Seleccionar pareja...</option>
-                    {parentOptions.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
+                  <SearchablePersonSelect
+                    value={quickTargetId}
+                    onChange={setQuickTargetId}
+                    options={parentOptions}
+                    placeholder="Seleccionar pareja..."
+                  />
                 </Field>
                 <Field label="Tipo">
                   <select value={quickPartnerType} onChange={e => setQuickPartnerType(e.target.value as 'SPOUSE' | 'PARTNER')} style={{ ...inputStyle, width: 'auto' }}>
@@ -515,16 +586,36 @@ export function PersonEditor({
               </Field>
             )}
             {form.nodeKind !== 'PET' && (
-              <Field label="Apellido" required>
-                <input value={form.lastName} onChange={e => updateField('lastName', e.target.value)} style={inputStyle} />
+              <Field
+                label="Apellidos"
+                required
+                help={
+                  autoLastName && !lastNameTouched
+                    ? `Auto-derivado de los padres. Edita para personalizar.`
+                    : 'Apellido(s) de la persona tal como aparecen en el árbol.'
+                }
+              >
+                <input
+                  value={form.lastName}
+                  onChange={e => {
+                    setLastNameTouched(true)
+                    updateField('lastName', e.target.value)
+                  }}
+                  style={{
+                    ...inputStyle,
+                    background: autoLastName && !lastNameTouched ? '#F3F7F4' : '#FFFCF8',
+                  }}
+                  placeholder={autoLastName || 'Ej: Apellido1 Apellido2'}
+                />
               </Field>
             )}
-            {form.nodeKind !== 'PET' && (
+            {/* birthSurname1 / birthSurname2 only in edit mode (historical data) */}
+            {form.nodeKind !== 'PET' && mode === 'edit' && (
               <Field label="Apellido de nacimiento 1">
                 <input value={form.birthSurname1} onChange={e => updateField('birthSurname1', e.target.value)} style={inputStyle} />
               </Field>
             )}
-            {form.nodeKind !== 'PET' && (
+            {form.nodeKind !== 'PET' && mode === 'edit' && (
               <Field label="Apellido de nacimiento 2">
                 <input value={form.birthSurname2} onChange={e => updateField('birthSurname2', e.target.value)} style={inputStyle} />
               </Field>
@@ -547,31 +638,23 @@ export function PersonEditor({
               </select>
             </Field>
             <Field label={form.nodeKind === 'PET' ? 'Dueño/a' : 'Padre'} help={form.nodeKind === 'PET' ? 'Persona responsable de la mascota. La mascota orbitará su nodo en el árbol.' : 'Padre biológico o adoptivo registrado en el árbol.'}>
-              <select
+              <SearchablePersonSelect
                 value={form.fatherId}
-                onChange={e => updateField('fatherId', e.target.value)}
-                style={canChangeRel ? inputStyle : disabledInputStyle}
+                onChange={id => { updateField('fatherId', id); setLastNameTouched(false) }}
+                options={parentOptions}
+                placeholder="Sin asignar"
                 disabled={!canChangeRel}
-              >
-                <option value="">Sin asignar</option>
-                {parentOptions.map(option => (
-                  <option key={option.id} value={option.id}>{option.label}</option>
-                ))}
-              </select>
+              />
             </Field>
             {form.nodeKind !== 'PET' && (
               <Field label="Madre" help="Madre biológica o adoptiva registrada en el árbol.">
-                <select
+                <SearchablePersonSelect
                   value={form.motherId}
-                  onChange={e => updateField('motherId', e.target.value)}
-                  style={canChangeRel ? inputStyle : disabledInputStyle}
+                  onChange={id => { updateField('motherId', id); setLastNameTouched(false) }}
+                  options={parentOptions}
+                  placeholder="Sin asignar"
                   disabled={!canChangeRel}
-                >
-                  <option value="">Sin asignar</option>
-                  {parentOptions.map(option => (
-                    <option key={option.id} value={option.id}>{option.label}</option>
-                  ))}
-                </select>
+                />
               </Field>
             )}
           </div>
@@ -649,16 +732,12 @@ export function PersonEditor({
                   form.claimedRelation &&
                   CLAIMED_RELATION_REQUIRES_REF.has(form.claimedRelation as ClaimedRelation) && (
                   <Field label="Relación con persona de la unidad">
-                    <select
+                    <SearchablePersonSelect
                       value={form.claimedRelationOfId}
-                      onChange={e => updateField('claimedRelationOfId', e.target.value)}
-                      style={inputStyle}
-                    >
-                      <option value="">Seleccionar...</option>
-                      {parentOptions.map(option => (
-                        <option key={option.id} value={option.id}>{option.label}</option>
-                      ))}
-                    </select>
+                      onChange={id => updateField('claimedRelationOfId', id)}
+                      options={parentOptions}
+                      placeholder="Seleccionar..."
+                    />
                   </Field>
                 )}
               </div>
@@ -801,18 +880,12 @@ export function PersonEditor({
                 </select>
               </Field>
               <Field label="Persona">
-                <select
+                <SearchablePersonSelect
                   value={newPartnerId}
-                  onChange={e => setNewPartnerId(e.target.value)}
-                  style={inputStyle}
-                >
-                  <option value="">Seleccionar...</option>
-                  {payload.candidates
-                    .filter(c => !relationships.some(r => r.partnerId === c.id))
-                    .map(c => (
-                      <option key={c.id} value={c.id}>{getPersonDisplayName(c)}</option>
-                    ))}
-                </select>
+                  onChange={setNewPartnerId}
+                  options={parentOptions.filter(c => !relationships.some(r => r.partnerId === c.id))}
+                  placeholder="Seleccionar..."
+                />
               </Field>
               <button
                 type="button"
@@ -923,6 +996,102 @@ export function PersonEditor({
           </section>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Searchable person selector ──────────────────────────────────────────────
+function SearchablePersonSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Sin asignar',
+  disabled = false,
+}: {
+  value: string
+  onChange: (id: string) => void
+  options: { id: string; label: string }[]
+  placeholder?: string
+  disabled?: boolean
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const filtered = useMemo(() => {
+    const lq = query.toLowerCase()
+    return lq ? options.filter(o => o.label.toLowerCase().includes(lq)) : options
+  }, [options, query])
+
+  const selected = options.find(o => o.id === value)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const base = disabled ? disabledInputStyle : inputStyle
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <div
+        style={{ ...base, display: 'flex', alignItems: 'center', gap: 6, cursor: disabled ? 'not-allowed' : 'pointer', userSelect: 'none' }}
+        onClick={() => {
+          if (disabled) return
+          const next = !open
+          setOpen(next)
+          if (next) setTimeout(() => inputRef.current?.focus(), 10)
+        }}
+      >
+        <span style={{ flex: 1, color: selected ? '#2C2C2C' : '#9B9490', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selected?.label ?? placeholder}
+        </span>
+        <span style={{ fontSize: 10, color: '#8B9E94', flexShrink: 0 }}>▾</span>
+      </div>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 300,
+          background: '#fff', border: '1px solid #D8D3CA',
+          borderRadius: '0 0 3px 3px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          display: 'flex', flexDirection: 'column', maxHeight: 240,
+        }}>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            style={{ padding: '8px 10px', border: 'none', borderBottom: '1px solid #E0DAD0', fontSize: 13, outline: 'none', flexShrink: 0 }}
+            placeholder="Buscar…"
+            onClick={e => e.stopPropagation()}
+          />
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div
+              style={{ padding: '8px 12px', fontSize: 13, color: '#9B9490', cursor: 'pointer' }}
+              onMouseDown={e => { e.preventDefault(); onChange(''); setOpen(false); setQuery('') }}
+            >
+              — Sin asignar
+            </div>
+            {filtered.map(o => (
+              <div
+                key={o.id}
+                style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', background: o.id === value ? '#F3F7F4' : 'transparent', color: '#2C2C2C' }}
+                onMouseDown={e => { e.preventDefault(); onChange(o.id); setOpen(false); setQuery('') }}
+              >
+                {o.label}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: '8px 12px', fontSize: 12, color: '#9B9490' }}>Sin resultados</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
