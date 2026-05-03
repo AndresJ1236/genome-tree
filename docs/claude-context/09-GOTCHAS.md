@@ -190,6 +190,28 @@ Otherwise the local empty `.env` overwrites production secrets. This has happene
 
 Recommended: exclude `node_modules .next .git Final` always.
 
+## CSP nonces
+
+### Don't add a static CSP to `next.config.ts`
+
+The `Content-Security-Policy` header is set per-request in `src/app/proxy.ts` using a unique 16-byte nonce. If you also add a CSP in `next.config.ts` → `headers()`, the static one will conflict with the per-request one (headers may both appear, or one overwrites the other depending on the browser). Keep CSP only in `proxy.ts`.
+
+### `layout.tsx` must stay async
+
+`src/app/layout.tsx` is `async` so it can call `await headers()` to read the `x-nonce` request header set by proxy.ts:
+
+```tsx
+const nonce = (await headers()).get('x-nonce') ?? ''
+```
+
+If you make it non-async (or forget the await), the nonce won't propagate and the browser will block inline scripts.
+
+### `style-src` keeps `unsafe-inline`
+
+Tailwind generates inline `<style>` tags at build time. Moving Tailwind styles to nonce-hashed form would require changes to the PostCSS pipeline. For now `style-src 'self' 'unsafe-inline'` is intentional. Don't remove it.
+
+---
+
 ## Misc
 
 ### `Final/` folder

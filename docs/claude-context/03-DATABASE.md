@@ -39,7 +39,8 @@ enum ProposalStatus { PENDING APPROVED REJECTED }
 enum ClaimedRelation { SIBLING HALF_SIBLING UNCLE_AUNT GREAT_UNCLE_AUNT
                        COUSIN NEPHEW_NIECE ANCESTOR EXTENDED_FAMILY }
 enum NotificationType { PROPOSAL_SUBMITTED PROPOSAL_APPROVED PROPOSAL_REJECTED
-                        NEW_PERSON_ADDED NEW_CONTENT_ADDED PERSON_UPDATED }
+                        NEW_PERSON_ADDED NEW_CONTENT_ADDED PERSON_UPDATED
+                        SECURITY_ALERT }   // added May 2026 — login block alerts
 ```
 
 ## Person — the central model
@@ -105,19 +106,25 @@ model Relationship {
 
 ```prisma
 model User {
-  id           String    @id @default(cuid())
-  username     String    @unique
-  passwordHash String
-  name         String
-  familyId     String
-  personId     String?   @unique     // optional link to their own Person row
-  role         UserRole  @default(MEMBER)
-  scope        UserScope @default(FAMILY)
-  branchRootId String?                 // BRANCH-scoped users: root of their visible subtree
+  id              String    @id @default(cuid())
+  username        String    @unique
+  passwordHash    String
+  name            String
+  familyId        String
+  personId        String?   @unique     // optional link to their own Person row
+  role            UserRole  @default(MEMBER)
+  scope           UserScope @default(FAMILY)
+  branchRootId    String?               // BRANCH-scoped users: root of their visible subtree
+  sessionVersion  Int       @default(0) // increment to invalidate all active sessions
+  resetTokenJti   String?   @unique     // jti of the last consumed reset token (prevents replay)
 }
 ```
 
 The combination of `role`, `scope`, and `branchRootId` determines what a user can see/edit. See [02-ARCHITECTURE.md](./02-ARCHITECTURE.md#permissions-model) for the resolution order.
+
+**`sessionVersion`** — embedded in the JWT at login time. `proxy.ts` compares the JWT claim against the DB value on every request; a mismatch invalidates the session. Increment to force-logout a user without needing a session store. See [11-SECURITY.md](./11-SECURITY.md#session-versioning-forced-logout).
+
+**`resetTokenJti`** — the `jti` UUID of the last password reset token that was successfully consumed. A reset token is rejected if its `jti` matches this field, making reset links single-use. See [11-SECURITY.md](./11-SECURITY.md#single-use-enforcement).
 
 ## ManagedFamilyUnit
 

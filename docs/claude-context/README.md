@@ -15,6 +15,7 @@
 8. **[08-PROCEDURES.md](./08-PROCEDURES.md)** — Step-by-step recipes for common tasks
 9. **[09-GOTCHAS.md](./09-GOTCHAS.md)** — Known traps, anti-patterns, things that bit us
 10. **[10-HISTORY.md](./10-HISTORY.md)** — Major changes timeline
+11. **[11-SECURITY.md](./11-SECURITY.md)** — Full security layer: auth hardening, sessions, CSP nonces, upload validation, rate limiting
 
 ## Quick orientation
 
@@ -41,6 +42,8 @@
 5. **Local `tsc` may show false errors.** The local Prisma client lags behind enum additions until you run `npx prisma generate` locally. Production rebuild always regenerates. If only Prisma-related errors appear, deploy and check production logs.
 
 6. **Hard refresh after every deploy.** Cloudflare and the browser both cache the JS bundle aggressively. `Ctrl+Shift+R` (or `Cmd+Shift+R`).
+
+7. **Security layer is documented.** Before touching auth, sessions, file uploads, or CSP read [11-SECURITY.md](./11-SECURITY.md). Key invariants: `typ` claim on JWTs, `sessionVersion` for forced logout, single-use reset tokens via `resetTokenJti`, magic byte upload validation, per-request CSP nonces.
 
 ## Project version & changelog
 
