@@ -1,9 +1,11 @@
 import 'server-only'
 
 import { SignJWT, jwtVerify } from 'jose'
+import { randomUUID } from 'crypto'
 import type { UserRole, UserScope } from '@/lib/content-types'
 
 export interface InvitePayload {
+  jti: string       // unique token ID — used for single-use enforcement
   familyId: string
   familySlug: string
   role: UserRole
@@ -19,11 +21,13 @@ function getKey() {
   return new TextEncoder().encode(secret)
 }
 
-export async function signInviteToken(payload: Omit<InvitePayload, 'expiresAt'>, expiresInDays = 7) {
+export async function signInviteToken(payload: Omit<InvitePayload, 'expiresAt' | 'jti'>, expiresInDays = 7) {
+  const jti       = randomUUID()
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
-  const token = await new SignJWT({ ...payload, expiresAt: expiresAt.toISOString() })
+  const token = await new SignJWT({ ...payload, jti, expiresAt: expiresAt.toISOString() })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
+    .setJti(jti)
     .setExpirationTime(`${expiresInDays}d`)
     .sign(getKey())
 
