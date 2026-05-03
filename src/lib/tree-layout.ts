@@ -181,10 +181,16 @@ export function computeTreeLayout(
 
   const coupleKey = (a: string, b: string) => [a, b].sort().join('|')
   const inferredCouples = new Map<string, { p1: string; p2: string }>()
+
+  // ── Pass 0: detect implicit couples from shared children ──────────────────
+  // If two people share a child (fatherId = X, motherId = Y) they are treated
+  // as a couple for generation-alignment purposes even without a Relationship
+  // record. Threshold raised to 60 years to tolerate data-entry errors and
+  // unusual (but real) age gaps.
   const likelyRealCouple = (a: string, b: string) => {
     const ay = ownYear(a)
     const by = ownYear(b)
-    return ay === 9999 || by === 9999 || Math.abs(ay - by) <= 35
+    return ay === 9999 || by === 9999 || Math.abs(ay - by) <= 60
   }
 
   for (const p of persons) {
@@ -242,15 +248,19 @@ export function computeTreeLayout(
   for (const p of persons) deriveGeneration(p.id)
 
   const hasKnownParents = (id: string) => (parentsOf.get(id)?.length ?? 0) > 0
+
+  // Used in Pass 2 only (both members have parents — guard against truly
+  // unrelated people being merged by mistake). Threshold matches likelyRealCouple.
   const likelySameGenerationSpouses = (a: string, b: string) => {
     const ay = ownYear(a)
     const by = ownYear(b)
-    return ay === 9999 || by === 9999 || Math.abs(ay - by) <= 35
+    return ay === 9999 || by === 9999 || Math.abs(ay - by) <= 60
   }
 
-  // Pass 1: align couples where one lacks parents (original behavior)
+  // Pass 1: align couples where one lacks parents.
+  // No age guard here — if someone has NO parents and is a known couple of an
+  // anchored person, we must always align them regardless of birth-year difference.
   for (const { p1, p2 } of inferredCouples.values()) {
-    if (!likelySameGenerationSpouses(p1, p2)) continue
     const g1 = gen.get(p1) ?? 0
     const g2 = gen.get(p2) ?? 0
     if (!hasKnownParents(p1) && hasKnownParents(p2)) gen.set(p1, g2)
