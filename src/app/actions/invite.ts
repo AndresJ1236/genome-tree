@@ -44,6 +44,7 @@ export async function acceptInvite(input: {
       role: payload.role,
       scope: payload.scope,
       branchRootId: payload.branchRootId,
+      personId: payload.personId ?? null,
     },
   })
 
