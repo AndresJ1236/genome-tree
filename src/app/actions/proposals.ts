@@ -7,7 +7,7 @@ import { logAudit } from '@/lib/audit'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { notifyAdminsAndRepresentatives, notifyUser } from '@/lib/notifications'
 import { revalidatePath } from 'next/cache'
-import type { ActionResult, PersonProposalItem, ProposalStatus } from '@/lib/content-types'
+import type { ActionResult, PersonCreationProposalItem, PersonProposalItem, ProposalStatus } from '@/lib/content-types'
 import type { Gender } from '@prisma/client'
 
 // null = no se propone cambio en ese campo
@@ -422,6 +422,258 @@ export async function getOwnProposals(): Promise<ActionResult<PersonProposalItem
     })
 
     return { ok: true, data: items }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+// ─────────────────────────────────────────────
+// PROPONER NUEVA PERSONA (MEMBER)
+// ─────────────────────────────────────────────
+
+export async function proposeNewPerson(input: {
+  firstName: string
+  lastName?: string
+  middleName?: string
+  gender?: Gender
+  birthDate?: string
+  deathDate?: string
+  birthPlace?: string
+  nodeKind?: 'PERSON' | 'PET'
+  notes?: string
+  fatherId?: string
+  motherId?: string
+}): Promise<ActionResult<{ proposalId: string }>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const firstName = input.firstName?.trim()
+  if (!firstName) return { ok: false, error: 'El nombre es obligatorio.' }
+
+  const nodeKind = input.nodeKind ?? 'PERSON'
+  if (nodeKind === 'PERSON' && !input.lastName?.trim()) {
+    return { ok: false, error: 'El apellido es obligatorio para personas.' }
+  }
+
+  try {
+    const proposal = await prisma.personCreationProposal.create({
+      data: {
+        familyId:    session.familyId,
+        proposedById: session.userId,
+        firstName,
+        lastName:    input.lastName?.trim() || null,
+        middleName:  input.middleName?.trim() || null,
+        gender:      input.gender ?? null,
+        birthDate:   input.birthDate ? new Date(input.birthDate) : null,
+        deathDate:   input.deathDate ? new Date(input.deathDate) : null,
+        birthPlace:  input.birthPlace?.trim() || null,
+        nodeKind,
+        notes:       input.notes?.trim() || null,
+        fatherId:    input.fatherId || null,
+        motherId:    input.motherId || null,
+      },
+    })
+
+    await logAudit({
+      familyId:   session.familyId,
+      userId:     session.userId,
+      action:     'PROPOSE_NEW_PERSON',
+      entityType: 'PersonCreationProposal',
+      entityId:   proposal.id,
+      newValue:   { firstName, lastName: input.lastName, nodeKind },
+    })
+
+    void notifyAdminsAndRepresentatives({
+      familyId: session.familyId,
+      type:     'PROPOSAL_SUBMITTED',
+      title:    'Propuesta de nueva persona',
+      body:     `${firstName}${input.lastName ? ' ' + input.lastName : ''}`,
+      href:     `/${session.familySlug}/admin`,
+    })
+
+    return { ok: true, data: { proposalId: proposal.id } }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+// ─────────────────────────────────────────────
+// OBTENER PROPUESTAS DE NUEVA PERSONA
+// ─────────────────────────────────────────────
+
+function serializeCreationProposal(p: {
+  id: string
+  status: string
+  createdAt: Date
+  reviewedAt: Date | null
+  rejectionReason: string | null
+  firstName: string
+  lastName: string | null
+  middleName: string | null
+  gender: Gender | null
+  birthDate: Date | null
+  nodeKind: string
+  notes: string | null
+  proposedBy: { name: string }
+  father: { firstName: string; middleName: string | null; lastName: string } | null
+  mother: { firstName: string; middleName: string | null; lastName: string } | null
+}) {
+  return {
+    id: p.id,
+    proposedByName: p.proposedBy.name,
+    status: p.status as ProposalStatus,
+    createdAt: p.createdAt.toISOString(),
+    reviewedAt: p.reviewedAt?.toISOString() ?? null,
+    rejectionReason: p.rejectionReason,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    middleName: p.middleName,
+    gender: p.gender as string | null,
+    birthDate: p.birthDate?.toISOString() ?? null,
+    nodeKind: p.nodeKind as 'PERSON' | 'PET',
+    notes: p.notes,
+    fatherName: p.father ? getPersonDisplayName(p.father) : null,
+    motherName: p.mother ? getPersonDisplayName(p.mother) : null,
+  }
+}
+
+const CREATION_SELECT = {
+  id: true, status: true, createdAt: true, reviewedAt: true, rejectionReason: true,
+  firstName: true, lastName: true, middleName: true, gender: true,
+  birthDate: true, nodeKind: true, notes: true,
+  proposedBy: { select: { name: true } },
+  father: { select: { firstName: true, middleName: true, lastName: true } },
+  mother: { select: { firstName: true, middleName: true, lastName: true } },
+} as const
+
+export async function getCreationProposals(): Promise<ActionResult<ReturnType<typeof serializeCreationProposal>[]>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+  if (session.role !== 'ADMIN') return { ok: false, error: 'Solo administradores' }
+
+  try {
+    const proposals = await prisma.personCreationProposal.findMany({
+      where: { familyId: session.familyId, status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      select: CREATION_SELECT,
+    })
+    return { ok: true, data: proposals.map(serializeCreationProposal) }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+export async function getOwnCreationProposals(): Promise<ActionResult<ReturnType<typeof serializeCreationProposal>[]>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    const proposals = await prisma.personCreationProposal.findMany({
+      where: { familyId: session.familyId, proposedById: session.userId },
+      orderBy: { createdAt: 'desc' },
+      select: CREATION_SELECT,
+    })
+    return { ok: true, data: proposals.map(serializeCreationProposal) }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+export async function approveCreationProposal(proposalId: string): Promise<ActionResult<{ personId: string }>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+  if (session.role !== 'ADMIN') return { ok: false, error: 'Solo administradores' }
+
+  try {
+    const proposal = await prisma.personCreationProposal.findUnique({
+      where: { id: proposalId },
+      select: {
+        familyId: true, status: true, proposedById: true,
+        firstName: true, lastName: true, middleName: true,
+        gender: true, birthDate: true, deathDate: true, birthPlace: true,
+        nodeKind: true, notes: true, fatherId: true, motherId: true,
+      },
+    })
+    if (!proposal) return { ok: false, error: 'Propuesta no encontrada' }
+    if (proposal.familyId !== session.familyId) return { ok: false, error: 'No autorizado' }
+    if (proposal.status !== 'PENDING') return { ok: false, error: 'Esta propuesta ya fue revisada' }
+
+    const person = await prisma.person.create({
+      data: {
+        familyId:   session.familyId,
+        firstName:  proposal.firstName,
+        lastName:   proposal.lastName ?? '',
+        middleName: proposal.middleName,
+        gender:     proposal.gender ?? 'UNKNOWN',
+        birthDate:  proposal.birthDate,
+        deathDate:  proposal.deathDate,
+        birthPlace: proposal.birthPlace,
+        nodeKind:   proposal.nodeKind,
+        bio:        proposal.notes,
+        fatherId:   proposal.fatherId,
+        motherId:   proposal.motherId,
+      },
+    })
+
+    await prisma.personCreationProposal.update({
+      where: { id: proposalId },
+      data: { status: 'APPROVED', reviewedById: session.userId, reviewedAt: new Date() },
+    })
+
+    await logAudit({
+      familyId: session.familyId,
+      userId:   session.userId,
+      action:   'APPROVE_NEW_PERSON_PROPOSAL',
+      entityType: 'PersonCreationProposal',
+      entityId: proposalId,
+      newValue: { personId: person.id },
+    })
+
+    void notifyUser(proposal.proposedById, {
+      familyId: session.familyId,
+      type:     'PROPOSAL_APPROVED',
+      title:    'Propuesta aprobada',
+      body:     `${proposal.firstName}${proposal.lastName ? ' ' + proposal.lastName : ''} fue añadido al árbol`,
+      href:     `/${session.familySlug}/person/${person.id}`,
+    })
+
+    revalidatePath(`/${session.familySlug}/admin`)
+    revalidatePath(`/${session.familySlug}/tree`)
+    return { ok: true, data: { personId: person.id } }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+export async function rejectCreationProposal(input: { proposalId: string; reason: string }): Promise<ActionResult> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+  if (session.role !== 'ADMIN') return { ok: false, error: 'Solo administradores' }
+
+  try {
+    const proposal = await prisma.personCreationProposal.findUnique({
+      where: { id: input.proposalId },
+      select: { familyId: true, status: true, proposedById: true, firstName: true, lastName: true },
+    })
+    if (!proposal) return { ok: false, error: 'Propuesta no encontrada' }
+    if (proposal.familyId !== session.familyId) return { ok: false, error: 'No autorizado' }
+    if (proposal.status !== 'PENDING') return { ok: false, error: 'Esta propuesta ya fue revisada' }
+
+    await prisma.personCreationProposal.update({
+      where: { id: input.proposalId },
+      data: { status: 'REJECTED', reviewedById: session.userId, reviewedAt: new Date(), rejectionReason: input.reason.trim() || null },
+    })
+
+    void notifyUser(proposal.proposedById, {
+      familyId: session.familyId,
+      type:     'PROPOSAL_REJECTED',
+      title:    'Propuesta rechazada',
+      body:     `La sugerencia de añadir a ${proposal.firstName}${proposal.lastName ? ' ' + proposal.lastName : ''} no fue aprobada`,
+      href:     `/${session.familySlug}/settings/proposals`,
+    })
+
+    revalidatePath(`/${session.familySlug}/admin`)
+    return { ok: true, data: undefined }
   } catch (error: unknown) {
     return { ok: false, error: (error as Error).message }
   }

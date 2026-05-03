@@ -3,8 +3,22 @@
 import { useEffect, useState, useTransition } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { getOwnProposals } from '@/app/actions/proposals'
+import { getOwnCreationProposals, getOwnProposals } from '@/app/actions/proposals'
 import type { PersonProposalItem, ProposalStatus } from '@/lib/content-types'
+
+type CreationProposal = {
+  id: string
+  proposedByName: string
+  status: ProposalStatus
+  createdAt: string
+  reviewedAt: string | null
+  rejectionReason: string | null
+  firstName: string
+  lastName: string | null
+  nodeKind: 'PERSON' | 'PET'
+  fatherName: string | null
+  motherName: string | null
+}
 
 const STATUS_LABEL: Record<ProposalStatus, string> = {
   PENDING:  'Pendiente',
@@ -22,26 +36,31 @@ export default function MyProposalsPage() {
   const params = useParams<{ familySlug: string }>()
   const familySlug = params.familySlug
   const [proposals, setProposals] = useState<PersonProposalItem[] | null>(null)
+  const [creationProposals, setCreationProposals] = useState<CreationProposal[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
     startTransition(async () => {
-      const res = await getOwnProposals()
+      const [res, cRes] = await Promise.all([getOwnProposals(), getOwnCreationProposals()])
       if (res.ok) setProposals(res.data)
       else setError(res.error)
+      if (cRes.ok) setCreationProposals(cRes.data as CreationProposal[])
     })
   }, [])
 
+  const hasContent = (proposals?.length ?? 0) > 0 || (creationProposals?.length ?? 0) > 0
+
   return (
-    <div style={{ maxWidth: 640, margin: '48px auto', padding: '0 24px' }}>
+    <div className="h-full overflow-y-auto">
+    <div style={{ maxWidth: 640, margin: '48px auto', padding: '0 24px 64px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 32 }}>
         <div>
           <h1 style={{ margin: '0 0 6px', fontFamily: 'Georgia, serif', fontSize: 28, color: '#2D4A3E' }}>
             Mis propuestas
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: '#6B6B6B' }}>
-            Cambios que has sugerido sobre personas del árbol.
+            Cambios y personas nuevas que has sugerido.
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
@@ -54,7 +73,7 @@ export default function MyProposalsPage() {
               whiteSpace: 'nowrap',
             }}
           >
-            + Nueva persona
+            + Sugerir persona
           </Link>
           <Link
             href={`/${familySlug}/person/new?kind=PET`}
@@ -65,7 +84,7 @@ export default function MyProposalsPage() {
               textDecoration: 'none', whiteSpace: 'nowrap',
             }}
           >
-            + Nueva mascota
+            + Sugerir mascota
           </Link>
         </div>
       </div>
@@ -78,17 +97,74 @@ export default function MyProposalsPage() {
           {error}
         </div>
       )}
-      {proposals !== null && proposals.length === 0 && (
+
+      {!isPending && !hasContent && (
         <div style={{ padding: '24px', background: '#fff', border: '1px solid #E0DAD0', borderRadius: 3, fontSize: 13, color: '#6B6B6B', textAlign: 'center' }}>
           No has enviado ninguna propuesta todavía.
         </div>
       )}
-      {proposals !== null && proposals.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {proposals.map(p => (
-            <ProposalCard key={p.id} proposal={p} />
-          ))}
+
+      {(creationProposals?.length ?? 0) > 0 && (
+        <>
+          <p style={{ margin: '0 0 12px', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8B9E94' }}>
+            Personas sugeridas
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+            {creationProposals!.map(p => (
+              <CreationCard key={p.id} proposal={p} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {(proposals?.length ?? 0) > 0 && (
+        <>
+          <p style={{ margin: '0 0 12px', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8B9E94' }}>
+            Cambios propuestos
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {proposals!.map(p => (
+              <ProposalCard key={p.id} proposal={p} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+    </div>
+  )
+}
+
+function CreationCard({ proposal: p }: { proposal: CreationProposal }) {
+  const colors = STATUS_COLOR[p.status]
+  const date = new Date(p.createdAt).toLocaleDateString('es-EC', { day: 'numeric', month: 'long', year: 'numeric' })
+  const name = [p.firstName, p.lastName].filter(Boolean).join(' ')
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E0DAD0', borderRadius: 3, padding: '16px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <p style={{ margin: '0 0 2px', fontFamily: 'Georgia, serif', fontSize: 15, color: '#2C2C2C' }}>
+            {name} {p.nodeKind === 'PET' && <span style={{ fontSize: 11, color: '#8B9E94', marginLeft: 4 }}>mascota</span>}
+          </p>
+          {(p.fatherName || p.motherName) && (
+            <p style={{ margin: '0 0 2px', fontSize: 12, color: '#6B6B6B' }}>
+              {p.fatherName && `Padre: ${p.fatherName}`}{p.fatherName && p.motherName && ' · '}{p.motherName && `Madre: ${p.motherName}`}
+            </p>
+          )}
+          <p style={{ margin: 0, fontSize: 11, color: '#8B9E94' }}>{date}</p>
         </div>
+        <span style={{
+          flexShrink: 0, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+          padding: '3px 9px', borderRadius: 2,
+          background: colors.bg, color: colors.color, border: `1px solid ${colors.border}`,
+        }}>
+          {STATUS_LABEL[p.status]}
+        </span>
+      </div>
+      {p.status === 'REJECTED' && p.rejectionReason && (
+        <p style={{ margin: '10px 0 0', fontSize: 12, color: '#8B4444', background: '#FFF1F1', padding: '8px 12px', borderRadius: 2 }}>
+          Motivo: {p.rejectionReason}
+        </p>
       )}
     </div>
   )

@@ -113,24 +113,26 @@ export default async function EditContentPage({
   if (!data) notFound()
 
   return (
-    <ContentEditor
-      initialData={data}
-      familySlug={familySlug}
-      personId={personId}
-      contentId={contentId}
-      isAdmin={session.role === 'ADMIN'}
-      people={people.map(person => ({
-        id: person.id,
-        firstName: person.firstName,
-        middleName: person.middleName,
-        lastName: person.lastName,
-        birthDate: person.birthDate ? person.birthDate.toISOString() : null,
-        deathDate: person.deathDate ? person.deathDate.toISOString() : null,
-        gender: person.gender,
-        fatherId: person.fatherId ?? null,
-        motherId: person.motherId ?? null,
-        nodeKind: person.nodeKind,
-      }))}
-    />
+    <div className="h-full overflow-y-auto">
+      <ContentEditor
+        initialData={data}
+        familySlug={familySlug}
+        personId={personId}
+        contentId={contentId}
+        isAdmin={session.role === 'ADMIN'}
+        people={people.map(person => ({
+          id: person.id,
+          firstName: person.firstName,
+          middleName: person.middleName,
+          lastName: person.lastName,
+          birthDate: person.birthDate ? person.birthDate.toISOString() : null,
+          deathDate: person.deathDate ? person.deathDate.toISOString() : null,
+          gender: person.gender,
+          fatherId: person.fatherId ?? null,
+          motherId: person.motherId ?? null,
+          nodeKind: person.nodeKind,
+        }))}
+      />
+    </div>
   )
 }

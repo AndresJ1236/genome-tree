@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition, useCallback } from
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createPerson, createRelationship, deleteRelationship, deletePerson, setParentChild, setPersonCoverPhoto, setRelationshipEndDate, updatePerson } from '@/app/actions/people'
-import { proposePeopleUpdate } from '@/app/actions/proposals'
+import { proposePeopleUpdate, proposeNewPerson } from '@/app/actions/proposals'
 import { uploadMedia, deleteMedia } from '@/app/actions/media'
 import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF } from '@/lib/content-types'
 import type { ClaimedRelation, MediaItem, PersonEditorPayload, PersonFormData, RelationshipItem } from '@/lib/content-types'
@@ -266,6 +266,25 @@ export function PersonEditor({
         }
         // sibling-of: parents are already pre-filled in form state by the UI
 
+        // MEMBER users submit as proposal, not direct creation
+        if (isMember) {
+          const result = await proposeNewPerson({
+            firstName: formToSend.firstName,
+            lastName:  formToSend.lastName || undefined,
+            middleName: formToSend.middleName || undefined,
+            gender:    formToSend.gender !== 'UNKNOWN' ? formToSend.gender as import('@prisma/client').Gender : undefined,
+            birthDate: formToSend.birthDate || undefined,
+            deathDate: formToSend.deathDate || undefined,
+            birthPlace: formToSend.birthPlace || undefined,
+            nodeKind:  formToSend.nodeKind,
+            notes:     formToSend.bio || undefined,
+            fatherId:  formToSend.fatherId || undefined,
+            motherId:  formToSend.motherId || undefined,
+          })
+          if (!result.ok) { setError(result.error); return }
+          setMessage('Propuesta enviada. Un administrador la revisará y añadirá la persona al árbol.')
+          return
+        }
 
         const result = await createPerson(formToSend)
         if (!result.ok) {
@@ -423,17 +442,20 @@ export function PersonEditor({
     })
   }
 
+  const isProposalMode = isMember && (mode === 'edit' || mode === 'create')
   const submitLabel = isPending
-    ? (mode === 'edit' && isMember ? 'Enviando...' : 'Guardando...')
+    ? (isProposalMode ? 'Enviando...' : 'Guardando...')
     : mode === 'create'
-      ? (isPet ? 'Crear mascota' : 'Crear persona')
+      ? (isMember ? (isPet ? 'Sugerir mascota' : 'Sugerir persona') : (isPet ? 'Crear mascota' : 'Crear persona'))
       : isMember ? 'Enviar propuesta' : 'Guardar cambios'
 
   const submitHint = isMember && mode === 'edit'
     ? 'Los cambios serán revisados antes de aplicarse.'
-    : mode === 'create'
-      ? `Completa los datos y ${isPet ? 'crea la mascota' : 'crea la persona'}.`
-      : 'Guarda para confirmar los cambios.'
+    : isMember && mode === 'create'
+      ? `Tu sugerencia será revisada por un administrador antes de añadirse al árbol.`
+      : mode === 'create'
+        ? `Completa los datos y ${isPet ? 'crea la mascota' : 'crea la persona'}.`
+        : 'Guarda para confirmar los cambios.'
 
   return (
     <div style={shellStyle}>

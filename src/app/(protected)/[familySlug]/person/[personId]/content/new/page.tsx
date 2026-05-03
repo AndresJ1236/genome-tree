@@ -63,6 +63,7 @@ export default async function NewContentPage({
   })
 
   return (
+    <div className="h-full overflow-y-auto">
     <ContentEditor
       initialData={emptyData(type as ContentEditorData['type'], familySlug, personId)}
       familySlug={familySlug}
@@ -81,5 +82,6 @@ export default async function NewContentPage({
         nodeKind: person.nodeKind,
       }))}
     />
+    </div>
   )
 }

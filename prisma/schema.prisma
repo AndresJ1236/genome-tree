@@ -117,8 +117,9 @@ model Family {
   auditLogs      AuditLog[]
   managedUnits   ManagedFamilyUnit[]
   accessRules    AccessRule[]
-  proposals      PersonUpdateProposal[]
-  notifications  Notification[]
+  proposals         PersonUpdateProposal[]
+  creationProposals PersonCreationProposal[]
+  notifications     Notification[]
 }
 
 // ─────────────────────────────────────────────
@@ -182,7 +183,9 @@ model Person {
   unitAffiliation       ManagedFamilyUnit?  @relation("PersonUnitAffiliation", fields: [unitAffiliationId], references: [id])
   claimedRelationOf     Person?             @relation("ClaimedRelationOf", fields: [claimedRelationOfId], references: [id])
   claimedRelationRefs   Person[]            @relation("ClaimedRelationOf")
-  proposals             PersonUpdateProposal[] @relation("ProposalPerson")
+  proposals                  PersonUpdateProposal[]    @relation("ProposalPerson")
+  creationProposalsAsFather  PersonCreationProposal[]  @relation("CreationProposalFather")
+  creationProposalsAsMother  PersonCreationProposal[]  @relation("CreationProposalMother")
 }
 
 // ─────────────────────────────────────────────
@@ -233,6 +236,8 @@ model User {
   accessRules                AccessRule[]
   proposalsMade              PersonUpdateProposal[]   @relation("ProposalProposedBy")
   proposalsReviewed          PersonUpdateProposal[]   @relation("ProposalReviewedBy")
+  creationProposalsMade      PersonCreationProposal[] @relation("CreationProposedBy")
+  creationProposalsReviewed  PersonCreationProposal[] @relation("CreationReviewedBy")
   notifications              Notification[]
 }
 
@@ -443,6 +448,42 @@ model PersonUpdateProposal {
 
   @@index([familyId, status])
   @@index([personId, status])
+}
+
+// ─────────────────────────────────────────────
+// PERSON CREATION PROPOSAL (sugerencias de personas nuevas por MEMBER)
+// ─────────────────────────────────────────────
+
+model PersonCreationProposal {
+  id              String         @id @default(cuid())
+  familyId        String
+  proposedById    String
+  status          ProposalStatus @default(PENDING)
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+
+  firstName  String
+  lastName   String?
+  middleName String?
+  gender     Gender?
+  birthDate  DateTime?
+  deathDate  DateTime?
+  birthPlace String?
+  nodeKind   PersonKind @default(PERSON)
+  notes      String?    @db.Text
+  fatherId   String?
+  motherId   String?
+
+  createdAt DateTime @default(now())
+
+  family     Family  @relation(fields: [familyId], references: [id])
+  proposedBy User    @relation("CreationProposedBy",  fields: [proposedById], references: [id])
+  reviewedBy User?   @relation("CreationReviewedBy",  fields: [reviewedById], references: [id])
+  father     Person? @relation("CreationProposalFather", fields: [fatherId], references: [id])
+  mother     Person? @relation("CreationProposalMother", fields: [motherId], references: [id])
+
+  @@index([familyId, status])
 }
 
 // ─────────────────────────────────────────────

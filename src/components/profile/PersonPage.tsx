@@ -193,7 +193,9 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
                   background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)',
                   letterSpacing: '0.04em',
                 }}>
-                  Afiliado a {person.unitAffiliationLabel}
+                  {person.unitAffiliationLabel.startsWith('Familia ')
+                    ? person.unitAffiliationLabel
+                    : `Familia ${person.unitAffiliationLabel}`}
                 </span>
               )}
               {person.claimedRelation && (

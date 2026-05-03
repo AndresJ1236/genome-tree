@@ -301,8 +301,8 @@ export async function createRelationship(input: {
     }
 
     const [p1, p2] = await Promise.all([
-      prisma.person.findFirst({ where: { id: input.personId, familyId: session.familyId }, select: { id: true } }),
-      prisma.person.findFirst({ where: { id: input.partnerId, familyId: session.familyId }, select: { id: true } }),
+      prisma.person.findFirst({ where: { id: input.personId, familyId: session.familyId }, select: { id: true, firstName: true, lastName: true, gender: true } }),
+      prisma.person.findFirst({ where: { id: input.partnerId, familyId: session.familyId }, select: { id: true, firstName: true, lastName: true, gender: true } }),
     ])
     if (!p1 || !p2) return { ok: false, error: 'Persona no encontrada en esta familia.' }
 
@@ -310,6 +310,50 @@ export async function createRelationship(input: {
     const rel = await prisma.relationship.create({
       data: { familyId: session.familyId, person1Id: id1, person2Id: id2, type: input.type },
     })
+
+    // Auto-create managed family unit if one doesn't exist for this couple
+    const existingUnit = await prisma.managedFamilyUnit.findFirst({
+      where: {
+        familyId: session.familyId,
+        OR: [
+          { parentAId: input.personId, parentBId: input.partnerId },
+          { parentAId: input.partnerId, parentBId: input.personId },
+        ],
+      },
+      select: { id: true },
+    })
+
+    if (!existingUnit) {
+      // Determine order: male first, female second; unknown → alphabetical by lastName
+      const male   = p1.gender === 'MALE'   ? p1 : p2.gender === 'MALE'   ? p2 : null
+      const female = p1.gender === 'FEMALE' ? p1 : p2.gender === 'FEMALE' ? p2 : null
+      const parentA = male ?? (p1.lastName <= p2.lastName ? p1 : p2)
+      const parentB = (parentA.id === p1.id ? p2 : p1)
+
+      const surnameA = parentA.lastName.split(' ')[0]
+      const surnameB = parentB.lastName.split(' ')[0]
+      const label = surnameB && surnameB !== surnameA
+        ? `Familia ${surnameA} ${surnameB}`
+        : `Familia ${surnameA}`
+
+      await prisma.managedFamilyUnit.create({
+        data: {
+          familyId:        session.familyId,
+          label,
+          parentAId:       parentA.id,
+          parentBId:       parentB.id,
+          primarySurname:  surnameA,
+          secondarySurname: surnameB !== surnameA ? surnameB : null,
+          canInviteUsers:  false,
+          canEditPeople:   false,
+          canManageContent: false,
+          canViewAudit:    false,
+          createdById:     session.userId,
+        },
+      })
+
+      revalidatePath(`/${session.familySlug}/admin`)
+    }
 
     revalidatePath(`/${session.familySlug}/person/${input.personId}/edit`)
     revalidatePath(`/${session.familySlug}/tree`)
