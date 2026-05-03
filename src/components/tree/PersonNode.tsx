@@ -80,7 +80,7 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
         style={{
           marginTop: 7,
           textAlign: 'center',
-          fontSize: 11,
+          fontSize: 13,
           fontFamily: 'Georgia, Cambria, serif',
           color: '#3a3a3a',
           lineHeight: 1.35,
@@ -92,7 +92,7 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
         {birthYear && (
           <>
             <br />
-            <span style={{ fontSize: 10, opacity: 0.55 }}>
+            <span style={{ fontSize: 11, opacity: 0.55 }}>
               {birthYear}{deathYear ? `–${deathYear}` : ''}
             </span>
           </>

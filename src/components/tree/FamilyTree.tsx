@@ -8,7 +8,6 @@ import { FamilyEdges } from './FamilyEdges'
 import { PersonPanel } from './PersonPanel'
 import { TreeSearch } from './TreeSearch'
 import { OnboardingOverlay } from './OnboardingOverlay'
-import { HelpTooltip } from '@/components/ui/HelpTooltip'
 
 const CANVAS_PAD = 120
 const CENTER_SCALE = 1.2
@@ -227,46 +226,53 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
         }}
       />
 
-      {/* Hint de navegación — esquina inferior izquierda, discreto */}
-      <div
-        style={{
-          position: 'absolute', bottom: 16, left: 16, zIndex: 20,
-          display: 'flex', gap: 8, alignItems: 'center',
-          pointerEvents: 'none',
-        }}
-      >
-        <span style={{ fontSize: 10, color: '#A8B5AE', letterSpacing: '0.06em', userSelect: 'none' }}>
-          Arrastra · Rueda = zoom
-        </span>
-        <HelpTooltip
-          text={"Arrastra el fondo para moverte.\nRueda del ratón para hacer zoom.\nHaz clic en una persona para ver su perfil."}
-          position="top"
-        >
-          <span
+      {/* Leyenda + hint de navegación — esquina inferior izquierda */}
+      <TreeLegend />
+
+      {/* Controles esquina inferior derecha */}
+      <div style={{
+        position: 'absolute', bottom: 16, right: 16, zIndex: 20,
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
+      }}>
+        {focusPersonId && (
+          <button
+            onClick={() => centerOnNode(focusPersonId)}
+            title="Centrar el árbol en tu posición"
             style={{
-              pointerEvents: 'auto',
-              width: 15, height: 15, borderRadius: '50%',
-              border: '1px solid #B5C4BC',
-              color: '#8B9E94', fontSize: 9,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'default', fontFamily: 'Georgia, serif', fontStyle: 'italic', fontWeight: 700,
+              background: '#FDFAF5',
+              border: '1.5px solid #B5C4BC',
+              borderRadius: 3,
+              padding: '8px 14px',
+              cursor: 'pointer',
+              fontSize: 12,
+              color: '#2D4A3E',
+              fontFamily: 'Georgia, serif',
+              letterSpacing: '0.04em',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+              display: 'flex', alignItems: 'center', gap: 6,
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.background = '#EAF0ED'
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#2D4A3E'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.background = '#FDFAF5'
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#B5C4BC'
             }}
           >
-            ?
-          </span>
-        </HelpTooltip>
+            <span style={{ fontSize: 14 }}>⌖</span> Ir a mí
+          </button>
+        )}
+        {visibleIds !== null && (
+          <div style={{
+            fontSize: 10, color: '#A8B5AE', letterSpacing: '0.05em',
+            userSelect: 'none', pointerEvents: 'none',
+          }}>
+            {visibleIds.size} / {nodes.length} visibles
+          </div>
+        )}
       </div>
-
-      {/* Contador de personas visibles — solo si hay virtualización activa */}
-      {visibleIds !== null && (
-        <div style={{
-          position: 'absolute', bottom: 16, right: 16, zIndex: 20,
-          fontSize: 10, color: '#A8B5AE', letterSpacing: '0.05em',
-          userSelect: 'none', pointerEvents: 'none',
-        }}>
-          {visibleIds.size} / {nodes.length} visibles
-        </div>
-      )}
 
       <div
         ref={viewportRef}
@@ -329,6 +335,89 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
         familySlug={familySlug}
         onClose={() => setSelectedId(null)}
       />
+    </div>
+  )
+}
+
+// ── Leyenda de colores ────────────────────────────────────────────────────────
+
+function TreeLegend() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div
+      style={{
+        position: 'absolute', bottom: 16, left: 16, zIndex: 20,
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6,
+      }}
+    >
+      {open && (
+        <div
+          style={{
+            background: '#FDFAF5',
+            border: '1px solid #D8D3CA',
+            borderRadius: 3,
+            padding: '12px 14px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+            display: 'flex', flexDirection: 'column', gap: 8,
+          }}
+        >
+          <LegendItem
+            ring={{ background: '#FFF3D6', border: '2px solid #C5973A' }}
+            label="Tú"
+          />
+          <LegendItem
+            ring={{ background: '#C8D9D2', border: '2px solid #7aad95' }}
+            label="Familia directa seleccionada"
+          />
+          <LegendItem
+            ring={{ background: '#EAF0ED', border: '1.5px solid #B5C4BC' }}
+            label="Persona"
+          />
+          <LegendItem
+            ring={{ background: '#EDE8E0', border: '1.5px dashed #9B9690' }}
+            label="Fallecido/a"
+          />
+        </div>
+      )}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          background: '#FDFAF5',
+          border: '1.5px solid #C8D0CA',
+          borderRadius: 3,
+          padding: '6px 12px',
+          cursor: 'pointer',
+          fontSize: 12,
+          color: '#6B7B70',
+          fontFamily: 'Georgia, serif',
+          letterSpacing: '0.04em',
+          display: 'flex', alignItems: 'center', gap: 5,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = '#2D4A3E'
+          ;(e.currentTarget as HTMLButtonElement).style.color = '#2D4A3E'
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = '#C8D0CA'
+          ;(e.currentTarget as HTMLButtonElement).style.color = '#6B7B70'
+        }}
+      >
+        {open ? '▾' : '▸'} Leyenda
+      </button>
+    </div>
+  )
+}
+
+function LegendItem({ ring, label }: { ring: React.CSSProperties; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <div style={{
+        width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+        ...ring,
+      }} />
+      <span style={{ fontSize: 12, color: '#4a4a4a', whiteSpace: 'nowrap' }}>{label}</span>
     </div>
   )
 }

@@ -273,7 +273,7 @@ function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
         <section>
           <SectionLabel>{isPet ? 'Historia' : `Sobre ${profile.firstName}`}</SectionLabel>
           <p style={{
-            fontSize: 13, color: '#4a4a4a', lineHeight: 1.65, margin: 0,
+            fontSize: 14, color: '#4a4a4a', lineHeight: 1.7, margin: 0,
             ...(bioExpanded ? {} : {
               display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
             }),
@@ -283,7 +283,7 @@ function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
           {profile.bio.length > 180 && (
             <button
               onClick={onToggleBio}
-              style={{ marginTop: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#2D4A3E', padding: 0, letterSpacing: '0.04em' }}
+              style={{ marginTop: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#2D4A3E', padding: 0, letterSpacing: '0.04em' }}
             >
               {bioExpanded ? 'Ver menos ↑' : 'Ver más ↓'}
             </button>
@@ -397,8 +397,8 @@ function FamilyChip({ person, relation }: { person: PersonBasic; relation: strin
       </div>
       {/* Nombre y relación */}
       <div>
-        <span style={{ fontSize: 12, color: '#2C2C2C' }}>{getPersonDisplayName(person)}</span>
-        <span style={{ fontSize: 10, color: '#8B9E94', marginLeft: 6 }}>
+        <span style={{ fontSize: 13, color: '#2C2C2C' }}>{getPersonDisplayName(person)}</span>
+        <span style={{ fontSize: 12, color: '#8B9E94', marginLeft: 6 }}>
           {relation}{birthYear ? ` · ${birthYear}${deathYear ? `–${deathYear}` : ''}` : ''}
         </span>
       </div>
@@ -480,14 +480,11 @@ function ArchiveCounts({ counts, isPet }: { counts: PersonProfile['counts']; isP
           const isEmpty = count === 0
           return (
             <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 10, color: isEmpty ? '#C4CBC6' : '#2D4A3E', width: 12, flexShrink: 0 }}>
-                {symbol}
-              </span>
-              <span style={{ fontSize: 12, color: isEmpty ? '#B0BAB4' : '#3a3a3a', flex: 1 }}>
+              <span style={{ fontSize: 13, color: isEmpty ? '#C4CBC6' : '#2D4A3E', flex: 1 }}>
                 {label}
               </span>
               <span style={{
-                fontSize: 11, fontWeight: 600,
+                fontSize: 13, fontWeight: 600,
                 color:      isEmpty ? '#C4CBC6' : '#2D4A3E',
                 minWidth:   18, textAlign: 'right',
               }}>
@@ -513,10 +510,10 @@ function ArchiveCounts({ counts, isPet }: { counts: PersonProfile['counts']; isP
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p style={{
-      fontSize:      10,
-      letterSpacing: '0.12em',
+      fontSize:      12,
+      letterSpacing: '0.08em',
       textTransform: 'uppercase',
-      color:         '#8B9E94',
+      color:         '#6B7B70',
       fontFamily:    'Georgia, serif',
       margin:        '0 0 10px',
     }}>

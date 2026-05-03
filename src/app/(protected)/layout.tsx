@@ -35,27 +35,27 @@ export default async function ProtectedLayout({
           <nav className="flex gap-4">
             <a
               href={`/${session.familySlug}/tree`}
-              className="text-xs tracking-widest uppercase transition-colors"
+              className="text-sm tracking-wide uppercase transition-colors"
               style={{ color: '#6B6B6B' }}
             >
-              Arbol
+              Árbol
             </a>
             {session.role === 'ADMIN' && (
               <a
                 href={`/${session.familySlug}/admin`}
-                className="text-xs tracking-widest uppercase transition-colors"
+                className="text-sm tracking-wide uppercase transition-colors"
                 style={{ color: '#6B6B6B' }}
               >
-                Administracion
+                Administración
               </a>
             )}
             {session.role !== 'ADMIN' && (
               <a
                 href={`/${session.familySlug}/settings/proposals`}
-                className="text-xs tracking-widest uppercase transition-colors"
+                className="text-sm tracking-wide uppercase transition-colors"
                 style={{ color: '#6B6B6B' }}
               >
-                Mis propuestas
+                Mis cambios
               </a>
             )}
           </nav>
@@ -74,7 +74,7 @@ export default async function ProtectedLayout({
           <HelpPanel />
           <a
             href={`/${session.familySlug}/settings`}
-            className="text-xs tracking-widest uppercase transition-colors"
+            className="text-sm tracking-wide uppercase transition-colors"
             style={{ color: '#6B6B6B' }}
           >
             Ajustes
@@ -82,7 +82,7 @@ export default async function ProtectedLayout({
           <form action={logout}>
             <button
               type="submit"
-              className="text-xs tracking-widest uppercase transition-colors"
+              className="text-sm tracking-wide uppercase transition-colors"
               style={{ color: '#6B6B6B' }}
             >
               Salir
