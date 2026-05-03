@@ -1311,3 +1311,71 @@ export async function previewRelationsImport(input: {
     return { ok: false, error: (error as Error).message }
   }
 }
+
+// ── Auto-create ManagedFamilyUnit for all existing couples without one ─────────
+
+export async function bulkAutoCreateFamilyUnits(): Promise<ActionResult<{ created: number }>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+  try {
+    ensureAdmin(session)
+
+    // Fetch all relationships for this family with person gender + lastName
+    const relationships = await prisma.relationship.findMany({
+      where: { person1: { familyId: session.familyId } },
+      select: {
+        person1Id: true,
+        person2Id: true,
+        person1: { select: { id: true, firstName: true, lastName: true, gender: true } },
+        person2: { select: { id: true, firstName: true, lastName: true, gender: true } },
+      },
+    })
+
+    // Fetch all existing units so we can skip already-covered pairs
+    const existingUnits = await prisma.managedFamilyUnit.findMany({
+      where: { familyId: session.familyId },
+      select: { parentAId: true, parentBId: true },
+    })
+    const covered = new Set(
+      existingUnits.map(u => [u.parentAId, u.parentBId].sort().join('|'))
+    )
+
+    let created = 0
+    for (const rel of relationships) {
+      const key = [rel.person1Id, rel.person2Id].sort().join('|')
+      if (covered.has(key)) continue
+
+      const p1 = rel.person1
+      const p2 = rel.person2
+      const male   = p1.gender === 'MALE'   ? p1 : p2.gender === 'MALE'   ? p2 : null
+      const female = p1.gender === 'FEMALE' ? p1 : p2.gender === 'FEMALE' ? p2 : null
+      const parentA = male ?? (p1.lastName <= p2.lastName ? p1 : p2)
+      const parentB = parentA.id === p1.id ? p2 : p1
+
+      const surnameA = parentA.lastName.split(' ')[0]
+      const surnameB = parentB.lastName.split(' ')[0]
+      const label = surnameB && surnameB !== surnameA
+        ? `Familia ${surnameA} ${surnameB}`
+        : `Familia ${surnameA}`
+
+      await prisma.managedFamilyUnit.create({
+        data: {
+          familyId: session.familyId,
+          label,
+          parentAId: parentA.id,
+          parentBId: parentB.id,
+          canInviteUsers: true,
+          canEditPeople: true,
+          canManageContent: true,
+          canViewAudit: false,
+        },
+      })
+      covered.add(key)
+      created++
+    }
+
+    return { ok: true, data: { created } }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
