@@ -39,6 +39,8 @@ function serializeOption(p: {
   birthDate: Date | null
   deathDate: Date | null
   gender: Gender
+  fatherId: string | null
+  motherId: string | null
 }): PersonOption {
   return {
     id: p.id,
@@ -48,6 +50,8 @@ function serializeOption(p: {
     birthDate: p.birthDate ? p.birthDate.toISOString() : null,
     deathDate: p.deathDate ? p.deathDate.toISOString() : null,
     gender: p.gender,
+    fatherId: p.fatherId,
+    motherId: p.motherId,
   }
 }
 
@@ -102,6 +106,8 @@ async function getVisiblePeopleForEditor(session: NonNullable<Awaited<ReturnType
       birthDate: true,
       deathDate: true,
       gender: true,
+      fatherId: true,
+      motherId: true,
     },
   })
 }

@@ -34,6 +34,8 @@ export interface PersonOption {
   birthDate: string | null
   deathDate: string | null
   gender: Gender
+  fatherId: string | null
+  motherId: string | null
 }
 
 export interface MediaItem {
