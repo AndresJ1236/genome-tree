@@ -171,6 +171,32 @@ function computeFocusLateralScores(
     }
   }
 
+  // ── L/R separation gap ────────────────────────────────────────────────
+  // After propagation, the SIGN of each score correctly identifies the side
+  // (negative = paternal, positive = maternal). Apply a fixed gap so each
+  // side is pushed clearly away from the center, creating a visual "valley"
+  // between the two families. Focus + direct siblings are exempt so the
+  // user and their immediate generation stay anchored to the center.
+  const SIDE_GAP = 3.0
+  const focusSiblingsSet = new Set<string>()
+  const fpFinal = personMap.get(focusId)
+  if (fpFinal) {
+    for (const id of personSet) {
+      if (id === focusId) continue
+      const p = personMap.get(id)
+      if (!p) continue
+      if ((fpFinal.fatherId && p.fatherId === fpFinal.fatherId) ||
+          (fpFinal.motherId && p.motherId === fpFinal.motherId)) {
+        focusSiblingsSet.add(id)
+      }
+    }
+  }
+  for (const [id, s] of [...scores.entries()]) {
+    if (id === focusId || focusSiblingsSet.has(id)) continue
+    if (s < -0.001) scores.set(id, s - SIDE_GAP)
+    else if (s > 0.001) scores.set(id, s + SIDE_GAP)
+  }
+
   // Unscored people (truly disconnected) default to 0
   for (const id of personSet) {
     if (!scores.has(id)) scores.set(id, 0)
