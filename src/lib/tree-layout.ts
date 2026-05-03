@@ -336,92 +336,77 @@ export function computeTreeLayout(
     return Math.min(fy, my)
   }
 
-  // ── Generation assignment via BFS from focus ─────────────────────────────
-  // "Social generations": distance from the focus person traversing parent,
-  // child, sibling (via shared parent → other children), and spouse edges.
-  //
-  // This replaces depth-from-roots, which placed a parent and their siblings
-  // on different rows whenever one branch had more recorded generations
-  // than the other (the parent's couple-alignment pushed them deeper, but
-  // their siblings stayed shallow). With BFS from focus, an uncle is always
-  // exactly one row above their nephew regardless of how deep the other
-  // family branch goes.
-  //
-  // To pick an auto-focus when none is provided we still need a
-  // depth-from-roots ranking, so we compute it once into a temp map.
-  const tempDepth = new Map<string, number>()
-  {
-    const visiting = new Set<string>()
-    function tempDeriveDepth(id: string): number {
-      if (tempDepth.has(id)) return tempDepth.get(id)!
-      if (visiting.has(id)) return 0
-      visiting.add(id)
-      const parents = parentsOf.get(id) ?? []
-      const value = parents.length === 0
-        ? 0
-        : Math.max(...parents.map(pid => tempDeriveDepth(pid) + 1))
-      visiting.delete(id)
-      tempDepth.set(id, value)
-      return value
-    }
-    for (const p of persons) tempDeriveDepth(p.id)
-  }
-
-  const focusId: string =
-    options?.focusPersonId && personSet.has(options.focusPersonId)
-      ? options.focusPersonId
-      : findAutoFocus(persons, parentsOf, childrenOf, tempDepth)
-
+  // ── Generation assignment ─────────────────────────────────────────────────
   const gen = new Map<string, number>()
-  gen.set(focusId, 0)
+  const visiting = new Set<string>()
+
+  function deriveGeneration(id: string): number {
+    if (gen.has(id)) return gen.get(id)!
+    if (visiting.has(id)) return 0
+    visiting.add(id)
+    const parents = parentsOf.get(id) ?? []
+    const value = parents.length === 0
+      ? 0
+      : Math.max(...parents.map(pid => deriveGeneration(pid) + 1))
+    visiting.delete(id)
+    gen.set(id, value)
+    return value
+  }
+
+  for (const p of persons) deriveGeneration(p.id)
+
+  const hasKnownParents = (id: string) => (parentsOf.get(id)?.length ?? 0) > 0
+
+  // Used in Pass 2 only (both members have parents — guard against truly
+  // unrelated people being merged by mistake). Threshold matches likelyRealCouple.
+  const likelySameGenerationSpouses = (a: string, b: string) => {
+    const ay = ownYear(a)
+    const by = ownYear(b)
+    return ay === 9999 || by === 9999 || Math.abs(ay - by) <= 60
+  }
+
+  // Pass 1: align couples where one lacks parents.
+  // No age guard here — if someone has NO parents and is a known couple of an
+  // anchored person, we must always align them regardless of birth-year difference.
+  for (const { p1, p2 } of inferredCouples.values()) {
+    const g1 = gen.get(p1) ?? 0
+    const g2 = gen.get(p2) ?? 0
+    if (!hasKnownParents(p1) && hasKnownParents(p2)) gen.set(p1, g2)
+    else if (!hasKnownParents(p2) && hasKnownParents(p1)) gen.set(p2, g1)
+  }
+
+  // Pass 2: iterative alignment for couples where BOTH have parents but at
+  // different depths (e.g. one side has more recorded generations than the other).
+  // Push the shallower person DOWN to match their spouse (use max generation).
+  // Then re-derive children so nothing is left at a stale level.
+  //
+  // IMPORTANT: re-derivation only INCREASES generations, never decreases.
+  // Without this, a couple-aligned person (pushed up to their spouse's deeper
+  // generation) would be pulled back down to gen(their own parents)+1, causing
+  // the loop to oscillate and the safety counter to abort with wrong results.
   {
-    const queue: string[] = [focusId]
-    while (queue.length > 0) {
-      const id = queue.shift()!
-      const g = gen.get(id)!
-      const p = personMap.get(id)
-      if (!p) continue
-
-      // Parents → g - 1 (older, smaller gen number)
-      if (p.fatherId && personSet.has(p.fatherId) && !gen.has(p.fatherId)) {
-        gen.set(p.fatherId, g - 1)
-        queue.push(p.fatherId)
+    let changed = true
+    let safety = 15
+    while (changed && safety-- > 0) {
+      changed = false
+      for (const { p1, p2 } of inferredCouples.values()) {
+        if (!likelySameGenerationSpouses(p1, p2)) continue
+        const g1 = gen.get(p1) ?? 0
+        const g2 = gen.get(p2) ?? 0
+        if (g1 === g2) continue
+        const aligned = Math.max(g1, g2)
+        if ((gen.get(p1) ?? 0) !== aligned) { gen.set(p1, aligned); changed = true }
+        if ((gen.get(p2) ?? 0) !== aligned) { gen.set(p2, aligned); changed = true }
       }
-      if (p.motherId && personSet.has(p.motherId) && !gen.has(p.motherId)) {
-        gen.set(p.motherId, g - 1)
-        queue.push(p.motherId)
-      }
-
-      // Children → g + 1. Reaching siblings of an ancestor happens here:
-      // ancestor.parents are at g-1, then their other children land at g.
-      for (const cid of childrenOf.get(id) ?? []) {
-        if (!gen.has(cid)) {
-          gen.set(cid, g + 1)
-          queue.push(cid)
-        }
-      }
-
-      // Spouses → same generation
-      for (const sid of spousesOf.get(id) ?? []) {
-        if (personSet.has(sid) && !gen.has(sid)) {
-          gen.set(sid, g)
-          queue.push(sid)
-        }
+      // Re-derive children — only increase, never decrease.
+      // Couple alignment always wins over parent-depth constraints.
+      for (const p of persons) {
+        const parents = parentsOf.get(p.id)
+        if (!parents || parents.length === 0) continue
+        const expected = Math.max(...parents.map(pid => (gen.get(pid) ?? 0))) + 1
+        if (expected > (gen.get(p.id) ?? 0)) { gen.set(p.id, expected); changed = true }
       }
     }
-  }
-
-  // Anyone not reached by BFS (truly disconnected from focus) falls back to
-  // depth-from-roots, shifted into a far-negative range so they cluster
-  // visually above the connected family without colliding with real ancestors.
-  for (const p of persons) {
-    if (!gen.has(p.id)) gen.set(p.id, (tempDepth.get(p.id) ?? 0) - 1000)
-  }
-
-  // Normalize so the topmost generation is 0
-  const minGen = Math.min(...gen.values())
-  if (minGen !== 0) {
-    for (const [id, g] of [...gen.entries()]) gen.set(id, g - minGen)
   }
 
   const byGen = new Map<number, string[]>()
@@ -430,6 +415,15 @@ export function computeTreeLayout(
     byGen.get(g)!.push(id)
   }
   const maxGen = Math.max(...gen.values())
+
+  // ── Score computation ─────────────────────────────────────────────────────
+  // Always use focus-centered lateral scores.
+  // Focus priority: (1) explicit focusPersonId from session, (2) auto-detected
+  // most-interior person (deepest with known parents + children).
+  const focusId: string =
+    options?.focusPersonId && personSet.has(options.focusPersonId)
+      ? options.focusPersonId
+      : findAutoFocus(persons, parentsOf, childrenOf, gen)
 
   const score: Map<string, number> = computeFocusLateralScores(focusId, personMap, personSet, spousesOf)
 
