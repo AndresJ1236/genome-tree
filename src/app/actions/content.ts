@@ -14,7 +14,7 @@ import {
   userManagesPerson,
 } from '@/lib/permissions'
 import { assertModuleEnabled, getFamilyModules, getModuleForContentType } from '@/lib/family-config'
-import { notifyFamilyMembers } from '@/lib/notifications'
+import { logAudit } from '@/lib/audit'
 import { revalidatePath } from 'next/cache'
 import type {
   ClaimedRelation,
@@ -52,27 +52,6 @@ const LIMITS = {
   MEDIA_MAX:         100,
   RECIPE_MEDIA_MAX:  3,
 } as const
-
-const CONTENT_TYPE_LABELS: Record<string, string> = {
-  STORY: 'Historia', RECIPE: 'Receta', OBJECT: 'Objeto',
-  DIARY: 'Diario', INTERVIEW: 'Entrevista', SOURCE: 'Fuente',
-}
-
-function fireContentNotification(
-  familyId: string,
-  familySlug: string,
-  personId: string,
-  contentType: string,
-  contentTitle: string
-) {
-  void notifyFamilyMembers({
-    familyId,
-    type:  'NEW_CONTENT_ADDED',
-    title: `Nueva ${CONTENT_TYPE_LABELS[contentType] ?? contentType} añadida`,
-    body:  contentTitle,
-    href:  `/${familySlug}/person/${personId}`,
-  })
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers de serialización (Prisma devuelve Date; React necesita strings)
@@ -531,7 +510,14 @@ export async function createStory(
     },
   })
 
-  fireContentNotification(session.familyId, session.familySlug, input.personId, 'STORY', input.title)
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'CREATE_CONTENT',
+    entityType: 'CONTENT',
+    entityId:   content.id,
+    newValue:   { type: 'STORY', title: input.title, personId: input.personId },
+  })
   revalidateContentPaths(session.familySlug, input.personId)
   return { ok: true, data: { id: content.id } }
 }
@@ -567,7 +553,14 @@ export async function createRecipe(
     },
   })
 
-  fireContentNotification(session.familyId, session.familySlug, input.personId, 'RECIPE', input.title)
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'CREATE_CONTENT',
+    entityType: 'CONTENT',
+    entityId:   content.id,
+    newValue:   { type: 'RECIPE', title: input.title, personId: input.personId },
+  })
   revalidateContentPaths(session.familySlug, input.personId)
   return { ok: true, data: { id: content.id } }
 }
@@ -599,7 +592,14 @@ export async function createDiaryEntry(
     },
   })
 
-  fireContentNotification(session.familyId, session.familySlug, input.personId, 'DIARY', input.title)
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'CREATE_CONTENT',
+    entityType: 'CONTENT',
+    entityId:   content.id,
+    newValue:   { type: 'DIARY', title: input.title, personId: input.personId },
+  })
   revalidateContentPaths(session.familySlug, input.personId)
   return { ok: true, data: { id: content.id } }
 }
@@ -635,7 +635,14 @@ export async function createInterview(
     },
   })
 
-  fireContentNotification(session.familyId, session.familySlug, input.personId, 'INTERVIEW', input.title)
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'CREATE_CONTENT',
+    entityType: 'CONTENT',
+    entityId:   content.id,
+    newValue:   { type: 'INTERVIEW', title: input.title, personId: input.personId },
+  })
   revalidateContentPaths(session.familySlug, input.personId)
   return { ok: true, data: { id: content.id } }
 }
@@ -669,7 +676,14 @@ export async function createObject(
     },
   })
 
-  fireContentNotification(session.familyId, session.familySlug, input.personId, 'OBJECT', input.title)
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'CREATE_CONTENT',
+    entityType: 'CONTENT',
+    entityId:   content.id,
+    newValue:   { type: 'OBJECT', title: input.title, personId: input.personId },
+  })
   revalidateContentPaths(session.familySlug, input.personId)
   return { ok: true, data: { id: content.id } }
 }
@@ -702,7 +716,14 @@ export async function createSource(
     },
   })
 
-  fireContentNotification(session.familyId, session.familySlug, input.personId, 'SOURCE', input.title)
+  void logAudit({
+    familyId:   session.familyId,
+    userId:     session.userId,
+    action:     'CREATE_CONTENT',
+    entityType: 'CONTENT',
+    entityId:   content.id,
+    newValue:   { type: 'SOURCE', title: input.title, personId: input.personId },
+  })
   revalidateContentPaths(session.familySlug, input.personId)
   return { ok: true, data: { id: content.id } }
 }

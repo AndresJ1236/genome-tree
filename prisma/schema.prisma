@@ -95,6 +95,7 @@ enum NotificationType {
   PROPOSAL_REJECTED
   NEW_PERSON_ADDED
   NEW_CONTENT_ADDED
+  PERSON_UPDATED
 }
 
 // ─────────────────────────────────────────────

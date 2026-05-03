@@ -37,3 +37,9 @@ export async function markAllNotificationsRead(): Promise<void> {
     data: { read: true },
   })
 }
+
+export async function getMyUnreadCount(): Promise<number> {
+  const session = await getSession()
+  if (!session) return 0
+  return prisma.notification.count({ where: { userId: session.userId, read: false } })
+}
