@@ -986,6 +986,39 @@ export async function createPasswordResetLink(userId: string): Promise<ActionRes
   }
 }
 
+export async function revokeUserSessions(userId: string): Promise<ActionResult> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    ensureAdmin(session)
+
+    const user = await prisma.user.findFirst({
+      where: { id: userId, familyId: session.familyId },
+      select: { id: true, username: true },
+    })
+    if (!user) return { ok: false, error: 'Usuario no encontrado.' }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { sessionVersion: { increment: 1 } },
+    })
+
+    await logAudit({
+      familyId: session.familyId,
+      userId: session.userId,
+      action: 'REVOKE_USER_SESSIONS',
+      entityType: 'User',
+      entityId: userId,
+      newValue: { targetUsername: user.username },
+    })
+
+    return { ok: true, data: undefined }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
 export async function importRelationsJson(input: {
   jsonText: string
 }): Promise<ActionResult<{ updatedPeople: number }>> {
