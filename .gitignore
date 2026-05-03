@@ -43,3 +43,5 @@ next-env.d.ts
 
 # Claude Code internal
 .claude/
+DEPLOY.md
+deploy-server.sh
