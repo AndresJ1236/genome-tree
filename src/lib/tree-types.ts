@@ -13,12 +13,17 @@ export interface PersonData {
   motherId:   string | null
 }
 
-// Relaciones explícitas — solo SPOUSE/PARTNER (sin PARENT_CHILD)
+// Relaciones explícitas — SPOUSE / PARTNER / SIBLING (no PARENT_CHILD)
 export interface RelationshipData {
   person1Id: string
   person2Id: string
-  type: 'SPOUSE' | 'PARTNER'
+  type: 'SPOUSE' | 'PARTNER' | 'SIBLING'
   endDate: string | null
+}
+
+export interface SiblingLink {
+  person1Id: string
+  person2Id: string
 }
 
 export interface LayoutNode extends PersonData {
@@ -41,10 +46,11 @@ export interface PetLink {
 }
 
 export interface TreeLayout {
-  nodes:       LayoutNode[]
-  familyUnits: FamilyUnit[]
-  petLinks:    PetLink[]
-  bounds:      { minX: number; minY: number; maxX: number; maxY: number }
+  nodes:        LayoutNode[]
+  familyUnits:  FamilyUnit[]
+  petLinks:     PetLink[]
+  siblingLinks: SiblingLink[]
+  bounds:       { minX: number; minY: number; maxX: number; maxY: number }
 }
 
 export interface TreeLayoutOptions {

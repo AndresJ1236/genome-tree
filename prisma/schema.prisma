@@ -25,6 +25,7 @@ enum PersonKind {
 enum RelationshipType {
   SPOUSE
   PARTNER
+  SIBLING
 }
 
 enum UserRole {
