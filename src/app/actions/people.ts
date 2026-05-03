@@ -21,6 +21,7 @@ import type {
   MediaItem,
   PersonEditorPayload,
   PersonFormData,
+  PersonKind,
   PersonOption,
   RelationshipItem,
   Gender,
