@@ -65,6 +65,7 @@ export async function POST(req: Request) {
     scope: user.scope,
     personId: user.personId ?? null,
     branchRootId: user.branchRootId ?? null,
+    sessionVersion: user.sessionVersion,
   })
 
   const response = NextResponse.redirect(buildUrl(req, `/${user.family.slug}/tree`), 303)

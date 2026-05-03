@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto'
 import type { UserRole, UserScope } from '@/lib/content-types'
 
 export interface InvitePayload {
+  typ: 'invite'
   jti: string       // unique token ID — used for single-use enforcement
   familyId: string
   familySlug: string
@@ -21,10 +22,10 @@ function getKey() {
   return new TextEncoder().encode(secret)
 }
 
-export async function signInviteToken(payload: Omit<InvitePayload, 'expiresAt' | 'jti'>, expiresInDays = 7) {
+export async function signInviteToken(payload: Omit<InvitePayload, 'expiresAt' | 'jti' | 'typ'>, expiresInDays = 7) {
   const jti       = randomUUID()
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
-  const token = await new SignJWT({ ...payload, jti, expiresAt: expiresAt.toISOString() })
+  const token = await new SignJWT({ ...payload, typ: 'invite', jti, expiresAt: expiresAt.toISOString() })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setJti(jti)
@@ -37,7 +38,9 @@ export async function signInviteToken(payload: Omit<InvitePayload, 'expiresAt' |
 export async function verifyInviteToken(token: string): Promise<InvitePayload | null> {
   try {
     const { payload } = await jwtVerify(token, getKey(), { algorithms: ['HS256'] })
-    return payload as unknown as InvitePayload
+    const p = payload as unknown as InvitePayload
+    if (p.typ !== 'invite') return null
+    return p
   } catch {
     return null
   }

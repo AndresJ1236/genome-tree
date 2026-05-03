@@ -79,6 +79,7 @@ export async function acceptInvite(input: {
     scope: user.scope,
     personId: user.personId ?? null,
     branchRootId: user.branchRootId ?? null,
+    sessionVersion: user.sessionVersion,
   })
 
   return { ok: true, data: undefined }
