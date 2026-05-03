@@ -516,20 +516,47 @@ export function computeTreeLayout(
       if (Math.abs(sa - sb) > 1e-9) return sa - sb
       return a.sortKey - b.sortKey
     })
-    // SIDE_GAP_PX: extra horizontal space inserted at EVERY sign transition
-    // in the sorted unit list (negative→neutral, neutral→positive, or
-    // negative→positive). Creates clear visual valleys between paternal,
-    // neutral (focus + disconnected), and maternal clusters. Propagates
-    // upward through desiredCenterForUnit which midpoints child positions.
+
+    // ── Side-bounded fallback positioning ─────────────────────────────────
+    // Group units by sign of their score and place them in distinct regions:
+    //   • Negative (paternal)  → x < 0, leftmost-first
+    //   • Zero (focus + disconnected) → centered at x = 0
+    //   • Positive (maternal)  → x > 0, leftmost-first
+    // SIDE_GAP_PX of empty space sits between the zero cluster and each side,
+    // so paternal nodes can never land on the maternal side or vice versa.
     const SIDE_GAP_PX = 500
-    let extraGap = 0
-    let prevSign: number | null = null
-    orderedByFallback.forEach((unit, index) => {
+    const negUnits: GenUnit[] = []
+    const zeroUnits: GenUnit[] = []
+    const posUnits: GenUnit[] = []
+    for (const unit of orderedByFallback) {
       const us = unitScore(unit.members)
-      const sign = us > 0.001 ? 1 : (us < -0.001 ? -1 : 0)
-      if (prevSign !== null && prevSign !== sign) extraGap += SIDE_GAP_PX
-      fallbackCenters.set(unit, index * H_GAP + extraGap)
-      prevSign = sign
+      if (us > 0.001) posUnits.push(unit)
+      else if (us < -0.001) negUnits.push(unit)
+      else zeroUnits.push(unit)
+    }
+
+    // Zero cluster centered at 0, spanning ±(zeroSpan/2)
+    const zeroSpan = Math.max(0, (zeroUnits.length - 1) * H_GAP)
+    const zeroLeftEdge = -zeroSpan / 2
+    zeroUnits.forEach((unit, i) => {
+      fallbackCenters.set(unit, zeroLeftEdge + i * H_GAP)
+    })
+
+    // Paternal cluster sits to the LEFT of (zeroLeftEdge - SIDE_GAP_PX),
+    // ordered so that the unit closest to focus (last in negUnits) is the
+    // RIGHTMOST paternal — i.e. paternal extends leftward from the boundary.
+    const negRightEdge = zeroLeftEdge - SIDE_GAP_PX
+    negUnits.forEach((unit, i) => {
+      const fromRight = negUnits.length - 1 - i  // 0 = rightmost paternal
+      fallbackCenters.set(unit, negRightEdge - fromRight * H_GAP)
+    })
+
+    // Maternal cluster sits to the RIGHT of (zeroRightEdge + SIDE_GAP_PX),
+    // ordered so the closest-to-focus unit is the LEFTMOST maternal.
+    const zeroRightEdge = zeroLeftEdge + zeroSpan
+    const posLeftEdge = zeroRightEdge + SIDE_GAP_PX
+    posUnits.forEach((unit, i) => {
+      fallbackCenters.set(unit, posLeftEdge + i * H_GAP)
     })
 
     units.sort((a, b) => {
