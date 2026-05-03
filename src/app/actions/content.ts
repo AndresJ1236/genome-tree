@@ -11,6 +11,7 @@ import {
   canViewPrivatePersonData,
   computeLockedAt,
   getContentVisibilityFilterForPerson,
+  userManagesPerson,
 } from '@/lib/permissions'
 import { assertModuleEnabled, getFamilyModules, getModuleForContentType } from '@/lib/family-config'
 import { notifyFamilyMembers } from '@/lib/notifications'
@@ -129,6 +130,12 @@ async function canManagePerson(personId: string): Promise<boolean> {
   }
 }
 
+async function canAddContentForPerson(personId: string): Promise<boolean> {
+  const session = await getSession()
+  if (!session) return false
+  return userManagesPerson(session, personId, 'content')
+}
+
 function canEditItem(
   item: { createdById: string; lockedAt: Date },
   session: NonNullable<Awaited<ReturnType<typeof getSession>>>,
@@ -172,7 +179,7 @@ export async function getPersonProfile(
   ])
   const personSelect = { id: true, firstName: true, middleName: true, lastName: true, birthDate: true, deathDate: true, coverPhoto: true, gender: true }
 
-  const [person, children, contentCounts, importantLinksCount, canManage, modules] = await Promise.all([
+  const [person, children, contentCounts, importantLinksCount, canManage, canAddContent, modules] = await Promise.all([
     prisma.person.findUnique({
       where: { id: personId },
       include: {
@@ -199,6 +206,7 @@ export async function getPersonProfile(
       where: visibilityIn.length > 0 ? { personId, visibility: { in: visibilityIn } } : { personId, id: '__none__' },
     }),
     canManagePerson(personId),
+    canAddContentForPerson(personId),
     getFamilyModules(session.familyId),
   ])
 
@@ -250,6 +258,7 @@ export async function getPersonProfile(
     coverPhoto: person.coverPhoto,
     isCore:     person.isCore,
     canManage,
+    canAddContent,
     modules,
     parents,
     spouses:       partners,

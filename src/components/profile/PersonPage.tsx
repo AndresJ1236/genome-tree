@@ -258,13 +258,13 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
       <main style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <div style={{ padding: '32px 24px', maxWidth: 800, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
           {modules.moduleMedia && resolvedActiveTab === 'fotos' && <PhotosTab media={person.allMedia} personId={person.id} onOpen={setLightbox} onCountChange={setMediaCount} />}
-          {modules.moduleStories && resolvedActiveTab === 'historias' && <StoriesTab items={person.stories} familySlug={familySlug} personId={person.id} canManage={person.canManage} />}
-          {modules.moduleRecipes && resolvedActiveTab === 'recetas' && <RecipesTab items={person.recipes} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canManage} />}
-          {modules.moduleObjects && resolvedActiveTab === 'objetos' && <ObjectsTab items={person.objects} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canManage} />}
-          {modules.moduleDiary && resolvedActiveTab === 'diario' && <DiaryTab items={person.diaryEntries} familySlug={familySlug} personId={person.id} canManage={person.canManage} />}
-          {modules.moduleDiary && resolvedActiveTab === 'entrevistas' && <InterviewsTab items={person.interviews} familySlug={familySlug} personId={person.id} canManage={person.canManage} />}
-          {modules.moduleStories && resolvedActiveTab === 'fuentes' && <SourcesTab items={person.sources} familySlug={familySlug} personId={person.id} canManage={person.canManage} />}
-          {modules.moduleLinks && resolvedActiveTab === 'relaciones' && <LinksTab items={person.importantLinks} familySlug={familySlug} personId={person.id} canManage={person.canManage} />}
+          {modules.moduleStories && resolvedActiveTab === 'historias' && <StoriesTab items={person.stories} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
+          {modules.moduleRecipes && resolvedActiveTab === 'recetas' && <RecipesTab items={person.recipes} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
+          {modules.moduleObjects && resolvedActiveTab === 'objetos' && <ObjectsTab items={person.objects} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
+          {modules.moduleDiary && resolvedActiveTab === 'diario' && <DiaryTab items={person.diaryEntries} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
+          {modules.moduleDiary && resolvedActiveTab === 'entrevistas' && <InterviewsTab items={person.interviews} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
+          {modules.moduleStories && resolvedActiveTab === 'fuentes' && <SourcesTab items={person.sources} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
+          {modules.moduleLinks && resolvedActiveTab === 'relaciones' && <LinksTab items={person.importantLinks} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
         </div>
       </main>
     </div>

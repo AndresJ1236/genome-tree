@@ -125,6 +125,7 @@ export interface PersonProfile {
   coverPhoto: string | null
   isCore: boolean
   canManage: boolean
+  canAddContent: boolean
   modules: FamilyConfigData
   parents: PersonBasic[]
   spouses: PersonBasic[]
