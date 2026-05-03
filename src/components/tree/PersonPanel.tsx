@@ -167,20 +167,12 @@ export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps)
             </Link>
 
             {visibleProfile.canManage && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <Link
-                  href={`/${familySlug}/person/${visibleProfile.id}/edit`}
-                  style={secondaryLinkStyle}
-                >
-                  Editar datos
-                </Link>
-                <Link
-                  href={`/${familySlug}/person/${visibleProfile.id}/content/new`}
-                  style={secondaryLinkStyle}
-                >
-                  + Agregar contenido
-                </Link>
-              </div>
+              <Link
+                href={`/${familySlug}/person/${visibleProfile.id}/edit`}
+                style={secondaryLinkStyle}
+              >
+                Editar datos
+              </Link>
             )}
           </div>
         )}

@@ -41,6 +41,7 @@ function serializeOption(p: {
   gender: Gender
   fatherId: string | null
   motherId: string | null
+  nodeKind: PersonKind
 }): PersonOption {
   return {
     id: p.id,
@@ -52,6 +53,7 @@ function serializeOption(p: {
     gender: p.gender,
     fatherId: p.fatherId,
     motherId: p.motherId,
+    nodeKind: p.nodeKind,
   }
 }
 
@@ -108,6 +110,7 @@ async function getVisiblePeopleForEditor(session: NonNullable<Awaited<ReturnType
       gender: true,
       fatherId: true,
       motherId: true,
+      nodeKind: true,
     },
   })
 }

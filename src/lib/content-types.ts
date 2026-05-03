@@ -36,6 +36,7 @@ export interface PersonOption {
   gender: Gender
   fatherId: string | null
   motherId: string | null
+  nodeKind: PersonKind
 }
 
 export interface MediaItem {

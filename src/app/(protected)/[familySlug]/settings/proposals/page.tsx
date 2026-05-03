@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
+import { useParams } from 'next/navigation'
+import Link from 'next/link'
 import { getOwnProposals } from '@/app/actions/proposals'
 import type { PersonProposalItem, ProposalStatus } from '@/lib/content-types'
 
@@ -17,6 +19,8 @@ const STATUS_COLOR: Record<ProposalStatus, { bg: string; color: string; border: 
 }
 
 export default function MyProposalsPage() {
+  const params = useParams<{ familySlug: string }>()
+  const familySlug = params.familySlug
   const [proposals, setProposals] = useState<PersonProposalItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -31,12 +35,40 @@ export default function MyProposalsPage() {
 
   return (
     <div style={{ maxWidth: 640, margin: '48px auto', padding: '0 24px' }}>
-      <h1 style={{ margin: '0 0 6px', fontFamily: 'Georgia, serif', fontSize: 28, color: '#2D4A3E' }}>
-        Mis propuestas
-      </h1>
-      <p style={{ margin: '0 0 32px', fontSize: 13, color: '#6B6B6B' }}>
-        Cambios que has sugerido sobre personas del árbol.
-      </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 32 }}>
+        <div>
+          <h1 style={{ margin: '0 0 6px', fontFamily: 'Georgia, serif', fontSize: 28, color: '#2D4A3E' }}>
+            Mis propuestas
+          </h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#6B6B6B' }}>
+            Cambios que has sugerido sobre personas del árbol.
+          </p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+          <Link
+            href={`/${familySlug}/person/new`}
+            style={{
+              display: 'block', textAlign: 'center', padding: '9px 16px',
+              background: '#2D4A3E', color: '#fff', borderRadius: 3,
+              fontSize: 12, fontFamily: 'Georgia, serif', textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            + Nueva persona
+          </Link>
+          <Link
+            href={`/${familySlug}/person/new?kind=PET`}
+            style={{
+              display: 'block', textAlign: 'center', padding: '9px 16px',
+              background: '#F5F0E8', color: '#2D4A3E', border: '1px solid #C5B99A',
+              borderRadius: 3, fontSize: 12, fontFamily: 'Georgia, serif',
+              textDecoration: 'none', whiteSpace: 'nowrap',
+            }}
+          >
+            + Nueva mascota
+          </Link>
+        </div>
+      </div>
 
       {isPending && (
         <div style={{ color: '#8B9E94', fontSize: 13 }}>Cargando...</div>
