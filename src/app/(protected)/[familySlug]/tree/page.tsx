@@ -146,15 +146,37 @@ export default async function TreePage({
         </div>
         <div className="flex gap-2 items-center flex-shrink-0">
           <BirthdayPanel familySlug={familySlug} />
-          <a
-            href="/api/relations/export"
+          <Link
+            href={`/${familySlug}/timeline`}
             className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0"
             style={{
               border: '1px solid #C8D4CE', color: '#2D4A3E',
               padding: '6px 8px', fontSize: 10, background: '#FFFDF9',
             }}
+            title="Línea de tiempo"
           >
-            <span className="hidden sm:inline">Exportar relaciones </span>JSON
+            🕒<span className="hidden sm:inline ml-1">Tiempo</span>
+          </Link>
+          <Link
+            href={`/${familySlug}/map`}
+            className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0"
+            style={{
+              border: '1px solid #C8D4CE', color: '#2D4A3E',
+              padding: '6px 8px', fontSize: 10, background: '#FFFDF9',
+            }}
+            title="Mapa de orígenes"
+          >
+            🗺️<span className="hidden sm:inline ml-1">Mapa</span>
+          </Link>
+          <a
+            href="/api/relations/export"
+            className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0 hidden sm:inline-block"
+            style={{
+              border: '1px solid #C8D4CE', color: '#2D4A3E',
+              padding: '6px 8px', fontSize: 10, background: '#FFFDF9',
+            }}
+          >
+            JSON
           </a>
           {session?.role === 'ADMIN' && (
             <Link
