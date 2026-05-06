@@ -104,7 +104,7 @@ export function TreeSearch({ enabled, onSelectPerson }: TreeSearchProps) {
         top: 20,
         left: 24,
         zIndex: 25,
-        width: 360,
+        width: 'min(360px, calc(100vw - 48px))',
       }}
     >
       <div

@@ -34,7 +34,16 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
   const [activeTab, setActiveTab] = useState<Tab>('fotos')
   const [lightbox, setLightbox] = useState<MediaItem | null>(null)
   const [mediaCount, setMediaCount] = useState(person.counts.media)
+  const [isMobile, setIsMobile] = useState(false)
   const modules = person.modules
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    setIsMobile(mq.matches)
+    const fn = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', fn)
+    return () => mq.removeEventListener('change', fn)
+  }, [])
 
   const birthYear = person.birthDate ? new Date(person.birthDate).getFullYear() : null
   const deathYear = person.deathDate ? new Date(person.deathDate).getFullYear() : null
@@ -109,7 +118,7 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
       )}
 
       {/* ── Back nav ─────────────────────────────────────────────────────────── */}
-      <div style={{ background: '#EBE6DB', borderBottom: '1px solid #D8D2C7', padding: '10px 24px', flexShrink: 0 }}>
+      <div style={{ background: '#EBE6DB', borderBottom: '1px solid #D8D2C7', padding: isMobile ? '8px 14px' : '10px 24px', flexShrink: 0 }}>
         <Link
           href={"/" + familySlug + "/tree"}
           style={{ fontSize: 12, color: '#2D4A3E', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6, letterSpacing: '0.04em' }}
@@ -122,10 +131,10 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
       <header style={{
         background: '#2D4A3E',
         color: '#fff',
-        padding: '28px 32px 24px',
+        padding: isMobile ? '12px 14px 10px' : '28px 32px 24px',
         display: 'flex',
-        gap: 28,
-        alignItems: 'flex-start',
+        gap: isMobile ? 12 : 28,
+        alignItems: 'center',
         flexShrink: 0,
       }}>
         {/* Avatar */}
@@ -133,45 +142,53 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
           <img
             src={person.coverPhoto}
             alt={fullName}
-            style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '3px solid rgba(255,255,255,0.25)', flexShrink: 0 }}
+            style={{
+              width: isMobile ? 52 : 100,
+              height: isMobile ? 52 : 100,
+              borderRadius: '50%', objectFit: 'cover',
+              border: isMobile ? '2px solid rgba(255,255,255,0.25)' : '3px solid rgba(255,255,255,0.25)',
+              flexShrink: 0,
+            }}
           />
         ) : (
           <div style={{
-            width: 100, height: 100, borderRadius: '50%', flexShrink: 0,
+            width: isMobile ? 52 : 100,
+            height: isMobile ? 52 : 100,
+            borderRadius: '50%', flexShrink: 0,
             background: 'rgba(255,255,255,0.12)', border: '2px solid rgba(255,255,255,0.2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <span style={{ fontSize: isPet ? 32 : 28, fontFamily: 'Georgia, serif', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
+            <span style={{ fontSize: isMobile ? (isPet ? 18 : 16) : (isPet ? 32 : 28), fontFamily: 'Georgia, serif', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
               {isPet ? '◉' : initials}
             </span>
           </div>
         )}
 
         {/* Info */}
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 26, fontWeight: 600, margin: '0 0 6px', lineHeight: 1.2 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: isMobile ? 17 : 26, fontWeight: 600, margin: isMobile ? '0 0 2px' : '0 0 6px', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>
             {fullName}
           </h1>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 10px' }}>
+          <p style={{ fontSize: isMobile ? 11 : 13, color: 'rgba(255,255,255,0.65)', margin: isMobile ? 0 : '0 0 10px' }}>
             {birthYear && (
               <span>{birthYear}{deathYear ? ' – ' + deathYear : ' –'}&nbsp;</span>
             )}
-            {person.birthPlace && <span style={{ marginLeft: 4 }}>{person.birthPlace}</span>}
+            {!isMobile && person.birthPlace && <span style={{ marginLeft: 4 }}>{person.birthPlace}</span>}
           </p>
-          {person.bio && (
+          {!isMobile && person.bio && (
             <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)', margin: 0, lineHeight: 1.6, maxWidth: 560 }}>
               {person.bio}
             </p>
           )}
           {person.canManage && (
-            <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <HeaderActionLink href={`/${familySlug}/person/${person.id}/edit`} label="Editar" />
-              <HeaderActionLink href={`/${familySlug}/person/new`} label="Nuevo" />
+            <div style={{ marginTop: isMobile ? 6 : 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <HeaderActionLink href={`/${familySlug}/person/${person.id}/edit`} label="Editar" compact={isMobile} />
+              <HeaderActionLink href={`/${familySlug}/person/new`} label="Nuevo" compact={isMobile} />
             </div>
           )}
 
-          {/* Familia directa */}
-          {(person.parents.length > 0 || person.spouses.length > 0 || person.children.length > 0) && (
+          {/* Familia directa — desktop only */}
+          {!isMobile && (person.parents.length > 0 || person.spouses.length > 0 || person.children.length > 0) && (
             <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {!isPet && person.spouses.map(p => (
                 <FamilyBadge key={p.id} person={p} label="Pareja" familySlug={familySlug} />
@@ -185,8 +202,8 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
             </div>
           )}
 
-          {/* Afiliación a unidad */}
-          {!isPet && (person.unitAffiliationLabel || person.claimedRelation) && (
+          {/* Afiliación a unidad — desktop only */}
+          {!isMobile && !isPet && (person.unitAffiliationLabel || person.claimedRelation) && (
             <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {person.unitAffiliationLabel && (
                 <span style={{
@@ -214,13 +231,33 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
         </div>
       </header>
 
+      {/* ── Familia directa (mobile strip) ───────────────────────────────────── */}
+      {isMobile && (person.parents.length > 0 || person.spouses.length > 0 || person.children.length > 0) && (
+        <div style={{
+          background: '#253d33',
+          padding: '6px 14px 8px',
+          display: 'flex', flexWrap: 'nowrap', gap: 6,
+          overflowX: 'auto', flexShrink: 0,
+        }}>
+          {!isPet && person.spouses.map(p => (
+            <FamilyBadge key={p.id} person={p} label="Pareja" familySlug={familySlug} />
+          ))}
+          {person.parents.map(p => (
+            <FamilyBadge key={p.id} person={p} label={isPet ? 'Dueño/a' : 'P/M'} familySlug={familySlug} />
+          ))}
+          {!isPet && person.children.map(p => (
+            <FamilyBadge key={p.id} person={p} label="Hijo/a" familySlug={familySlug} />
+          ))}
+        </div>
+      )}
+
       {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
       <div style={{
         background: '#EBE6DB',
         borderBottom: '1px solid #D0C9BC',
         display: 'flex',
         overflowX: 'auto',
-        padding: '0 16px',
+        padding: isMobile ? '0 8px' : '0 16px',
         flexShrink: 0,
       }}>
         {tabs.map(tab => (
@@ -228,7 +265,7 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             style={{
-              padding: '13px 16px 12px',
+              padding: isMobile ? '9px 10px 8px' : '13px 16px 12px',
               background: 'transparent',
               border: 'none',
               borderBottom: resolvedActiveTab === tab.id ? '2.5px solid #2D4A3E' : '2.5px solid transparent',
@@ -259,7 +296,7 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
 
       {/* ── Contenido de la tab activa ───────────────────────────────────────── */}
       <main style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        <div style={{ padding: '32px 24px', maxWidth: 800, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        <div style={{ padding: isMobile ? '16px 14px' : '32px 24px', maxWidth: 800, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
           {modules.moduleMedia && resolvedActiveTab === 'fotos' && <PhotosTab media={person.allMedia} personId={person.id} onOpen={setLightbox} onCountChange={setMediaCount} />}
           {modules.moduleStories && resolvedActiveTab === 'historias' && <StoriesTab items={person.stories} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
           {modules.moduleRecipes && resolvedActiveTab === 'recetas' && <RecipesTab items={person.recipes} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
@@ -296,7 +333,7 @@ function FamilyBadge({ person, label, familySlug }: { person: { id: string; firs
   )
 }
 
-function HeaderActionLink({ href, label }: { href: string; label: string }) {
+function HeaderActionLink({ href, label, compact }: { href: string; label: string; compact?: boolean }) {
   return (
     <Link
       href={href}
@@ -309,8 +346,8 @@ function HeaderActionLink({ href, label }: { href: string; label: string }) {
         background: 'rgba(255,255,255,0.08)',
         textDecoration: 'none',
         borderRadius: 2,
-        padding: '8px 10px',
-        fontSize: 11,
+        padding: compact ? '5px 8px' : '8px 10px',
+        fontSize: 10,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
       }}

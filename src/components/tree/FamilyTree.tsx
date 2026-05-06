@@ -57,6 +57,7 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
   }, [transform])
 
   const dragRef = useRef({ active: false, lastX: 0, lastY: 0 })
+  const isPinchingRef = useRef(false)
   const [centering, setCentering] = useState(false)
 
   useEffect(() => {
@@ -125,7 +126,8 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
     if (!el || nodes.length === 0) return
     const vw = el.clientWidth
     const vh = el.clientHeight
-    const s = Math.min(1, Math.min((vw * 0.9) / canvasW, (vh * 0.9) / canvasH))
+    const fitScale = Math.min(1, (vw * 0.9) / canvasW, (vh * 0.9) / canvasH)
+    const s = vw <= 640 ? Math.max(0.65, fitScale) : fitScale
 
     let init: { x: number; y: number; scale: number }
     if (focusNode) {
@@ -160,8 +162,65 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+
+    let lastPinchDist = 0
+
+    function pinchDist(e: TouchEvent) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    function onTouchStart(e: TouchEvent) {
+      if (e.touches.length === 2) {
+        isPinchingRef.current = true
+        dragRef.current.active = false
+        e.preventDefault()
+        lastPinchDist = pinchDist(e)
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      e.preventDefault()
+      const d = pinchDist(e)
+      if (lastPinchDist === 0) { lastPinchDist = d; return }
+      const factor = d / lastPinchDist
+      lastPinchDist = d
+      const rect = el.getBoundingClientRect()
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
+      const { x, y, scale } = transformRef.current
+      const newScale = Math.max(0.2, Math.min(3, scale * factor))
+      const ratio = newScale / scale
+      const newT = { x: mx - (mx - x) * ratio, y: my - (my - y) * ratio, scale: newScale }
+      setTransform(newT)
+      transformRef.current = newT
+    }
+
+    function onTouchEnd(e: TouchEvent) {
+      if (e.touches.length < 2) {
+        isPinchingRef.current = false
+        lastPinchDist = 0
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd)
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [])
+
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('.person-node')) return
+    if (isPinchingRef.current) return
     dragRef.current = { active: true, lastX: e.clientX, lastY: e.clientY }
     e.currentTarget.setPointerCapture(e.pointerId)
   }, [])
@@ -231,7 +290,10 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
 
       {/* Controles esquina inferior derecha */}
       <div style={{
-        position: 'absolute', bottom: 16, right: 16, zIndex: 20,
+        position: 'absolute',
+        bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+        right:  'calc(16px + env(safe-area-inset-right, 0px))',
+        zIndex: 20,
         display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
       }}>
         {focusPersonId && (
@@ -347,7 +409,10 @@ function TreeLegend() {
   return (
     <div
       style={{
-        position: 'absolute', bottom: 16, left: 16, zIndex: 20,
+        position: 'absolute',
+        bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+        left:   'calc(16px + env(safe-area-inset-left, 0px))',
+        zIndex: 20,
         display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6,
       }}
     >

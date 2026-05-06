@@ -1,8 +1,6 @@
 ﻿import { getSession } from '@/lib/session'
-import { logout } from '@/app/actions/auth'
 import { getUnreadCount } from '@/lib/notifications'
-import { NotificationBell } from '@/components/notifications/NotificationBell'
-import { HelpPanel } from '@/components/ui/HelpPanel'
+import { AppHeader } from '@/components/ui/AppHeader'
 import { redirect } from 'next/navigation'
 
 export default async function ProtectedLayout({
@@ -16,81 +14,12 @@ export default async function ProtectedLayout({
   const unreadCount = await getUnreadCount(session.userId)
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      <header
-        className="flex items-center justify-between px-6 py-4 border-b"
-        style={{
-          background: '#FDFAF5',
-          borderColor: '#D8D3CA',
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <span
-            className="text-lg tracking-widest uppercase"
-            style={{ fontFamily: 'Georgia, Cambria, serif', color: '#2D4A3E' }}
-          >
-            Genome Tree
-          </span>
-          <span style={{ color: '#D8D3CA' }}>|</span>
-          <nav className="flex gap-4">
-            <a
-              href={`/${session.familySlug}/tree`}
-              className="text-sm tracking-wide uppercase transition-colors"
-              style={{ color: '#6B6B6B' }}
-            >
-              Árbol
-            </a>
-            {session.role === 'ADMIN' && (
-              <a
-                href={`/${session.familySlug}/admin`}
-                className="text-sm tracking-wide uppercase transition-colors"
-                style={{ color: '#6B6B6B' }}
-              >
-                Administración
-              </a>
-            )}
-            {session.role !== 'ADMIN' && (
-              <a
-                href={`/${session.familySlug}/settings/proposals`}
-                className="text-sm tracking-wide uppercase transition-colors"
-                style={{ color: '#6B6B6B' }}
-              >
-                Mis cambios
-              </a>
-            )}
-          </nav>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {session.role === 'ADMIN' && (
-            <span
-              className="px-1.5 py-0.5 text-xs rounded-sm"
-              style={{ background: '#EAF0ED', color: '#2D4A3E' }}
-            >
-              Admin
-            </span>
-          )}
-          <NotificationBell initialUnreadCount={unreadCount} />
-          <HelpPanel />
-          <a
-            href={`/${session.familySlug}/settings`}
-            className="text-sm tracking-wide uppercase transition-colors"
-            style={{ color: '#6B6B6B' }}
-          >
-            Ajustes
-          </a>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="text-sm tracking-wide uppercase transition-colors"
-              style={{ color: '#6B6B6B' }}
-            >
-              Salir
-            </button>
-          </form>
-        </div>
-      </header>
-
+    <div className="h-dvh flex flex-col overflow-hidden">
+      <AppHeader
+        familySlug={session.familySlug}
+        role={session.role}
+        unreadCount={unreadCount}
+      />
       <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
     </div>
   )

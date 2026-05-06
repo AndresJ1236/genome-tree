@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    ignore:
+      # Next.js major upgrades require manual review
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
