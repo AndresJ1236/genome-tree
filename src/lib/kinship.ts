@@ -1,4 +1,7 @@
-import 'server-only'
+// NOTA: este módulo es pura lógica (sin acceso a DB), por eso NO usa
+// 'server-only'. Eso permite testearlo con Vitest en Node sin montar
+// todo el stack de Next.js. La carga de datos sí ocurre en el server
+// action getKinship — que es la frontera con el cliente.
 
 /**
  * Calculadora de parentesco — dado dos personas A y B (con sus IDs y un mapa
