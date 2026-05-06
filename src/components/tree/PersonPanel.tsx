@@ -6,6 +6,7 @@ import { getPersonProfile } from '@/app/actions/content'
 import type { PersonProfile, PersonBasic } from '@/lib/content-types'
 import { pickMediaUrl } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
+import { KinshipBadge } from '@/components/ui/KinshipBadge'
 
 const PANEL_W = 380
 const MOBILE_BREAKPOINT = 640
@@ -292,6 +293,10 @@ function PanelContent({ profile, familySlug, bioExpanded, onToggleBio }: {
             {profile.birthPlace && <span>{profile.birthPlace}</span>}
           </p>
         )}
+
+        <div style={{ marginTop: 8 }}>
+          <KinshipBadge personId={profile.id} />
+        </div>
       </div>
 
       {/* ── Familia directa ──────────────────────────────────────────────── */}
