@@ -166,14 +166,26 @@ export interface PersonProfile {
     sources: number
     importantLinks: number
     media: number
+    audioVideo: number
   }
   claimedRelation: ClaimedRelation | null
   claimedRelationOf: PersonBasic | null
   unitAffiliationLabel: string | null
 }
 
+export interface AudioVideoItem {
+  id:          string
+  url:         string
+  mimeType:    string
+  kind:        'AUDIO' | 'VIDEO'
+  caption:     string | null
+  durationSec: number | null
+  createdAt:   string
+}
+
 export interface PersonFull extends PersonProfile {
   allMedia: MediaItem[]
+  audioVideo: AudioVideoItem[]
   stories: StoryItem[]
   recipes: RecipeItem[]
   diaryEntries: DiaryItem[]

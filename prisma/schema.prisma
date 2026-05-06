@@ -339,7 +339,7 @@ model FamilyConfig {
   moduleMedia        Boolean @default(true)
   moduleObjects      Boolean @default(true)
   moduleLinks        Boolean @default(true)
-  moduleAudioVideo   Boolean @default(false)
+  moduleAudioVideo   Boolean @default(true)
   moduleExportImport Boolean @default(false)
   moduleSearch       Boolean @default(true)
 

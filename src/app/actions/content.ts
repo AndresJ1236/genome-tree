@@ -173,7 +173,7 @@ export async function getPersonProfile(
         mother:           { select: personSelect },
         unitAffiliation:  { select: { label: true } },
         claimedRelationOf: { select: personSelect },
-        media:  { where: { featured: true }, orderBy: { order: 'asc' }, take: LIMITS.FEATURED_MAX },
+        media:  { where: { featured: true, kind: { not: { in: ['AUDIO', 'VIDEO'] } } }, orderBy: { order: 'asc' }, take: LIMITS.FEATURED_MAX },
         _count: { select: { media: true } },
       },
     }),
@@ -228,6 +228,15 @@ export async function getPersonProfile(
     contentCounts.map(c => [c.type, c._count.id])
   )
 
+  // Counts por tipo de media — IMAGE vs AUDIO+VIDEO. Solo si el viewer
+  // tiene permiso de ver media; si no, ambos quedan en 0.
+  const [mediaImageCount, mediaAudioVideoCount] = canViewMedia
+    ? await Promise.all([
+        prisma.media.count({ where: { personId, kind: { not: { in: ['AUDIO', 'VIDEO'] } } } }),
+        prisma.media.count({ where: { personId, kind: { in: ['AUDIO', 'VIDEO'] } } }),
+      ])
+    : [0, 0]
+
   const parents: PersonBasic[] = [
     person.father ? toPersonBasic(person.father) : null,
     person.mother ? toPersonBasic(person.mother) : null,
@@ -263,7 +272,9 @@ export async function getPersonProfile(
       objects:        countMap['OBJECT']    ?? 0,
       sources:        countMap['SOURCE']    ?? 0,
       importantLinks: visibilityIn.length > 0 ? importantLinksCount : 0,
-      media:          canViewMedia ? person._count.media : 0,
+      // canViewMedia gating + fallback a 0 si no hay permiso
+      media:          canViewMedia ? mediaImageCount : 0,
+      audioVideo:     canViewMedia ? mediaAudioVideoCount : 0,
     },
   }
 
@@ -320,11 +331,19 @@ export async function getPersonFull(
 
     canViewMedia
       ? prisma.media.findMany({
-          where:   { personId },
+          where:   { personId, kind: { not: { in: ['AUDIO', 'VIDEO'] } } },   // solo fotos en este array
           orderBy: [{ featured: 'desc' }, { order: 'asc' }],
         })
       : Promise.resolve([]),
   ])
+
+  // Audio + video — query separada (mismas reglas de visibilidad que media)
+  const audioVideoMedia = canViewMedia
+    ? await prisma.media.findMany({
+        where:   { personId, kind: { in: ['AUDIO', 'VIDEO'] } },
+        orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
+      })
+    : []
 
   if (!profileResult.ok) return profileResult
   const canManageTargetPerson = profileResult.data.canManage
@@ -456,6 +475,15 @@ export async function getPersonFull(
   const full: PersonFull = {
     ...profileResult.data,
     allMedia:       allMedia.map(toMediaItem),
+    audioVideo:     audioVideoMedia.map(m => ({
+      id:          m.id,
+      url:         m.url,
+      mimeType:    m.mimeType,
+      kind:        m.kind === 'AUDIO' ? 'AUDIO' as const : 'VIDEO' as const,
+      caption:     m.caption,
+      durationSec: m.durationSec,
+      createdAt:   m.createdAt.toISOString(),
+    })),
     stories,
     recipes,
     diaryEntries,
