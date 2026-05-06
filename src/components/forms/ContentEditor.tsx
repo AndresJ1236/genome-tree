@@ -18,6 +18,7 @@ import {
 } from '@/app/actions/content'
 import { deleteMedia, uploadContentMedia } from '@/app/actions/media'
 import type { ContentEditorData, ContentVisibility, MediaItem, PersonOption } from '@/lib/content-types'
+import { pickMediaUrl } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { ConfirmButton } from '@/components/ui/ConfirmButton'
 
@@ -247,15 +248,22 @@ export function ContentEditor({
         setMedia(prev => [
           ...prev,
           {
-            id: result.data.id,
-            url: result.data.url,
-            alt: null,
-            caption: null,
-            featured: false,
-            order: prev.length,
-            mimeType: file.type,
+            id:        result.data.id,
+            url:       result.data.url,
+            thumbUrl:  null,
+            mediumUrl: null,
+            largeUrl:  null,
+            alt:       null,
+            caption:   null,
+            featured:  false,
+            order:     prev.length,
+            mimeType:  file.type,
+            width:     null,
+            height:    null,
           },
         ])
+        // Optimistic insert sin variantes; router.refresh() abajo trae los URLs reales
+        // (incluidas thumbUrl/mediumUrl/largeUrl) cuando se vuelve a renderizar.
       }
 
       router.refresh()
@@ -312,7 +320,7 @@ export function ContentEditor({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 14 }}>
                 {media.map(item => (
                   <div key={item.id} style={{ border: '1px solid #E0DAD0', borderRadius: 3, overflow: 'hidden', background: '#FFFCF8' }}>
-                    <img src={item.url} alt={item.alt ?? ''} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
+                    <img src={pickMediaUrl(item, 'medium')} alt={item.alt ?? ''} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
                     <div style={{ padding: 10 }}>
                       <ConfirmButton
                         label="Eliminar imagen"

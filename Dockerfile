@@ -41,6 +41,11 @@ COPY --from=builder /app/node_modules/postgres-array ./node_modules/postgres-arr
 COPY --from=builder /app/node_modules/pgpass         ./node_modules/pgpass
 COPY --from=builder /app/node_modules/pg-cloudflare  ./node_modules/pg-cloudflare
 
+# sharp + libvips bindings — binarios nativos que Next standalone tracing pierde.
+# Sin esto, el upload de fotos rompe en producción con MODULE_NOT_FOUND.
+COPY --from=builder /app/node_modules/sharp          ./node_modules/sharp
+COPY --from=builder /app/node_modules/@img           ./node_modules/@img
+
 # Startup script
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r//' /entrypoint.sh && chmod 755 /entrypoint.sh

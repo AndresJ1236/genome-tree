@@ -9,7 +9,7 @@ import type {
   InterviewItem, ObjectItem, SourceItem, ImportantLinkItem,
   MediaItem, ConfidenceLevel,
 } from '@/lib/content-types'
-import { CLAIMED_RELATION_LABELS, CONFIDENCE_LABELS } from '@/lib/content-types'
+import { CLAIMED_RELATION_LABELS, CONFIDENCE_LABELS, pickMediaUrl } from '@/lib/content-types'
 import { uploadMedia, deleteMedia, toggleFeaturedMedia } from '@/app/actions/media'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { CommentsThread } from '@/components/ui/CommentsThread'
@@ -82,7 +82,7 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
           }}
         >
           <img
-            src={lightbox.url}
+            src={pickMediaUrl(lightbox, 'large')}
             alt={lightbox.alt ?? ''}
             style={{ maxWidth: '92vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 3 }}
             onClick={e => e.stopPropagation()}
@@ -485,7 +485,9 @@ function PhotosTab({
       }
       const newItem: MediaItem = {
         id: res.data.id, url: res.data.url,
+        thumbUrl: null, mediumUrl: null, largeUrl: null,
         alt: null, caption: null, featured: false, order: 0, mimeType: file.type,
+        width: null, height: null,
       }
       setMedia(prev => [...prev, newItem])
     }
@@ -594,7 +596,7 @@ function PhotoCard({
       style={{ position: 'relative', borderRadius: 4, overflow: 'hidden', aspectRatio: '1', background: '#E4E0D8', cursor: 'pointer' }}
     >
       <img
-        src={item.url}
+        src={pickMediaUrl(item, 'medium')}
         alt={item.alt ?? ''}
         onClick={() => onOpen(item)}
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'opacity 0.2s', opacity: hover ? 0.85 : 1 }}
@@ -751,7 +753,7 @@ function RecipesTab({
               {r.media.map(m => (
                 <img
                   key={m.id}
-                  src={m.url}
+                  src={pickMediaUrl(m, 'medium')}
                   alt={m.alt ?? ''}
                   onClick={() => onOpen(m)}
                   style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 3, cursor: 'pointer', border: '1px solid #E0DAD0' }}
@@ -832,7 +834,7 @@ function ObjectsTab({
           <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
             {obj.media.length > 0 && (
               <img
-                src={obj.media[0].url}
+                src={pickMediaUrl(obj.media[0], 'medium')}
                 alt={obj.media[0].alt ?? ''}
                 onClick={() => onOpen(obj.media[0])}
                 style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 3, cursor: 'pointer', flexShrink: 0, border: '1px solid #E0DAD0' }}

@@ -2,7 +2,12 @@
 
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
-import { uploadFile, deleteFile, generateKey } from '@/lib/storage'
+import {
+  generateKey,
+  processImage,
+  uploadProcessedImage,
+  deleteFileWithVariants,
+} from '@/lib/storage'
 import { assertCanManagePerson } from '@/lib/permissions'
 import { assertModuleEnabled, getModuleForContentType } from '@/lib/family-config'
 import type { ActionResult } from '@/lib/content-types'
@@ -125,17 +130,18 @@ export async function uploadMedia(
   })
   if (!family) return { ok: false, error: 'Familia no encontrada.' }
 
-  // Subir archivo — usa el MIME canónico (no file.type que puede venir vacío)
+  // Procesar imagen: capeada a 4K + 3 variantes WebP (thumb/medium/large).
+  // Sube las 4 versiones a MinIO en paralelo.
   const buffer = Buffer.from(await file.arrayBuffer())
-  const key    = generateKey(family.slug, personId, mimeType)
+  const baseKey = generateKey(family.slug, personId, mimeType)
 
-  let url: string
+  let uploaded
   try {
-    const result = await uploadFile(key, buffer, mimeType)
-    url = result.url
+    const processed = await processImage(buffer, mimeType)
+    uploaded = await uploadProcessedImage(baseKey, processed)
   } catch (e: unknown) {
-    console.error('[uploadMedia] Error subiendo archivo:', e)
-    return { ok: false, error: 'Error al subir la imagen. Intenta de nuevo.' }
+    console.error('[uploadMedia] Error procesando o subiendo:', e)
+    return { ok: false, error: 'Error al procesar la imagen. Intenta de nuevo.' }
   }
 
   // Calcular order: último + 1
@@ -146,14 +152,19 @@ export async function uploadMedia(
   })
   const order = (lastMedia?.order ?? -1) + 1
 
-  // Registrar en DB
+  // Registrar en DB con todas las variantes
   const media = await prisma.media.create({
     data: {
       personId,
       familyId:     session.familyId,
-      url,
-      key,
-      mimeType,
+      url:          uploaded.url,
+      key:          uploaded.key,
+      mimeType:     uploaded.mimeType,
+      thumbUrl:     uploaded.thumbUrl,
+      mediumUrl:    uploaded.mediumUrl,
+      largeUrl:     uploaded.largeUrl,
+      width:        uploaded.width,
+      height:       uploaded.height,
       featured,
       order,
       uploadedById: session.userId,
@@ -230,15 +241,15 @@ export async function uploadContentMedia(
   if (!family) return { ok: false, error: 'Familia no encontrada.' }
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const key    = generateKey(family.slug, personId, mimeType)
+  const baseKey = generateKey(family.slug, personId, mimeType)
 
-  let url: string
+  let uploaded
   try {
-    const result = await uploadFile(key, buffer, mimeType)
-    url = result.url
+    const processed = await processImage(buffer, mimeType)
+    uploaded = await uploadProcessedImage(baseKey, processed)
   } catch (e: unknown) {
-    console.error('[uploadContentMedia] Error subiendo archivo:', e)
-    return { ok: false, error: 'Error al subir la imagen. Intenta de nuevo.' }
+    console.error('[uploadContentMedia] Error procesando o subiendo:', e)
+    return { ok: false, error: 'Error al procesar la imagen. Intenta de nuevo.' }
   }
 
   // Registrar Media y vincularlo al Content en una transacción
@@ -249,9 +260,14 @@ export async function uploadContentMedia(
       data: {
         personId,
         familyId:     session.familyId,
-        url,
-        key,
-        mimeType,
+        url:          uploaded.url,
+        key:          uploaded.key,
+        mimeType:     uploaded.mimeType,
+        thumbUrl:     uploaded.thumbUrl,
+        mediumUrl:    uploaded.mediumUrl,
+        largeUrl:     uploaded.largeUrl,
+        width:        uploaded.width,
+        height:       uploaded.height,
         featured:     false,
         order,
         uploadedById: session.userId,
@@ -300,9 +316,9 @@ export async function deleteMedia(
     prisma.media.delete({ where: { id: mediaId } }),
   ])
 
-  // Eliminar archivo del storage (no bloquea si falla)
-  deleteFile(media.key).catch(err =>
-    console.error('[deleteMedia] Error eliminando archivo:', err)
+  // Eliminar original + 3 variantes WebP del storage (no bloquea si falla)
+  deleteFileWithVariants(media.key).catch(err =>
+    console.error('[deleteMedia] Error eliminando archivos:', err)
   )
 
   return { ok: true, data: undefined }
