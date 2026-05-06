@@ -181,12 +181,17 @@ Client refreshes affected routes via Next.js Server Actions response
 ## Auth flow
 
 1. User submits login form → POST `/auth/login`
-2. `auth/login/route.ts` verifies credentials with `bcryptjs.compare()`
-3. On success, issues a JWT via `jose` containing `{ userId, familyId, role, scope, personId, branchRootId }`
-4. Sets HTTP-only cookie `session=<jwt>` with 30-day expiry
-5. Redirects to `/[familySlug]/tree`
-6. Subsequent requests: `proxy.ts` middleware reads cookie, decodes JWT, attaches session to request
-7. Server actions/pages call `getSession()` to access the decoded payload
+2. `auth/login/route.ts` checks IP and per-username rate limits (in-memory, `src/lib/rate-limit.ts`)
+3. Runs `bcryptjs.compare()` against the stored hash — always runs even if user not found (timing-attack normalization via dummy hash)
+4. On failure: records failure for both IP and username; if username just hit the threshold, fires `notifyLoginBlock()` to family admins
+5. On success: issues a JWT via `jose` containing `{ typ: 'session', userId, familyId, familySlug, role, scope, personId, branchRootId, sessionVersion }`
+6. Sets HTTP-only `session` cookie with 7-day expiry (secure except on localhost)
+7. Redirects to `?from=` path (if present and safe) or `/${familySlug}/tree`
+8. Subsequent requests: `proxy.ts` verifies JWT, checks `typ === 'session'`, compares `sessionVersion` against DB, redirects to login if invalid
+9. Rolling renewal: if < 3 days remain on the token, `proxy.ts` issues a fresh 7-day token automatically
+10. Server actions/pages call `getSession()` to access the decoded payload
+
+For full security details see [11-SECURITY.md](./11-SECURITY.md).
 
 ## Permissions model
 

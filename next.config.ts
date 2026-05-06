@@ -18,10 +18,27 @@ if (process.env.APP_HOSTNAME) {
   })
 }
 
+// CSP is set per-request in proxy.ts (with per-request nonces).
+// These static headers cover everything else.
+const securityHeaders = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+]
+
 const nextConfig: NextConfig = {
   output: process.env.BUILD_STANDALONE === '1' ? 'standalone' : undefined,
   allowedDevOrigins: ['127.0.0.1'],
   images: { remotePatterns },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: securityHeaders,
+      },
+    ]
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '15mb',

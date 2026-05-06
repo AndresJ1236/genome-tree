@@ -214,3 +214,38 @@ If the schema was changed and the rollback also requires schema changes:
 
 1. Edit the schema to remove the new addition
 2. `prisma db push` again — for additive changes, removal is also non-destructive UNLESS rows reference the removed value/column
+
+---
+
+## Rotate SESSION_SECRET
+
+**When to rotate:** if the secret is leaked, appears in logs, or was committed to git.
+
+**Effect:** all active sessions are immediately invalidated — every user must log in again. Reset and invite tokens also stop working (their keys are derived from SESSION_SECRET). Warn users before rotating if possible.
+
+### Steps
+
+1. **Generate a new secret** (run locally):
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+   ```
+
+2. **Update `.env.production`** on the server:
+   ```bash
+   ssh -i USER_HOME/.ssh/SSH_KEY root@NAS_HOST
+   nano "NAS_DEPLOY_PATH/.env.production"
+   # Change SESSION_SECRET="..." to the new value
+   ```
+
+3. **Restart the app container** (no rebuild needed):
+   ```bash
+   cd "NAS_DEPLOY_PATH"
+   docker compose up -d --force-recreate app
+   ```
+
+4. **Verify** the app starts cleanly:
+   ```bash
+   docker logs genome-app-1 --tail 10
+   ```
+
+> **Note:** the old secret is used for three separate keys internally: raw (session tokens), `+'-reset'` (reset tokens), `+'-invite'` (invite tokens). All three are invalidated when the secret changes.

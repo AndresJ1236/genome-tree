@@ -1,15 +1,31 @@
 interface LoginPageProps {
   searchParams?: Promise<{
     error?: string
+    retry?: string
+    from?: string
   }>
 }
 
-function getErrorMessage(error?: string) {
+function isSafeRedirect(url: string | undefined): string | null {
+  if (!url) return null
+  // Solo rutas relativas internas: empieza con / pero NO con //
+  return url.startsWith('/') && !url.startsWith('//') ? url : null
+}
+
+function getErrorMessage(error?: string, retry?: string): { message: string; isBlock: boolean } | null {
   switch (error) {
     case 'missing':
-      return 'Completa todos los campos'
+      return { message: 'Completa todos los campos', isBlock: false }
     case 'invalid':
-      return 'Usuario o contrasena incorrectos'
+      return { message: 'Usuario o contrasena incorrectos', isBlock: false }
+    case 'blocked': {
+      const seconds = parseInt(retry ?? '0', 10)
+      const minutes = Math.ceil(seconds / 60)
+      return {
+        message: `Demasiados intentos fallidos. Intenta de nuevo en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`,
+        isBlock: true,
+      }
+    }
     default:
       return null
   }
@@ -17,7 +33,8 @@ function getErrorMessage(error?: string) {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = searchParams ? await searchParams : undefined
-  const errorMessage = getErrorMessage(params?.error)
+  const errorInfo = getErrorMessage(params?.error, params?.retry)
+  const safeFrom = isSafeRedirect(params?.from)
 
   return (
     <div className="min-h-full flex items-center justify-center px-4">
@@ -46,12 +63,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           }}
         >
           <form action="/auth/login" method="post" className="flex flex-col gap-6">
-            {errorMessage && (
+            {safeFrom && <input type="hidden" name="from" value={safeFrom} />}
+            {errorInfo && (
               <p
                 className="text-sm text-center py-2 px-3 rounded-sm"
                 style={{ background: '#FBF0EE', color: '#8B3A2F', border: '1px solid #E8C8C0' }}
               >
-                {errorMessage}
+                {errorInfo.message}
               </p>
             )}
 
@@ -101,7 +119,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
             <button
               type="submit"
-              className="w-full py-3 text-xs tracking-widest uppercase transition-colors mt-2"
+              disabled={errorInfo?.isBlock}
+              className="w-full py-3 text-xs tracking-widest uppercase transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: '#2D4A3E',
                 color: '#F5F0E8',

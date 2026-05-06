@@ -8,6 +8,7 @@ import { pickMediaUrl } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
 
 const PANEL_W = 380
+const MOBILE_BREAKPOINT = 640
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -28,6 +29,15 @@ export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps)
   const [error, setError]       = useState<string | null>(null)
   const [bioExpanded, setBioExpanded] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+    setIsMobile(mq.matches)
+    const fn = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', fn)
+    return () => mq.removeEventListener('change', fn)
+  }, [])
 
   useEffect(() => {
     if (!personId) {
@@ -56,76 +66,97 @@ export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps)
 
   return (
     <>
-      {/* Backdrop semitransparente — cierra el panel al hacer clic */}
+      {/* Backdrop */}
       <div
         onClick={onClose}
         style={{
           position:      'fixed',
           inset:         0,
           zIndex:        40,
-          background:    'transparent',
+          background:    isMobile ? 'rgba(0,0,0,0.45)' : 'transparent',
           opacity:       isOpen ? 1 : 0,
           pointerEvents: isOpen ? 'auto' : 'none',
-          transition:    'opacity 0.2s ease',
+          transition:    'opacity 0.25s ease',
         }}
       />
 
-      {/* Panel lateral */}
+      {/* Panel — bottom sheet en mobile, lateral en desktop */}
       <aside
         aria-label="Perfil de persona"
-        style={{
-          position:   'fixed',
-          top:        0,
-          right:      0,
-          height:     '100dvh',
-          width:      PANEL_W,
-          background: '#FAFAF7',
-          borderLeft: '1px solid #DDE4DF',
-          boxShadow:  '-6px 0 32px rgba(0,0,0,0.10)',
-          zIndex:     50,
-          transform:  isOpen ? 'translateX(0)' : `translateX(${PANEL_W}px)`,
-          transition: 'transform 0.30s cubic-bezier(0.4,0,0.2,1)',
-          display:    'flex',
+        style={isMobile ? {
+          position:      'fixed',
+          bottom:        0,
+          left:          0,
+          right:         0,
+          height:        '78dvh',
+          background:    '#FAFAF7',
+          borderRadius:  '12px 12px 0 0',
+          boxShadow:     '0 -8px 40px rgba(0,0,0,0.18)',
+          zIndex:        50,
+          transform:     isOpen ? 'translateY(0)' : 'translateY(100%)',
+          transition:    'transform 0.32s cubic-bezier(0.4,0,0.2,1)',
+          display:       'flex',
           flexDirection: 'column',
-          overflow:   'hidden',
+          overflow:      'hidden',
+        } : {
+          position:      'fixed',
+          top:           0,
+          right:         0,
+          height:        '100dvh',
+          width:         PANEL_W,
+          background:    '#FAFAF7',
+          borderLeft:    '1px solid #DDE4DF',
+          boxShadow:     '-6px 0 32px rgba(0,0,0,0.10)',
+          zIndex:        50,
+          transform:     isOpen ? 'translateX(0)' : `translateX(${PANEL_W}px)`,
+          transition:    'transform 0.30s cubic-bezier(0.4,0,0.2,1)',
+          display:       'flex',
+          flexDirection: 'column',
+          overflow:      'hidden',
         }}
       >
-        {/* Botón cerrar */}
-        <button
-          onClick={onClose}
-          aria-label="Cerrar panel"
-          style={{
-            position:       'absolute',
-            top:            14,
-            right:          14,
-            width:          28,
-            height:         28,
-            borderRadius:   '50%',
-            border:         '1.5px solid #C8D0CA',
-            background:     'transparent',
-            cursor:         'pointer',
-            display:        'flex',
-            alignItems:     'center',
-            justifyContent: 'center',
-            color:          '#6B7B70',
-            fontSize:       13,
-            zIndex:         1,
-            transition:     'border-color 0.2s, color 0.2s',
-          }}
-          onMouseEnter={e => {
-            ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#2D4A3E'
-            ;(e.currentTarget as HTMLButtonElement).style.color = '#2D4A3E'
-          }}
-          onMouseLeave={e => {
-            ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#C8D0CA'
-            ;(e.currentTarget as HTMLButtonElement).style.color = '#6B7B70'
-          }}
-        >
-          ✕
-        </button>
+        {/* Drag handle (mobile) / botón cerrar (desktop) */}
+        {isMobile ? (
+          <div style={{ padding: '10px 0 4px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#C8D0CA' }} />
+          </div>
+        ) : (
+          <button
+            onClick={onClose}
+            aria-label="Cerrar panel"
+            style={{
+              position:       'absolute',
+              top:            14,
+              right:          14,
+              width:          28,
+              height:         28,
+              borderRadius:   '50%',
+              border:         '1.5px solid #C8D0CA',
+              background:     'transparent',
+              cursor:         'pointer',
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              color:          '#6B7B70',
+              fontSize:       13,
+              zIndex:         1,
+              transition:     'border-color 0.2s, color 0.2s',
+            }}
+            onMouseEnter={e => {
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#2D4A3E'
+              ;(e.currentTarget as HTMLButtonElement).style.color = '#2D4A3E'
+            }}
+            onMouseLeave={e => {
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#C8D0CA'
+              ;(e.currentTarget as HTMLButtonElement).style.color = '#6B7B70'
+            }}
+          >
+            ✕
+          </button>
+        )}
 
         {/* Contenido scrolleable */}
-        <div style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '32px 24px 24px' }}>
+        <div style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: isMobile ? '8px 20px 8px' : '32px 24px 24px' }}>
           {isPending && !visibleProfile && <PanelSkeleton />}
           {!isPending && visibleError   && <PanelError message={visibleError} />}
           {visibleProfile               && (
@@ -140,12 +171,12 @@ export function PersonPanel({ personId, familySlug, onClose }: PersonPanelProps)
         {visibleProfile && (
           <div
             style={{
-              borderTop: '1px solid #E1DCD3',
-              background: 'rgba(250, 250, 247, 0.96)',
+              borderTop:      '1px solid #E1DCD3',
+              background:     'rgba(250, 250, 247, 0.96)',
               backdropFilter: 'blur(10px)',
-              padding: '14px 24px 18px',
-              display: 'grid',
-              gap: 10,
+              padding:        `14px 24px calc(18px + env(safe-area-inset-bottom, 0px))`,
+              display:        'grid',
+              gap:            10,
             }}
           >
             <Link

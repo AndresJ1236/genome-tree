@@ -13,6 +13,7 @@ import {
   importRelationsJson,
   previewManagedFamilyUnit,
   previewRelationsImport,
+  revokeUserSessions,
   updateFamilyConfig,
   updateManagedFamilyUnit,
   updateUserAccess,
@@ -159,6 +160,16 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
       const result = await createPasswordResetLink(userId)
       if (!result.ok) { setError(result.error); return }
       setResetLinks(prev => ({ ...prev, [userId]: result.data.url }))
+    })
+  }
+
+  function handleRevokeSession(userId: string) {
+    if (!confirm('¿Cerrar sesión activa de este usuario? Tendrá que volver a iniciar sesión.')) return
+    clear()
+    startTransition(async () => {
+      const result = await revokeUserSessions(userId)
+      if (!result.ok) { setError(result.error); return }
+      setMessage('Sesión revocada. El usuario deberá iniciar sesión de nuevo.')
     })
   }
 
@@ -475,6 +486,14 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
                       style={secondaryBtn}
                     >
                       Generar link de recuperación
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleRevokeSession(user.id)}
+                      style={{ ...secondaryBtn, color: '#8B3A2F', borderColor: '#E8C8C0' }}
+                    >
+                      Revocar sesión
                     </button>
                     {resetLinks[user.id] && (
                       <>

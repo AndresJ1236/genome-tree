@@ -129,70 +129,44 @@ export default async function TreePage({
 
   return (
     <div className="h-full flex flex-col">
-        <div
-          style={{
-            padding: '18px 24px 0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: '#F5F0E8',
-          }}
-        >
-        <div>
+      <div
+        className="flex justify-between items-center px-4 sm:px-6 py-2 sm:py-[18px] flex-shrink-0"
+        style={{ background: '#F5F0E8' }}
+      >
+        <div className="min-w-0 mr-3">
           <p
-            style={{
-              margin: 0,
-              fontFamily: 'Georgia, serif',
-              fontSize: 18,
-              color: '#2D4A3E',
-            }}
+            className="m-0 text-sm sm:text-lg truncate"
+            style={{ fontFamily: 'Georgia, serif', color: '#2D4A3E' }}
           >
             {family.name.startsWith('Familia ') ? family.name : `Familia ${family.name}`}
           </p>
-          <p
-            style={{
-              margin: '4px 0 0',
-              fontSize: 12,
-              color: '#8B9E94',
-            }}
-          >
+          <p className="hidden sm:block m-0 mt-1 text-xs" style={{ color: '#8B9E94' }}>
             Explora el árbol y agrega nuevas ramas desde aquí.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="flex gap-2 items-center flex-shrink-0">
           <BirthdayPanel familySlug={familySlug} />
           <a
             href="/api/relations/export"
+            className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0"
             style={{
-              textDecoration: 'none',
-              border: '1px solid #C8D4CE',
-              color: '#2D4A3E',
-              padding: '9px 12px',
-              borderRadius: 2,
-              fontSize: 12,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              background: '#FFFDF9',
+              border: '1px solid #C8D4CE', color: '#2D4A3E',
+              padding: '6px 8px', fontSize: 10, background: '#FFFDF9',
             }}
           >
-            Exportar relaciones JSON
+            <span className="hidden sm:inline">Exportar relaciones </span>JSON
           </a>
           {session?.role === 'ADMIN' && (
             <Link
               href={`/${familySlug}/person/new`}
+              className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0"
               style={{
-                textDecoration: 'none',
-                border: '1px solid #C8D4CE',
-                color: '#2D4A3E',
-                padding: '9px 12px',
-                borderRadius: 2,
-                fontSize: 12,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                background: '#F8F5EE',
+                border: '1px solid #C8D4CE', color: '#2D4A3E',
+                padding: '6px 10px', fontSize: 10, background: '#F8F5EE',
               }}
             >
-              Nuevo
+              <span className="hidden sm:inline">Nuevo</span>
+              <span className="sm:hidden">+</span>
             </Link>
           )}
         </div>
