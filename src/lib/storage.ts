@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   CreateBucketCommand,
   HeadBucketCommand,
+  PutBucketPolicyCommand,
 } from '@aws-sdk/client-s3'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
@@ -47,15 +48,63 @@ function getClient(): S3Client {
 
 let _bucketReady = false
 
+/**
+ * Bucket policy that allows anonymous GetObject on every key in the bucket.
+ *
+ * Why this is safe: nginx already gates /media/ behind a session cookie via
+ * auth_request, so no anonymous traffic can hit MinIO from outside. The
+ * MinIO bucket itself only ever talks to the nginx container on the
+ * internal Docker network. Object keys are unguessable (CUID + epoch ms +
+ * 6-char random suffix), so even if a malicious actor somehow bypassed
+ * nginx, they would still need to guess the exact path.
+ *
+ * Without this policy, nginx's proxy_pass to MinIO returns 403 because
+ * nginx doesn't sign the request with MinIO credentials — and AWS S3 /
+ * MinIO buckets default to "private" on creation.
+ */
+function publicReadPolicy(bucket: string): string {
+  return JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: { AWS: ['*'] },
+        Action: ['s3:GetObject'],
+        Resource: [`arn:aws:s3:::${bucket}/*`],
+      },
+    ],
+  })
+}
+
 async function ensureBucket(): Promise<void> {
   if (_bucketReady) return
   const client = getClient()
   const { bucket } = getConfig()
 
+  let needsPolicy = false
   try {
     await client.send(new HeadBucketCommand({ Bucket: bucket }))
   } catch {
     await client.send(new CreateBucketCommand({ Bucket: bucket }))
+    needsPolicy = true
+  }
+
+  // Apply the public-read policy on every cold start. Idempotent — MinIO
+  // accepts the same policy doc repeatedly. We only NEED to do this once
+  // when the bucket is freshly created, but doing it always is cheaper
+  // than tracking persistent state and protects against the policy being
+  // wiped manually.
+  if (needsPolicy || !_bucketReady) {
+    try {
+      await client.send(new PutBucketPolicyCommand({
+        Bucket: bucket,
+        Policy: publicReadPolicy(bucket),
+      }))
+    } catch (e) {
+      // Don't crash the app if policy fails — uploads still work; only
+      // public reads break, and those will be visible in the UI.
+      console.warn('[storage] PutBucketPolicy failed:', e)
+    }
   }
 
   _bucketReady = true
