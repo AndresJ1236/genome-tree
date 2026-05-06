@@ -57,14 +57,18 @@ export default async function TimelinePage({
   const decades = [...byDecade.keys()].sort((a, b) => b - a)  // más recientes primero
 
   return (
-    <div style={{ background: '#F5F0E8', minHeight: '100%', overflowY: 'auto' }}>
+    <div style={{
+      background: '#F5F0E8',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',     // el scroll ocurre en el child interno, no aquí
+    }}>
       <header style={{
         background: '#2D4A3E',
         color: '#fff',
         padding: '20px 24px',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
+        flexShrink: 0,
       }}>
         <Link href={`/${familySlug}/tree`} style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, textDecoration: 'none' }}>
           ← Volver al árbol
@@ -77,13 +81,16 @@ export default async function TimelinePage({
         </p>
       </header>
 
-      {events.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', color: '#8B9E94' }}>
-          No hay eventos con fecha registrada todavía.
-        </div>
-      )}
+      {/* Contenedor scrolleable — flex-1 + min-h-0 es el patrón estándar
+          de la app para que el scroll quede confinado al área correcta */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        {events.length === 0 && (
+          <div style={{ padding: 40, textAlign: 'center', color: '#8B9E94' }}>
+            No hay eventos con fecha registrada todavía.
+          </div>
+        )}
 
-      <div style={{ maxWidth: 760, margin: '24px auto', padding: '0 24px 60px' }}>
+        <div style={{ maxWidth: 760, margin: '24px auto', padding: '0 24px 60px' }}>
         {decades.map(dec => {
           const yearMap = byDecade.get(dec)!
           const years = [...yearMap.keys()].sort((a, b) => b - a)
@@ -154,6 +161,7 @@ export default async function TimelinePage({
             </section>
           )
         })}
+        </div>
       </div>
     </div>
   )
