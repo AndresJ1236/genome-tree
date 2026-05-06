@@ -13,6 +13,7 @@ import { CLAIMED_RELATION_LABELS, CONFIDENCE_LABELS, pickMediaUrl } from '@/lib/
 import { uploadMedia, deleteMedia, toggleFeaturedMedia } from '@/app/actions/media'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { CommentsThread } from '@/components/ui/CommentsThread'
+import { ReactionBar } from '@/components/ui/ReactionBar'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -730,6 +731,7 @@ function StoriesTab({
               Fuente: {s.source}
             </p>
           )}
+          <ReactionBar contentId={s.id} variant="full" />
           <CommentsThread contentId={s.id} placeholder="Comparte un recuerdo o una pregunta..." />
         </ContentCard>
       ))}
