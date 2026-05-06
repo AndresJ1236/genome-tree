@@ -12,6 +12,7 @@ import type {
 import { CLAIMED_RELATION_LABELS, CONFIDENCE_LABELS } from '@/lib/content-types'
 import { uploadMedia, deleteMedia, toggleFeaturedMedia } from '@/app/actions/media'
 import { getPersonDisplayName } from '@/lib/person-name'
+import { CommentsThread } from '@/components/ui/CommentsThread'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -690,6 +691,7 @@ function StoriesTab({
               Fuente: {s.source}
             </p>
           )}
+          <CommentsThread contentId={s.id} placeholder="Comparte un recuerdo o una pregunta..." />
         </ContentCard>
       ))}
     </div>

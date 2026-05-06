@@ -149,6 +149,27 @@ export async function fanOutNotificationsFromAudit(entry: {
         href = `/${slug}/person/${personId}`
         break
       }
+      case 'CREATE_COMMENT': {
+        const personId = nv.personId
+        const preview = nv.preview
+        if (!personId) return
+        const person = await prisma.person.findUnique({
+          where: { id: personId },
+          select: { firstName: true, lastName: true },
+        })
+        if (!person) return
+        // Buscar el nombre del autor para personalizar el título
+        const actor = await prisma.user.findUnique({
+          where: { id: entry.actorId },
+          select: { name: true },
+        })
+        const actorName = actor?.name ?? 'Alguien'
+        type = 'NEW_COMMENT'
+        title = `${actorName} comentó en una historia de ${person.firstName} ${person.lastName}`
+        body = preview ?? null
+        href = `/${slug}/person/${personId}`
+        break
+      }
       default:
         return // No notification for admin/config actions
     }

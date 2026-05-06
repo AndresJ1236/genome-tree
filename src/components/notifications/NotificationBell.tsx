@@ -26,6 +26,7 @@ const TYPE_ICON: Record<string, string> = {
   NEW_PERSON_ADDED:   '👤',
   NEW_CONTENT_ADDED:  '📄',
   PERSON_UPDATED:     '✏️',
+  NEW_COMMENT:        '💬',
 }
 
 export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: number }) {

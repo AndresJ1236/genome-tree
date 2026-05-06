@@ -97,6 +97,7 @@ enum NotificationType {
   NEW_PERSON_ADDED
   NEW_CONTENT_ADDED
   PERSON_UPDATED
+  NEW_COMMENT
 }
 
 // ─────────────────────────────────────────────
@@ -122,6 +123,7 @@ model Family {
   proposals         PersonUpdateProposal[]
   creationProposals PersonCreationProposal[]
   notifications     Notification[]
+  comments          Comment[]
 }
 
 // ─────────────────────────────────────────────
@@ -158,6 +160,15 @@ model Person {
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  // ── Soft delete ────────────────────────────────────────────────────
+  // Cuando deletedAt no es null, la persona es invisible al árbol y a las
+  // queries de listado, pero sigue en DB para poder restaurar. Las
+  // referencias (fatherId, motherId) NO se rompen — siguen apuntando a
+  // este ID; el render del árbol simplemente filtra antes de pasarlo a
+  // computeTreeLayout.
+  deletedAt   DateTime?
+  deletedById String?
 
   // ── Relaciones Prisma ─────────────────────────────────────────────
   family               Family          @relation(fields: [familyId], references: [id])
@@ -241,6 +252,7 @@ model User {
   creationProposalsMade      PersonCreationProposal[] @relation("CreationProposedBy")
   creationProposalsReviewed  PersonCreationProposal[] @relation("CreationReviewedBy")
   notifications              Notification[]
+  comments                   Comment[]
 }
 
 model ManagedFamilyUnit {
@@ -368,10 +380,36 @@ model Content {
   // INTERVIEW
   question    String? @db.Text
 
+  // Soft delete
+  deletedAt   DateTime?
+  deletedById String?
+
   person    Person         @relation(fields: [personId], references: [id])
   family    Family         @relation(fields: [familyId], references: [id])
   createdBy User           @relation(fields: [createdById], references: [id])
   media     ContentMedia[]
+  comments  Comment[]
+}
+
+// ─────────────────────────────────────────────
+// COMMENT (mensajes de la familia en historias / contenido)
+// ─────────────────────────────────────────────
+
+model Comment {
+  id          String   @id @default(cuid())
+  contentId   String
+  familyId    String
+  authorId    String                 // User que escribió
+  body        String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?              // soft delete
+
+  content Content @relation(fields: [contentId], references: [id])
+  family  Family  @relation(fields: [familyId], references: [id])
+  author  User    @relation(fields: [authorId], references: [id])
+
+  @@index([contentId, createdAt])
 }
 
 // ─────────────────────────────────────────────
