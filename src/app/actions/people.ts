@@ -26,6 +26,7 @@ import type {
   Gender,
 } from '@/lib/content-types'
 import { revalidatePath } from 'next/cache'
+import { calculateKinship, type KinshipResult } from '@/lib/kinship'
 
 function serializeDate(d: Date | null | undefined): string {
   return d ? d.toISOString().slice(0, 10) : ''
@@ -1072,4 +1073,65 @@ export async function getOnThisDayEvents(): Promise<ActionResult<OnThisDayEvent[
   })
 
   return { ok: true, data: events }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calculadora de parentesco
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type { KinshipResult } from '@/lib/kinship'
+
+/**
+ * Calcula cómo es la persona `toId` respecto al usuario logueado (o respecto
+ * a `fromId` si se pasa explícito). Útil cuando alguien hace click en un
+ * nodo lejano y quiere saber "¿qué es esta persona de mí?".
+ */
+export async function getKinship(
+  toId: string,
+  fromId?: string
+): Promise<ActionResult<KinshipResult>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  // fromId default = la persona vinculada al usuario logueado
+  const startId = fromId ?? session.personId
+  if (!startId) {
+    return { ok: false, error: 'No tienes una persona vinculada al usuario.' }
+  }
+
+  // Verificar acceso al target (no leakear info de gente que no debería ver)
+  try { await assertPersonAccess(toId, session) }
+  catch (e) { return { ok: false, error: (e as Error).message } }
+
+  // Cargar TODAS las personas de la familia (filtradas por visibilidad).
+  // Esto es necesario porque el LCA puede pasar por personas a las que
+  // solo se accede transitivamente. Para árboles >5000 personas habría
+  // que limitar el BFS, pero para uso familiar es trivial.
+  const visibleIds = await getVisiblePersonIds(session)
+  const people = await prisma.person.findMany({
+    where: {
+      familyId:  session.familyId,
+      deletedAt: null,
+      ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
+    },
+    select: { id: true, fatherId: true, motherId: true, gender: true, firstName: true, lastName: true },
+  })
+
+  const couples = await prisma.relationship.findMany({
+    where: {
+      familyId: session.familyId,
+      type:     { in: ['SPOUSE', 'PARTNER'] },
+      endDate:  null,    // ignora relaciones terminadas
+    },
+    select: { person1Id: true, person2Id: true },
+  })
+
+  const result = calculateKinship(
+    startId,
+    toId,
+    people.map(p => ({ ...p, gender: p.gender as 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN' })),
+    couples.map(c => ({ p1: c.person1Id, p2: c.person2Id })),
+  )
+
+  return { ok: true, data: result }
 }
