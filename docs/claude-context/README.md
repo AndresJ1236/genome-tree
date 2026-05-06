@@ -22,7 +22,7 @@
 | Question | Answer |
 |----------|--------|
 | What is this? | Self-hosted genealogy app for a single extended family |
-| Current version | v3.0.0 (May 6, 2026) |
+| Current version | v3.1.0 (May 6, 2026) |
 | Production URL | https://arbol.example.com |
 | Production host | TrueNAS SCALE NAS_HOST (private LAN, exposed via Cloudflare Tunnel) |
 | Deploy target | `NAS_DEPLOY_PATH` on the NAS |
