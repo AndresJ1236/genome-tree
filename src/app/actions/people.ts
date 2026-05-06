@@ -960,3 +960,116 @@ export async function getMonthBirthdays(month?: number): Promise<ActionResult<Mo
   result.sort((a, b) => a.day - b.day)
   return { ok: true, data: result }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Hace X años" — eventos de hoy en años anteriores
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OnThisDayEvent {
+  kind:      'BIRTH' | 'DEATH'
+  personId:  string
+  fullName:  string
+  yearsAgo:  number      // años desde el evento
+  year:      number      // año en que ocurrió
+  isPet:     boolean
+  /** Si era CUMPLEAÑOS de alguien vivo, dice cuántos cumpliría hoy */
+  ageToday?: number | null
+}
+
+/**
+ * Devuelve los eventos significativos (nacimientos y fallecimientos) que
+ * coinciden con el mes y día actual en años anteriores. Útil para mostrar
+ * "Hace 50 años nació tu abuelita" en la home.
+ *
+ * Excluye eventos del año en curso (esos ya están en BirthdayPanel para
+ * cumpleaños).
+ *
+ * Ordenado por relevancia: muerte > nacimiento, dentro de cada uno los
+ * años más redondos primero (50, 25, 10, 5, etc.) y finalmente más recientes.
+ */
+export async function getOnThisDayEvents(): Promise<ActionResult<OnThisDayEvent[]>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const visibleIds = await getVisiblePersonIds(session)
+  const today = new Date()
+  const todayMonth = today.getMonth() + 1
+  const todayDay = today.getDate()
+  const currentYear = today.getFullYear()
+
+  // Traemos personas con birthDate O deathDate definida y filtramos en JS
+  const persons = await prisma.person.findMany({
+    where: {
+      familyId:  session.familyId,
+      deletedAt: null,
+      OR: [
+        { birthDate: { not: null } },
+        { deathDate: { not: null } },
+      ],
+      ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
+    },
+    select: {
+      id:        true,
+      firstName: true,
+      middleName: true,
+      lastName:  true,
+      birthDate: true,
+      deathDate: true,
+      nodeKind:  true,
+    },
+  })
+
+  const events: OnThisDayEvent[] = []
+  for (const p of persons) {
+    const fullName = getPersonDisplayName({ firstName: p.firstName, middleName: p.middleName, lastName: p.lastName })
+    const isPet    = p.nodeKind === 'PET'
+
+    if (p.birthDate) {
+      const bd = new Date(p.birthDate)
+      const m = bd.getMonth() + 1
+      const d = bd.getDate()
+      const y = bd.getFullYear()
+      // Misma fecha, año anterior — excluye el año actual
+      if (m === todayMonth && d === todayDay && y < currentYear) {
+        const yearsAgo = currentYear - y
+        const stillAlive = !p.deathDate
+        events.push({
+          kind:      'BIRTH',
+          personId:  p.id,
+          fullName,
+          yearsAgo,
+          year:      y,
+          isPet,
+          ageToday:  stillAlive ? yearsAgo : null,
+        })
+      }
+    }
+
+    if (p.deathDate) {
+      const dd = new Date(p.deathDate)
+      const m = dd.getMonth() + 1
+      const d = dd.getDate()
+      const y = dd.getFullYear()
+      if (m === todayMonth && d === todayDay && y < currentYear) {
+        events.push({
+          kind:     'DEATH',
+          personId: p.id,
+          fullName,
+          yearsAgo: currentYear - y,
+          year:     y,
+          isPet,
+        })
+      }
+    }
+  }
+
+  // Ordenamos: aniversarios redondos (multiplo de 5/10) primero, después por antigüedad descendente
+  events.sort((a, b) => {
+    const aRound = a.yearsAgo % 10 === 0 ? 0 : a.yearsAgo % 5 === 0 ? 1 : 2
+    const bRound = b.yearsAgo % 10 === 0 ? 0 : b.yearsAgo % 5 === 0 ? 1 : 2
+    if (aRound !== bRound) return aRound - bRound
+    return b.yearsAgo - a.yearsAgo  // más antiguo primero (50 > 30)
+  })
+
+  return { ok: true, data: events }
+}

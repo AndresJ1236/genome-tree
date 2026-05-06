@@ -99,6 +99,17 @@ enum NotificationType {
   PERSON_UPDATED
   NEW_COMMENT
   SECURITY_ALERT
+  NEW_REACTION
+}
+
+// Tipos de reacciones — selección curada (no se ofrece toda la galería de
+// emoji para mantener el UI limpio y los counts comparables).
+enum ReactionType {
+  HEART     // ❤️  default — "me gusta / me emociona"
+  LAUGH     // 😄 "qué chistoso / buen recuerdo"
+  WOW       // 😮 "no sabía"
+  SAD       // 😢 "qué tristeza"
+  PRAY      // 🙏 "en paz / honor"
 }
 
 // ─────────────────────────────────────────────
@@ -125,6 +136,7 @@ model Family {
   creationProposals PersonCreationProposal[]
   notifications     Notification[]
   comments          Comment[]
+  reactions         Reaction[]
 }
 
 // ─────────────────────────────────────────────
@@ -260,6 +272,7 @@ model User {
   creationProposalsReviewed  PersonCreationProposal[] @relation("CreationReviewedBy")
   notifications              Notification[]
   comments                   Comment[]
+  reactions                  Reaction[]
 }
 
 model ManagedFamilyUnit {
@@ -396,6 +409,7 @@ model Content {
   createdBy User           @relation(fields: [createdById], references: [id])
   media     ContentMedia[]
   comments  Comment[]
+  reactions Reaction[]
 }
 
 // ─────────────────────────────────────────────
@@ -417,6 +431,34 @@ model Comment {
   author  User    @relation(fields: [authorId], references: [id])
 
   @@index([contentId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// REACTION (likes/emociones en historias y fotos)
+// Una fila por (usuario, target, tipo). Un usuario puede dejar varias
+// reacciones de DIFERENTE tipo en el mismo target — el unique compound
+// previene duplicados del mismo tipo. El target es contentId o mediaId
+// (nunca los dos a la vez).
+// ─────────────────────────────────────────────
+
+model Reaction {
+  id        String       @id @default(cuid())
+  familyId  String
+  userId    String
+  type      ReactionType
+  contentId String?
+  mediaId   String?
+  createdAt DateTime     @default(now())
+
+  family  Family   @relation(fields: [familyId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+  content Content? @relation(fields: [contentId], references: [id])
+  media   Media?   @relation(fields: [mediaId], references: [id])
+
+  @@unique([userId, contentId, type])
+  @@unique([userId, mediaId, type])
+  @@index([contentId])
+  @@index([mediaId])
 }
 
 // ─────────────────────────────────────────────
@@ -447,6 +489,7 @@ model Media {
   person       Person         @relation(fields: [personId], references: [id])
   family       Family         @relation(fields: [familyId], references: [id])
   contentMedia ContentMedia[]
+  reactions    Reaction[]
 }
 
 // ─────────────────────────────────────────────

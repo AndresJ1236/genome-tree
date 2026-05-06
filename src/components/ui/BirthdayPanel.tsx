@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { getMonthBirthdays, type MonthBirthday } from '@/app/actions/people'
+import { getMonthBirthdays, getOnThisDayEvents, type MonthBirthday, type OnThisDayEvent } from '@/app/actions/people'
 
 const MONTHS = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -26,6 +26,7 @@ interface BirthdayPanelProps {
 export function BirthdayPanel({ familySlug, alwaysOpen = false }: BirthdayPanelProps) {
   const [open, setOpen] = useState(alwaysOpen)
   const [birthdays, setBirthdays] = useState<MonthBirthday[] | null>(null)
+  const [events, setEvents] = useState<OnThisDayEvent[] | null>(null)
   const [showDeceased, setShowDeceased] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -33,9 +34,10 @@ export function BirthdayPanel({ familySlug, alwaysOpen = false }: BirthdayPanelP
   useEffect(() => {
     if (!open || birthdays !== null) return
     setLoading(true)
-    getMonthBirthdays()
-      .then(r => {
-        if (r.ok) setBirthdays(r.data)
+    Promise.all([getMonthBirthdays(), getOnThisDayEvents()])
+      .then(([b, e]) => {
+        if (b.ok) setBirthdays(b.data)
+        if (e.ok) setEvents(e.data)
       })
       .finally(() => setLoading(false))
   }, [open, birthdays])
@@ -46,11 +48,16 @@ export function BirthdayPanel({ familySlug, alwaysOpen = false }: BirthdayPanelP
     getMonthBirthdays().then(r => {
       if (r.ok) setBirthdays(r.data)
     })
+    // También pre-cargamos eventos de "hace X años" — son query liviana
+    getOnThisDayEvents().then(r => {
+      if (r.ok) setEvents(r.data)
+    })
   }, [birthdays])
 
   const monthName = MONTHS[new Date().getMonth()]
   const filtered = birthdays?.filter(b => showDeceased || !b.deceased) ?? []
   const hasToday = birthdays?.some(b => b.isToday && !b.deceased) ?? false
+  const hasEventsToday = (events?.length ?? 0) > 0
 
   return (
     <div style={{ position: 'relative' }}>
@@ -72,7 +79,7 @@ export function BirthdayPanel({ familySlug, alwaysOpen = false }: BirthdayPanelP
         }}
       >
         🎂 {monthName}
-        {hasToday && (
+        {(hasToday || hasEventsToday) && (
           <span style={{
             position: 'absolute',
             top: 4, right: 4,
@@ -147,7 +154,61 @@ export function BirthdayPanel({ familySlug, alwaysOpen = false }: BirthdayPanelP
               </p>
             )}
 
-            {!loading && filtered.length === 0 && (
+            {/* "Hace X años" — eventos de hoy en años anteriores */}
+            {!loading && events && events.length > 0 && (
+              <div style={{
+                marginBottom: 14,
+                padding: '10px 12px',
+                background: '#FFF8E6',
+                border: '1px solid #E8D68A',
+                borderRadius: 3,
+              }}>
+                <p style={{
+                  margin: '0 0 8px',
+                  fontSize: 11,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#8B6411',
+                  fontWeight: 600,
+                }}>
+                  📅 Hace tiempo · hoy
+                </p>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 5 }}>
+                  {events.slice(0, 5).map((ev, i) => (
+                    <li key={`${ev.kind}-${ev.personId}-${i}`}>
+                      <Link
+                        href={`/${familySlug}/person/${ev.personId}`}
+                        onClick={() => setOpen(false)}
+                        style={{
+                          display: 'block',
+                          padding: '4px 6px',
+                          fontSize: 12,
+                          color: '#2C2C2C',
+                          textDecoration: 'none',
+                          lineHeight: 1.4,
+                          borderRadius: 2,
+                        }}
+                      >
+                        <span style={{ color: '#8B6411', fontWeight: 600 }}>
+                          Hace {ev.yearsAgo} año{ev.yearsAgo === 1 ? '' : 's'}
+                        </span>
+                        {' '}
+                        {ev.kind === 'BIRTH' ? 'nació' : 'falleció'}{' '}
+                        <span style={{ fontWeight: 500 }}>{ev.fullName}</span>
+                        {ev.isPet && <span style={{ marginLeft: 4, fontSize: 10 }}>🐾</span>}
+                        {ev.ageToday != null && (
+                          <span style={{ color: '#8B9E94', fontSize: 11 }}>
+                            {' '}· hoy cumpliría {ev.ageToday}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {!loading && filtered.length === 0 && (!events || events.length === 0) && (
               <p style={{
                 fontSize: 13,
                 color: '#8B9E94',
