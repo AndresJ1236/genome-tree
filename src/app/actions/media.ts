@@ -7,6 +7,12 @@ import {
   processImage,
   uploadProcessedImage,
   deleteFileWithVariants,
+  uploadMediaFile,
+  classifyMime,
+  AUDIO_MIME_TYPES,
+  VIDEO_MIME_TYPES,
+  MAX_AUDIO_SIZE,
+  MAX_VIDEO_SIZE,
 } from '@/lib/storage'
 import { assertCanManagePerson } from '@/lib/permissions'
 import { assertModuleEnabled, getModuleForContentType } from '@/lib/family-config'
@@ -452,4 +458,151 @@ export async function toggleFeaturedMedia(
 
   await prisma.media.update({ where: { id: mediaId }, data: { featured } })
   return { ok: true, data: undefined }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audio / Video upload — sin transcoding (los browsers reproducen directamente)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_AV_PER_PERSON = 30   // máx 30 audios+videos por persona
+
+/**
+ * Sube un audio o video para una persona. Igual que uploadMedia pero sin
+ * el pipeline de sharp/variantes — el archivo se guarda tal cual.
+ *
+ * El frontend puede leer la duración después de cargar el blob via
+ * <audio>.duration / <video>.duration y enviarla con setMediaDuration.
+ */
+export async function uploadAudioVideo(
+  formData: FormData
+): Promise<ActionResult<{ id: string; url: string; kind: 'AUDIO' | 'VIDEO' }>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const file     = formData.get('file')     as File   | null
+  const personId = formData.get('personId') as string | null
+  const caption  = (formData.get('caption') as string | null) ?? null
+
+  if (!file || !personId) {
+    return { ok: false, error: 'Faltan datos: file y personId son requeridos.' }
+  }
+
+  // Validar tipo
+  const reportedMime = (file.type || '').toLowerCase()
+  const kind = classifyMime(reportedMime)
+  if (kind !== 'audio' && kind !== 'video') {
+    return { ok: false, error: 'Solo se permiten archivos de audio o video.' }
+  }
+
+  const allowedList: readonly string[] = kind === 'audio' ? AUDIO_MIME_TYPES : VIDEO_MIME_TYPES
+  if (!allowedList.includes(reportedMime)) {
+    return {
+      ok: false,
+      error: kind === 'audio'
+        ? 'Formato de audio no soportado. Usa MP3, M4A, AAC, OGG o WAV.'
+        : 'Formato de video no soportado. Usa MP4, WebM o MOV.',
+    }
+  }
+
+  // Validar tamaño
+  const maxSize = kind === 'audio' ? MAX_AUDIO_SIZE : MAX_VIDEO_SIZE
+  if (file.size > maxSize) {
+    return {
+      ok: false,
+      error: kind === 'audio'
+        ? 'El audio no puede superar los 50 MB.'
+        : 'El video no puede superar los 200 MB.',
+    }
+  }
+
+  // Validar acceso
+  try {
+    await assertCanManagePerson(personId, session, 'content')
+    await assertModuleEnabled(session.familyId, 'moduleAudioVideo', 'El módulo de audio/video está desactivado.')
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+
+  // Límite por persona — cuenta audios+videos juntos
+  const avCount = await prisma.media.count({
+    where: { personId, kind: { in: ['AUDIO', 'VIDEO'] } },
+  })
+  if (avCount >= MAX_AV_PER_PERSON) {
+    return { ok: false, error: `Límite alcanzado: máximo ${MAX_AV_PER_PERSON} audios/videos por persona.` }
+  }
+
+  const family = await prisma.family.findUnique({
+    where:  { id: session.familyId },
+    select: { slug: true },
+  })
+  if (!family) return { ok: false, error: 'Familia no encontrada.' }
+
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const baseKey = generateKey(family.slug, personId, reportedMime)
+
+  let uploaded
+  try {
+    uploaded = await uploadMediaFile(baseKey, buffer, reportedMime)
+  } catch (e) {
+    console.error('[uploadAudioVideo] Error subiendo:', e)
+    return { ok: false, error: 'Error al subir el archivo. Intenta de nuevo.' }
+  }
+
+  const lastMedia = await prisma.media.findFirst({
+    where:   { personId },
+    orderBy: { order: 'desc' },
+    select:  { order: true },
+  })
+  const order = (lastMedia?.order ?? -1) + 1
+
+  const media = await prisma.media.create({
+    data: {
+      personId,
+      familyId:     session.familyId,
+      url:          uploaded.url,
+      key:          uploaded.key,
+      mimeType:     uploaded.mimeType,
+      kind:         kind === 'audio' ? 'AUDIO' : 'VIDEO',
+      caption,
+      featured:     false,
+      order,
+      uploadedById: session.userId,
+    },
+  })
+
+  return {
+    ok:   true,
+    data: { id: media.id, url: media.url, kind: kind === 'audio' ? 'AUDIO' : 'VIDEO' },
+  }
+}
+
+/**
+ * El cliente puede actualizar la duración después de leer el blob:
+ *   const audio = new Audio(url)
+ *   audio.addEventListener('loadedmetadata', () => {
+ *     setMediaDuration({ mediaId, durationSec: Math.round(audio.duration) })
+ *   })
+ */
+export async function setMediaDuration(input: {
+  mediaId:     string
+  durationSec: number
+}): Promise<ActionResult<null>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const media = await prisma.media.findUnique({
+    where:  { id: input.mediaId },
+    select: { familyId: true, durationSec: true },
+  })
+  if (!media || media.familyId !== session.familyId) {
+    return { ok: false, error: 'Media no encontrado.' }
+  }
+  // Si ya tiene duración, no la sobrescribimos
+  if (media.durationSec != null) return { ok: true, data: null }
+
+  await prisma.media.update({
+    where: { id: input.mediaId },
+    data:  { durationSec: Math.max(0, Math.round(input.durationSec)) },
+  })
+  return { ok: true, data: null }
 }
