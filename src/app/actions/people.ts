@@ -1135,3 +1135,180 @@ export async function getKinship(
 
   return { ok: true, data: result }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Línea de tiempo de eventos familiares
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TimelineEvent {
+  kind:     'BIRTH' | 'DEATH' | 'MARRIAGE' | 'SEPARATION'
+  date:     string         // ISO 8601 (yyyy-mm-dd)
+  year:     number
+  personIds: string[]      // [persona] para birth/death, [a, b] para marriage/separation
+  label:    string         // texto descriptivo: "Nació Wilson Jácome"
+  decade:   number         // year - (year % 10) — para agrupar visualmente
+}
+
+/**
+ * Devuelve TODOS los eventos significativos de la familia ordenados
+ * cronológicamente: nacimientos, fallecimientos, matrimonios y separaciones.
+ *
+ * Filtra por visibilidad. Para una familia de ~200 personas devuelve
+ * típicamente 400-800 eventos, lo cual es perfectamente manejable.
+ */
+export async function getTimelineEvents(): Promise<ActionResult<TimelineEvent[]>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const visibleIds = await getVisiblePersonIds(session)
+  const visibleSet = visibleIds ?? null
+
+  const [persons, relationships] = await Promise.all([
+    prisma.person.findMany({
+      where: {
+        familyId:  session.familyId,
+        deletedAt: null,
+        ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
+      },
+      select: {
+        id:         true,
+        firstName:  true,
+        middleName: true,
+        lastName:   true,
+        birthDate:  true,
+        deathDate:  true,
+        nodeKind:   true,
+      },
+    }),
+    prisma.relationship.findMany({
+      where: {
+        familyId: session.familyId,
+        type:     { in: ['SPOUSE', 'PARTNER'] },
+      },
+      select: { person1Id: true, person2Id: true, createdAt: true, endDate: true },
+    }),
+  ])
+
+  const events: TimelineEvent[] = []
+  const personMap = new Map(persons.map(p => [p.id, p]))
+
+  for (const p of persons) {
+    const fullName = getPersonDisplayName({ firstName: p.firstName, middleName: p.middleName, lastName: p.lastName })
+
+    if (p.birthDate) {
+      const dt = new Date(p.birthDate)
+      const year = dt.getFullYear()
+      events.push({
+        kind:      'BIRTH',
+        date:      dt.toISOString().slice(0, 10),
+        year,
+        personIds: [p.id],
+        label:     p.nodeKind === 'PET' ? `Llegó ${fullName} 🐾` : `Nació ${fullName}`,
+        decade:    year - (year % 10),
+      })
+    }
+
+    if (p.deathDate) {
+      const dt = new Date(p.deathDate)
+      const year = dt.getFullYear()
+      events.push({
+        kind:      'DEATH',
+        date:      dt.toISOString().slice(0, 10),
+        year,
+        personIds: [p.id],
+        label:     `Falleció ${fullName}`,
+        decade:    year - (year % 10),
+      })
+    }
+  }
+
+  for (const r of relationships) {
+    // Solo si ambos están en el set visible
+    if (visibleSet && (!visibleSet.has(r.person1Id) || !visibleSet.has(r.person2Id))) continue
+    const p1 = personMap.get(r.person1Id)
+    const p2 = personMap.get(r.person2Id)
+    if (!p1 || !p2) continue
+
+    const name1 = getPersonDisplayName({ firstName: p1.firstName, middleName: p1.middleName, lastName: p1.lastName })
+    const name2 = getPersonDisplayName({ firstName: p2.firstName, middleName: p2.middleName, lastName: p2.lastName })
+
+    // Marriage = createdAt (cuando se registró la relación). No es exacto pero
+    // es lo mejor que tenemos sin un campo "marriedAt" en el schema.
+    // TODO futuro: agregar marriedAt al modelo Relationship para fechas reales.
+    const md = new Date(r.createdAt)
+    const my = md.getFullYear()
+    events.push({
+      kind:      'MARRIAGE',
+      date:      md.toISOString().slice(0, 10),
+      year:      my,
+      personIds: [r.person1Id, r.person2Id],
+      label:     `Se unieron ${name1} y ${name2}`,
+      decade:    my - (my % 10),
+    })
+
+    if (r.endDate) {
+      const ed = new Date(r.endDate)
+      const ey = ed.getFullYear()
+      events.push({
+        kind:      'SEPARATION',
+        date:      ed.toISOString().slice(0, 10),
+        year:      ey,
+        personIds: [r.person1Id, r.person2Id],
+        label:     `Se separaron ${name1} y ${name2}`,
+        decade:    ey - (ey % 10),
+      })
+    }
+  }
+
+  events.sort((a, b) => a.date.localeCompare(b.date))
+  return { ok: true, data: events }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapa de orígenes — agregación de birthPlace
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BirthPlaceCluster {
+  place:     string         // texto tal como fue ingresado
+  count:     number         // cuántas personas nacieron ahí
+  personIds: string[]       // hasta 10, para preview
+  /** Coordenadas si se geocodearon (pendiente para futura fase) */
+  lat?:      number | null
+  lng?:      number | null
+}
+
+/**
+ * Agrupa personas por birthPlace para alimentar el mapa de orígenes.
+ * Por ahora solo devuelve los textos agregados. En una fase futura se
+ * geocodificarán contra Nominatim para obtener lat/lng.
+ */
+export async function getBirthPlaceClusters(): Promise<ActionResult<BirthPlaceCluster[]>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const visibleIds = await getVisiblePersonIds(session)
+  const persons = await prisma.person.findMany({
+    where: {
+      familyId:   session.familyId,
+      deletedAt:  null,
+      birthPlace: { not: null },
+      ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
+    },
+    select: { id: true, birthPlace: true },
+  })
+
+  const map = new Map<string, BirthPlaceCluster>()
+  for (const p of persons) {
+    if (!p.birthPlace) continue
+    const place = p.birthPlace.trim()
+    if (!place) continue
+    const cluster = map.get(place) ?? { place, count: 0, personIds: [] }
+    cluster.count++
+    if (cluster.personIds.length < 10) cluster.personIds.push(p.id)
+    map.set(place, cluster)
+  }
+
+  // Ordenado por count descendente
+  const result = [...map.values()].sort((a, b) => b.count - a.count)
+  return { ok: true, data: result }
+}
