@@ -41,12 +41,37 @@ export interface PersonOption {
 
 export interface MediaItem {
   id: string
-  url: string
+  url: string                  // original (capeado a 4K)
+  thumbUrl: string | null      // 150px WebP — null en filas legacy pre-backfill
+  mediumUrl: string | null     // 400px WebP
+  largeUrl: string | null      // 1600px WebP
   alt: string | null
   caption: string | null
   featured: boolean
   order: number
   mimeType: string
+  width: number | null
+  height: number | null
+}
+
+/**
+ * Devuelve la URL de la variante preferida con fallback gracioso al original.
+ * Permite que filas legacy (pre-backfill) sigan funcionando aunque carguen
+ * más pesado.
+ *
+ *  - 'thumb'    → 150px (nodos del árbol, micro-thumbnails)
+ *  - 'medium'   → 400px (galería en grid, avatar de perfil)
+ *  - 'large'    → 1600px (vista expandida, lightbox modesto)
+ *  - 'original' → tal cual subido (lightbox máxima calidad, descargas)
+ */
+export function pickMediaUrl(
+  m: { url: string; thumbUrl?: string | null; mediumUrl?: string | null; largeUrl?: string | null },
+  prefer: 'thumb' | 'medium' | 'large' | 'original'
+): string {
+  if (prefer === 'thumb'    && m.thumbUrl)  return m.thumbUrl
+  if (prefer === 'medium'   && m.mediumUrl) return m.mediumUrl
+  if (prefer === 'large'    && m.largeUrl)  return m.largeUrl
+  return m.url
 }
 
 export interface ContentBase {

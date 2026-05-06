@@ -217,3 +217,177 @@ export function generateKey(
   const random = Math.random().toString(36).slice(2, 8)
   return `${familySlug}/${personId}/${timestamp}-${random}.${ext}`
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Image processing — sharp pipeline
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Tamaños de variantes (lado mayor en px). Se generan SIEMPRE en WebP.
+export const VARIANT_SIZES = {
+  thumb:  150,   // ~10 KB, cuadrado (cover) — nodos del árbol
+  medium: 400,   // ~50 KB — galería, avatar de perfil
+  large:  1600,  // ~250 KB — vista expandida del perfil
+} as const
+
+// Original capeado a 4K (3840×3840 max, lado mayor). Si la imagen ya es más
+// chica, se sube tal cual sin re-codificar (preserva calidad y metadata).
+export const ORIGINAL_MAX_DIMENSION = 3840
+
+export interface ProcessedImage {
+  original: { buffer: Buffer; mimeType: string; width: number; height: number }
+  large:    Buffer
+  medium:   Buffer
+  thumb:    Buffer
+}
+
+/**
+ * Procesa una imagen subida produciendo:
+ *   • original capeado a ORIGINAL_MAX_DIMENSION (manteniendo aspect ratio)
+ *   • large WebP a VARIANT_SIZES.large
+ *   • medium WebP a VARIANT_SIZES.medium
+ *   • thumb WebP cuadrado a VARIANT_SIZES.thumb (fit cover, ideal para avatares)
+ *
+ * `.rotate()` aplicado en cada variante respeta la orientación EXIF — sin esto,
+ * fotos de iPhone aparecen rotadas en navegadores que ignoran EXIF.
+ */
+export async function processImage(input: Buffer, inputMimeType: string): Promise<ProcessedImage> {
+  // Import dinámico para no cargar sharp en cold path si solo se borra
+  const sharp = (await import('sharp')).default
+
+  const meta = await sharp(input).metadata()
+  const w = meta.width ?? 0
+  const h = meta.height ?? 0
+  const needsCap = w > ORIGINAL_MAX_DIMENSION || h > ORIGINAL_MAX_DIMENSION
+
+  // Original: si la imagen es muy grande, recodificar capeada (preservando formato).
+  // Si ya es chica, devolver el buffer original sin tocar.
+  let originalBuffer = input
+  let finalMimeType = inputMimeType
+  let finalWidth = w
+  let finalHeight = h
+
+  if (needsCap) {
+    const pipe = sharp(input).rotate().resize({
+      width:  ORIGINAL_MAX_DIMENSION,
+      height: ORIGINAL_MAX_DIMENSION,
+      fit:    'inside',
+      withoutEnlargement: true,
+    })
+
+    // Mantener formato original cuando es razonable; PNG con alpha se queda PNG.
+    if (inputMimeType === 'image/png') {
+      originalBuffer = await pipe.png({ compressionLevel: 9 }).toBuffer()
+      finalMimeType = 'image/png'
+    } else if (inputMimeType === 'image/webp') {
+      originalBuffer = await pipe.webp({ quality: 90 }).toBuffer()
+      finalMimeType = 'image/webp'
+    } else if (inputMimeType === 'image/gif') {
+      // sharp soporta GIF lectura pero no escritura animada estable; preservar tal cual
+      originalBuffer = input
+    } else {
+      // JPEG y todo lo demás → JPEG calidad 90
+      originalBuffer = await pipe.jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+      finalMimeType = 'image/jpeg'
+    }
+
+    // Releer dimensiones reales después del cap
+    const newMeta = await sharp(originalBuffer).metadata()
+    finalWidth = newMeta.width ?? finalWidth
+    finalHeight = newMeta.height ?? finalHeight
+  }
+
+  // Variantes — siempre WebP
+  const [largeBuf, mediumBuf, thumbBuf] = await Promise.all([
+    sharp(input).rotate().resize({
+      width:  VARIANT_SIZES.large,
+      height: VARIANT_SIZES.large,
+      fit:    'inside',
+      withoutEnlargement: true,
+    }).webp({ quality: 85 }).toBuffer(),
+
+    sharp(input).rotate().resize({
+      width:  VARIANT_SIZES.medium,
+      height: VARIANT_SIZES.medium,
+      fit:    'inside',
+      withoutEnlargement: true,
+    }).webp({ quality: 80 }).toBuffer(),
+
+    sharp(input).rotate().resize({
+      width:  VARIANT_SIZES.thumb,
+      height: VARIANT_SIZES.thumb,
+      fit:    'cover',         // cuadrado — para avatares circulares
+      position: 'attention',   // sharp encuentra la región "interesante" (ej. caras)
+    }).webp({ quality: 75 }).toBuffer(),
+  ])
+
+  return {
+    original: { buffer: originalBuffer, mimeType: finalMimeType, width: finalWidth, height: finalHeight },
+    large:    largeBuf,
+    medium:   mediumBuf,
+    thumb:    thumbBuf,
+  }
+}
+
+export interface VariantUploadResult {
+  url:       string   // original
+  key:       string   // original
+  thumbUrl:  string
+  mediumUrl: string
+  largeUrl:  string
+  mimeType:  string
+  width:     number
+  height:    number
+}
+
+/**
+ * Sube las 4 versiones (original + 3 variantes WebP) en paralelo y devuelve
+ * los URLs públicos. Las variantes derivan del key del original con sufijos
+ * predecibles: `<base>-thumb.webp`, `<base>-medium.webp`, `<base>-large.webp`.
+ */
+export async function uploadProcessedImage(
+  baseKey: string,
+  processed: ProcessedImage
+): Promise<VariantUploadResult> {
+  // baseKey = `family/personId/timestamp-rand.jpg`
+  // Para variantes: cambiar extensión y agregar sufijo
+  const lastDot = baseKey.lastIndexOf('.')
+  const stem = lastDot >= 0 ? baseKey.slice(0, lastDot) : baseKey
+
+  const thumbKey  = `${stem}-thumb.webp`
+  const mediumKey = `${stem}-medium.webp`
+  const largeKey  = `${stem}-large.webp`
+
+  const [origRes, thumbRes, mediumRes, largeRes] = await Promise.all([
+    uploadFile(baseKey,   processed.original.buffer, processed.original.mimeType),
+    uploadFile(thumbKey,  processed.thumb,  'image/webp'),
+    uploadFile(mediumKey, processed.medium, 'image/webp'),
+    uploadFile(largeKey,  processed.large,  'image/webp'),
+  ])
+
+  return {
+    url:       origRes.url,
+    key:       origRes.key,
+    thumbUrl:  thumbRes.url,
+    mediumUrl: mediumRes.url,
+    largeUrl:  largeRes.url,
+    mimeType:  processed.original.mimeType,
+    width:     processed.original.width,
+    height:    processed.original.height,
+  }
+}
+
+/**
+ * Borra el original Y todas las variantes asociadas al baseKey.
+ * Tolerante: si una variante no existe (ej. fila legacy pre-backfill), no
+ * lanza error.
+ */
+export async function deleteFileWithVariants(baseKey: string): Promise<void> {
+  const lastDot = baseKey.lastIndexOf('.')
+  const stem = lastDot >= 0 ? baseKey.slice(0, lastDot) : baseKey
+  await Promise.all([
+    deleteFile(baseKey),
+    deleteFile(`${stem}-thumb.webp`),
+    deleteFile(`${stem}-medium.webp`),
+    deleteFile(`${stem}-large.webp`),
+  ])
+}

@@ -420,15 +420,22 @@ model Media {
   id           String   @id @default(cuid())
   personId     String
   familyId     String
-  url          String
-  key          String
-  mimeType     String
+  url          String                 // original (capeado a 3840px lado mayor)
+  key          String                 // MinIO key del original
+  mimeType     String                 // del original
   alt          String?
   caption      String?
   featured     Boolean  @default(false)
   order        Int      @default(0)
   uploadedById String
   createdAt    DateTime @default(now())
+
+  // Variantes WebP generadas en upload (null en filas legacy pre-backfill)
+  thumbUrl     String?                // 150px cuadrado, ~10 KB — nodos del árbol
+  mediumUrl    String?                // 400px lado mayor, ~50 KB — galería, avatar
+  largeUrl     String?                // 1600px lado mayor, ~250 KB — vista expandida
+  width        Int?                   // dimensiones reales del original (post-cap)
+  height       Int?
 
   person       Person         @relation(fields: [personId], references: [id])
   family       Family         @relation(fields: [familyId], references: [id])

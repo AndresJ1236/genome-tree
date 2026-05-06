@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { createPerson, createRelationship, deleteRelationship, deletePerson, setParentChild, setPersonCoverPhoto, setRelationshipEndDate, updatePerson } from '@/app/actions/people'
 import { proposePeopleUpdate, proposeNewPerson } from '@/app/actions/proposals'
 import { uploadMedia, deleteMedia } from '@/app/actions/media'
-import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF } from '@/lib/content-types'
+import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF, pickMediaUrl } from '@/lib/content-types'
 import type { ClaimedRelation, MediaItem, PersonEditorPayload, PersonFormData, RelationshipItem } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { HelpTooltip } from '@/components/ui/HelpTooltip'
@@ -342,13 +342,18 @@ export function PersonEditor({
         setMedia(prev => [
           ...prev,
           {
-            id: result.data.id,
-            url: result.data.url,
-            alt: null,
-            caption: null,
-            featured: false,
-            order: prev.length,
-            mimeType: file.type,
+            id:        result.data.id,
+            url:       result.data.url,
+            thumbUrl:  null,
+            mediumUrl: null,
+            largeUrl:  null,
+            alt:       null,
+            caption:   null,
+            featured:  false,
+            order:     prev.length,
+            mimeType:  file.type,
+            width:     null,
+            height:    null,
           },
         ])
       }
@@ -1047,7 +1052,7 @@ export function PersonEditor({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 14 }}>
               {media.length > 0 ? media.map(item => (
                 <div key={item.id} style={{ border: '1px solid #E0DAD0', borderRadius: 3, overflow: 'hidden', background: '#fff' }}>
-                  <img src={item.url} alt={item.alt ?? ''} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
+                  <img src={pickMediaUrl(item, 'medium')} alt={item.alt ?? ''} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
                   <div style={{ padding: 10, display: 'grid', gap: 8 }}>
                     <button
                       type="button"

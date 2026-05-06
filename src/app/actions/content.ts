@@ -81,15 +81,22 @@ function toPersonBasic(p: {
 function toMediaItem(m: {
   id: string; url: string; alt: string | null; caption: string | null
   featured: boolean; order: number; mimeType: string
+  thumbUrl?: string | null; mediumUrl?: string | null; largeUrl?: string | null
+  width?: number | null; height?: number | null
 }): MediaItem {
   return {
-    id:       m.id,
-    url:      m.url,
-    alt:      m.alt,
-    caption:  m.caption,
-    featured: m.featured,
-    order:    m.order,
-    mimeType: m.mimeType,
+    id:        m.id,
+    url:       m.url,
+    thumbUrl:  m.thumbUrl  ?? null,
+    mediumUrl: m.mediumUrl ?? null,
+    largeUrl:  m.largeUrl  ?? null,
+    alt:       m.alt,
+    caption:   m.caption,
+    featured:  m.featured,
+    order:     m.order,
+    mimeType:  m.mimeType,
+    width:     m.width  ?? null,
+    height:    m.height ?? null,
   }
 }
 

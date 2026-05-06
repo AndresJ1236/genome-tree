@@ -65,15 +65,25 @@ function serializeMedia(m: {
   featured: boolean
   order: number
   mimeType: string
+  thumbUrl?: string | null
+  mediumUrl?: string | null
+  largeUrl?: string | null
+  width?: number | null
+  height?: number | null
 }): MediaItem {
   return {
-    id: m.id,
-    url: m.url,
-    alt: m.alt,
-    caption: m.caption,
-    featured: m.featured,
-    order: m.order,
-    mimeType: m.mimeType,
+    id:        m.id,
+    url:       m.url,
+    thumbUrl:  m.thumbUrl  ?? null,
+    mediumUrl: m.mediumUrl ?? null,
+    largeUrl:  m.largeUrl  ?? null,
+    alt:       m.alt,
+    caption:   m.caption,
+    featured:  m.featured,
+    order:     m.order,
+    mimeType:  m.mimeType,
+    width:     m.width  ?? null,
+    height:    m.height ?? null,
   }
 }
 
@@ -663,7 +673,9 @@ export async function setPersonCoverPhoto(personId: string, mediaId: string | nu
       if (!media || media.familyId !== session.familyId || media.personId !== personId) {
         return { ok: false, error: 'Imagen no encontrada para esta persona.' }
       }
-      coverPhoto = media.url
+      // Preferir la variante medium (50 KB) sobre el original (~2 MB) para el avatar.
+      // Las filas legacy sin variantes caen en el url original.
+      coverPhoto = media.mediumUrl ?? media.url
     }
 
     await prisma.person.update({

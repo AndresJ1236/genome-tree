@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { getPersonProfile } from '@/app/actions/content'
 import type { PersonProfile, PersonBasic } from '@/lib/content-types'
+import { pickMediaUrl } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
 
 const PANEL_W = 380
@@ -436,7 +437,7 @@ function FeaturedGrid({ media, isPet }: { media: PersonProfile['featuredMedia'];
           item ? (
             <img
               key={item.id}
-              src={item.url}
+              src={pickMediaUrl(item, 'medium')}
               alt={item.alt ?? ''}
               style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 2, display: 'block' }}
             />
