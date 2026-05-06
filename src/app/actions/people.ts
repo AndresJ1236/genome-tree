@@ -288,6 +288,7 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
           type: r.type as 'SPOUSE' | 'PARTNER' | 'SIBLING',
           partnerId: partner.id,
           partnerName: getPersonDisplayName(partner),
+          startDate: r.startDate ? r.startDate.toISOString().slice(0, 10) : null,
           endDate: r.endDate ? r.endDate.toISOString().slice(0, 10) : null,
         }
       }),
@@ -299,6 +300,8 @@ export async function createRelationship(input: {
   personId: string
   partnerId: string
   type: 'SPOUSE' | 'PARTNER' | 'SIBLING'
+  /** Fecha real de matrimonio/unión. Solo aplica a SPOUSE/PARTNER. */
+  startDate?: string | null
 }): Promise<ActionResult<{ id: string }>> {
   const session = await getSession()
   if (!session) return { ok: false, error: 'No autenticado' }
@@ -319,7 +322,13 @@ export async function createRelationship(input: {
 
     const [id1, id2] = [input.personId, input.partnerId].sort()
     const rel = await prisma.relationship.create({
-      data: { familyId: session.familyId, person1Id: id1, person2Id: id2, type: input.type },
+      data: {
+        familyId:  session.familyId,
+        person1Id: id1,
+        person2Id: id2,
+        type:      input.type,
+        startDate: input.type !== 'SIBLING' && input.startDate ? new Date(input.startDate) : null,
+      },
     })
 
     // Sibling relationships: no managed family unit, just revalidate and return
@@ -842,6 +851,42 @@ export async function setRelationshipEndDate(input: {
   }
 }
 
+export async function setRelationshipStartDate(input: {
+  relationshipId: string
+  personId: string
+  startDate: string | null
+}): Promise<ActionResult<null>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    const isAdmin = session.role === 'ADMIN' || session.scope === 'ADMIN'
+    if (!isAdmin) return { ok: false, error: 'Solo administradores pueden modificar relaciones de pareja.' }
+
+    const rel = await prisma.relationship.findFirst({
+      where: { id: input.relationshipId, familyId: session.familyId },
+    })
+    if (!rel) return { ok: false, error: 'Relación no encontrada.' }
+    if (rel.person1Id !== input.personId && rel.person2Id !== input.personId) {
+      return { ok: false, error: 'No autorizado.' }
+    }
+    if (rel.type === 'SIBLING') {
+      return { ok: false, error: 'Los hermanos no tienen fecha de inicio.' }
+    }
+
+    const startDate = input.startDate ? new Date(input.startDate) : null
+    await prisma.relationship.update({
+      where: { id: input.relationshipId },
+      data: { startDate },
+    })
+
+    revalidateFamilyPaths(session.familySlug)
+    return { ok: true, data: null }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
 export async function setParentChild(input: {
   childId: string
   parentId: string
@@ -1185,7 +1230,7 @@ export async function getTimelineEvents(): Promise<ActionResult<TimelineEvent[]>
         familyId: session.familyId,
         type:     { in: ['SPOUSE', 'PARTNER'] },
       },
-      select: { person1Id: true, person2Id: true, createdAt: true, endDate: true },
+      select: { person1Id: true, person2Id: true, startDate: true, endDate: true },
     }),
   ])
 
@@ -1232,19 +1277,22 @@ export async function getTimelineEvents(): Promise<ActionResult<TimelineEvent[]>
     const name1 = getPersonDisplayName({ firstName: p1.firstName, middleName: p1.middleName, lastName: p1.lastName })
     const name2 = getPersonDisplayName({ firstName: p2.firstName, middleName: p2.middleName, lastName: p2.lastName })
 
-    // Marriage = createdAt (cuando se registró la relación). No es exacto pero
-    // es lo mejor que tenemos sin un campo "marriedAt" en el schema.
-    // TODO futuro: agregar marriedAt al modelo Relationship para fechas reales.
-    const md = new Date(r.createdAt)
-    const my = md.getFullYear()
-    events.push({
-      kind:      'MARRIAGE',
-      date:      md.toISOString().slice(0, 10),
-      year:      my,
-      personIds: [r.person1Id, r.person2Id],
-      label:     `Se unieron ${name1} y ${name2}`,
-      decade:    my - (my % 10),
-    })
+    // Marriage = fecha REAL del matrimonio (Relationship.startDate).
+    // Si no se conoce, NO insertamos el evento — mejor omitir que mostrar
+    // una fecha incorrecta. El admin puede llenar la fecha desde
+    // PersonEditor → Relaciones.
+    if (r.startDate) {
+      const md = new Date(r.startDate)
+      const my = md.getFullYear()
+      events.push({
+        kind:      'MARRIAGE',
+        date:      md.toISOString().slice(0, 10),
+        year:      my,
+        personIds: [r.person1Id, r.person2Id],
+        label:     `Se unieron ${name1} y ${name2}`,
+        decade:    my - (my % 10),
+      })
+    }
 
     if (r.endDate) {
       const ed = new Date(r.endDate)

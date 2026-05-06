@@ -302,6 +302,7 @@ export interface RelationshipItem {
   type: 'SPOUSE' | 'PARTNER' | 'SIBLING'
   partnerId: string
   partnerName: string
+  startDate: string | null
   endDate: string | null
 }
 
