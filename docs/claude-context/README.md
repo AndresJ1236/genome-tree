@@ -22,7 +22,7 @@
 | Question | Answer |
 |----------|--------|
 | What is this? | Self-hosted genealogy app for a single extended family |
-| Current version | v3.0.0 (May 6, 2026) |
+| Current version | v3.1.0 (May 6, 2026) |
 | Production URL | https://arbol.adastranium.com |
 | Production host | TrueNAS SCALE 192.168.100.58 (private LAN, exposed via Cloudflare Tunnel) |
 | Deploy target | `/mnt/vault/Tresure/Genome` on the NAS |
