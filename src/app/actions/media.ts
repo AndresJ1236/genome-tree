@@ -23,6 +23,42 @@ const ALLOWED_MIME_TYPES = [
   'image/gif',
 ]
 
+// Map filename extensions → canonical MIME type.
+// Used to recover when the browser sends an empty/unknown file.type
+// (notably for .jpeg files on some platforms).
+const EXT_TO_MIME: Record<string, string> = {
+  jpg:  'image/jpeg',
+  jpeg: 'image/jpeg',
+  jfif: 'image/jpeg',
+  pjpeg: 'image/jpeg',
+  png:  'image/png',
+  webp: 'image/webp',
+  gif:  'image/gif',
+}
+
+/**
+ * Resolve a canonical MIME type for a file.
+ *
+ * Browsers sometimes send unhelpful values for `file.type`:
+ *   - empty string  (rare, but happens on some Linux distros / older browsers)
+ *   - "image/jpg"   (informal alias used by a few uploaders)
+ *   - other variants that aren't in our allow-list
+ *
+ * If the reported type is recognized, we keep it. Otherwise we fall back
+ * to the file extension. Returns null if neither route gives us a known type.
+ */
+function resolveMimeType(file: File): string | null {
+  // Normalize informal aliases first
+  const reported = file.type.toLowerCase().replace('image/jpg', 'image/jpeg')
+  if (ALLOWED_MIME_TYPES.includes(reported)) return reported
+
+  // Fall back to extension
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  if (ext && EXT_TO_MIME[ext]) return EXT_TO_MIME[ext]
+
+  return null
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Subir imagen para una persona
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,8 +81,10 @@ export async function uploadMedia(
     return { ok: false, error: 'Faltan datos: file y personId son requeridos.' }
   }
 
-  // Validar tipo
-  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+  // Resolve canonical MIME — handles browsers that report an empty or
+  // informal type (e.g. "image/jpg") for .jpeg files.
+  const mimeType = resolveMimeType(file)
+  if (!mimeType) {
     return { ok: false, error: 'Formato no permitido. Usa JPG, PNG, WebP o GIF.' }
   }
 
@@ -87,13 +125,13 @@ export async function uploadMedia(
   })
   if (!family) return { ok: false, error: 'Familia no encontrada.' }
 
-  // Subir archivo
+  // Subir archivo — usa el MIME canónico (no file.type que puede venir vacío)
   const buffer = Buffer.from(await file.arrayBuffer())
-  const key    = generateKey(family.slug, personId, file.type)
+  const key    = generateKey(family.slug, personId, mimeType)
 
   let url: string
   try {
-    const result = await uploadFile(key, buffer, file.type)
+    const result = await uploadFile(key, buffer, mimeType)
     url = result.url
   } catch (e: unknown) {
     console.error('[uploadMedia] Error subiendo archivo:', e)
@@ -115,7 +153,7 @@ export async function uploadMedia(
       familyId:     session.familyId,
       url,
       key,
-      mimeType:     file.type,
+      mimeType,
       featured,
       order,
       uploadedById: session.userId,
@@ -143,7 +181,8 @@ export async function uploadContentMedia(
     return { ok: false, error: 'Faltan datos requeridos.' }
   }
 
-  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+  const mimeType = resolveMimeType(file)
+  if (!mimeType) {
     return { ok: false, error: 'Formato no permitido. Usa JPG, PNG, WebP o GIF.' }
   }
 
@@ -191,11 +230,11 @@ export async function uploadContentMedia(
   if (!family) return { ok: false, error: 'Familia no encontrada.' }
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const key    = generateKey(family.slug, personId, file.type)
+  const key    = generateKey(family.slug, personId, mimeType)
 
   let url: string
   try {
-    const result = await uploadFile(key, buffer, file.type)
+    const result = await uploadFile(key, buffer, mimeType)
     url = result.url
   } catch (e: unknown) {
     console.error('[uploadContentMedia] Error subiendo archivo:', e)
@@ -212,7 +251,7 @@ export async function uploadContentMedia(
         familyId:     session.familyId,
         url,
         key,
-        mimeType:     file.type,
+        mimeType,
         featured:     false,
         order,
         uploadedById: session.userId,

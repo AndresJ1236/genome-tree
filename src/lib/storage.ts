@@ -147,12 +147,23 @@ export function getPublicUrl(key: string): string {
   return `/uploads/${key}`
 }
 
+/**
+ * Map a canonical MIME type to a single, unambiguous file extension.
+ * Falls back to "bin" only if the MIME is genuinely unknown.
+ */
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png':  'png',
+  'image/webp': 'webp',
+  'image/gif':  'gif',
+}
+
 export function generateKey(
   familySlug: string,
   personId: string,
   mimeType: string
 ): string {
-  const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'bin'
+  const ext = MIME_TO_EXT[mimeType.toLowerCase()] ?? 'bin'
   const timestamp = Date.now()
   const random = Math.random().toString(36).slice(2, 8)
   return `${familySlug}/${personId}/${timestamp}-${random}.${ext}`
