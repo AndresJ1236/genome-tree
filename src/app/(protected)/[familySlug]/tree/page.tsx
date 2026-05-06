@@ -6,6 +6,7 @@ import type { PersonData, RelationshipData } from '@/lib/tree-types'
 import { FamilyTree } from '@/components/tree/FamilyTree'
 import { getFamilyModules } from '@/lib/family-config'
 import { getVisiblePersonIds } from '@/lib/permissions'
+import { BirthdayPanel } from '@/components/ui/BirthdayPanel'
 
 export default async function TreePage({
   params,
@@ -24,6 +25,7 @@ export default async function TreePage({
     prisma.person.findMany({
       where: {
         familyId: family.id,
+        deletedAt: null,    // soft delete: oculta personas eliminadas del árbol
         ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
       },
     }),
@@ -158,6 +160,7 @@ export default async function TreePage({
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <BirthdayPanel familySlug={familySlug} />
           <a
             href="/api/relations/export"
             style={{

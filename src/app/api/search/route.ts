@@ -18,6 +18,7 @@ function personYears(birthDate: Date | null, deathDate: Date | null): string | n
 function buildPersonSearchWhere(terms: string[], visibleIds: Set<string> | null, familyId: string) {
   return {
     familyId,
+    deletedAt: null,
     ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
     AND: terms.map(term => ({
       OR: [
@@ -34,6 +35,7 @@ function buildPersonSearchWhere(terms: string[], visibleIds: Set<string> | null,
 function buildContentSearchWhere(terms: string[], visibleIds: Set<string> | null, familyId: string, visibilityIn: ContentVisibility[]) {
   return {
     familyId,
+    deletedAt: null,
     visibility: { in: visibilityIn },
     ...(visibleIds ? { personId: { in: [...visibleIds] } } : {}),
     AND: terms.map(term => ({

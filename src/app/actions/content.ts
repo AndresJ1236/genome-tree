@@ -172,13 +172,15 @@ export async function getPersonProfile(
     }),
     // Hijos: personas donde fatherId=personId o motherId=personId
     prisma.person.findMany({
-      where: { OR: [{ fatherId: personId }, { motherId: personId }] },
+      where: { OR: [{ fatherId: personId }, { motherId: personId }], deletedAt: null },
       select: personSelect,
       orderBy: { birthDate: 'asc' },
     }),
     prisma.content.groupBy({
       by:     ['type'],
-      where:  visibilityIn.length > 0 ? { personId, visibility: { in: visibilityIn } } : { personId, id: '__none__' },
+      where:  visibilityIn.length > 0
+        ? { personId, deletedAt: null, visibility: { in: visibilityIn } }
+        : { personId, id: '__none__' },
       _count: { id: true },
     }),
     prisma.importantLink.count({
@@ -200,7 +202,7 @@ export async function getPersonProfile(
   }
   // Consulta de hijos con fatherId/motherId para inferir pareja
   const childrenWithParents = await prisma.person.findMany({
-    where: { OR: [{ fatherId: personId }, { motherId: personId }] },
+    where: { OR: [{ fatherId: personId }, { motherId: personId }], deletedAt: null },
     select: { fatherId: true, motherId: true },
   })
   for (const c of childrenWithParents) {
@@ -291,7 +293,9 @@ export async function getPersonFull(
     getPersonProfile(personId),
 
     prisma.content.findMany({
-      where: visibilityIn.length > 0 ? { personId, visibility: { in: visibilityIn } } : { personId, id: '__none__' },
+      where: visibilityIn.length > 0
+        ? { personId, deletedAt: null, visibility: { in: visibilityIn } }
+        : { personId, id: '__none__' },
       include: {
         createdBy: { select: { id: true, name: true } },
         media:     { include: { media: true }, orderBy: { order: 'asc' } },
@@ -817,11 +821,48 @@ export async function deleteContent(id: string): Promise<ActionResult> {
     return { ok: false, error: (e as Error).message }
   }
 
-  // Eliminar en cascada: ContentMedia primero, luego Content
-  await prisma.$transaction([
-    prisma.contentMedia.deleteMany({ where: { contentId: id } }),
-    prisma.content.delete({ where: { id } }),
-  ])
+  // Soft delete: marca como eliminado pero preserva en DB.
+  // ContentMedia se mantiene; queries de listado deben filtrar por
+  // deletedAt:null (ya implementado en getProfilePayload y similares).
+  await prisma.content.update({
+    where: { id },
+    data: {
+      deletedAt:   new Date(),
+      deletedById: session.userId,
+    },
+  })
+
+  revalidateContentPaths(session.familySlug, content.personId)
+  return { ok: true, data: undefined }
+}
+
+/**
+ * Restaura un contenido previamente eliminado.
+ * Solo admins pueden restaurar (ediciones normales pueden estar bloqueadas
+ * por lockedAt, pero la restauración es reversible y no toca el contenido).
+ */
+export async function restoreContent(id: string): Promise<ActionResult> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const isAdmin = session.role === 'ADMIN' || session.scope === 'ADMIN'
+  if (!isAdmin) return { ok: false, error: 'Solo administradores pueden restaurar contenido.' }
+
+  const content = await prisma.content.findUnique({
+    where: { id },
+    select: { familyId: true, personId: true, deletedAt: true },
+  })
+  if (!content || content.familyId !== session.familyId) {
+    return { ok: false, error: 'Contenido no encontrado' }
+  }
+  if (!content.deletedAt) {
+    return { ok: false, error: 'Este contenido no está eliminado.' }
+  }
+
+  await prisma.content.update({
+    where: { id },
+    data: { deletedAt: null, deletedById: null },
+  })
 
   revalidateContentPaths(session.familySlug, content.personId)
   return { ok: true, data: undefined }

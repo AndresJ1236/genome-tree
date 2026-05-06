@@ -97,6 +97,7 @@ async function getVisiblePeopleForEditor(session: NonNullable<Awaited<ReturnType
   return prisma.person.findMany({
     where: {
       familyId: session.familyId,
+      deletedAt: null,        // soft delete: ocultas en el selector
       ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
     },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
@@ -718,14 +719,18 @@ export async function deletePerson(personId: string): Promise<ActionResult> {
       }
     }
 
-    await prisma.$transaction([
-      prisma.relationship.deleteMany({
-        where: {
-          OR: [{ person1Id: personId }, { person2Id: personId }],
-        },
-      }),
-      prisma.person.delete({ where: { id: personId } }),
-    ])
+    // Soft delete: marca la persona como eliminada pero NO borra del DB.
+    // Las relaciones (Relationship) tampoco se borran — quedan colgando, pero
+    // el árbol filtra por deletedAt:null antes de pasar al layout, así que
+    // person1Id/person2Id de la persona eliminada no aparecerán en personSet
+    // y se ignoran automáticamente. Si la persona se restaura, todo vuelve.
+    await prisma.person.update({
+      where: { id: personId },
+      data: {
+        deletedAt: new Date(),
+        deletedById: session.userId,
+      },
+    })
 
     await logAudit({
       familyId: session.familyId,
@@ -738,6 +743,50 @@ export async function deletePerson(personId: string): Promise<ActionResult> {
         middleName: person.middleName,
         lastName: person.lastName,
       },
+    })
+
+    revalidateFamilyPaths(session.familySlug)
+    return { ok: true, data: undefined }
+  } catch (error: unknown) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+/**
+ * Restaura una persona previamente eliminada (deletedAt → null).
+ * Solo admins.
+ */
+export async function restorePerson(personId: string): Promise<ActionResult> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  try {
+    const isAdmin = session.role === 'ADMIN' || session.scope === 'ADMIN'
+    if (!isAdmin) return { ok: false, error: 'Solo administradores pueden restaurar personas.' }
+
+    const person = await prisma.person.findUnique({
+      where: { id: personId },
+      select: { id: true, familyId: true, firstName: true, lastName: true, deletedAt: true },
+    })
+    if (!person || person.familyId !== session.familyId) {
+      return { ok: false, error: 'Persona no encontrada.' }
+    }
+    if (!person.deletedAt) {
+      return { ok: false, error: 'Esta persona no está eliminada.' }
+    }
+
+    await prisma.person.update({
+      where: { id: personId },
+      data: { deletedAt: null, deletedById: null },
+    })
+
+    await logAudit({
+      familyId: session.familyId,
+      userId: session.userId,
+      action: 'RESTORE_PERSON',
+      entityType: 'Person',
+      entityId: personId,
+      newValue: { firstName: person.firstName, lastName: person.lastName },
     })
 
     revalidateFamilyPaths(session.familySlug)
@@ -809,4 +858,93 @@ export async function setParentChild(input: {
   } catch (error: unknown) {
     return { ok: false, error: (error as Error).message }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cumpleaños del mes
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MonthBirthday {
+  id:        string
+  fullName:  string
+  day:       number               // día del mes (1-31)
+  birthYear: number | null
+  age:       number | null        // edad que cumplirá este año (null si falleció o no hay año)
+  gender:    'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN'
+  isPet:     boolean
+  isPast:    boolean              // ya pasó este mes
+  isToday:   boolean
+  deceased:  boolean
+}
+
+/**
+ * Devuelve cumpleaños del mes calendario actual de personas en la familia
+ * (filtra invisibles según permisos del usuario, y excluye eliminadas).
+ *
+ * Si `month` se pasa, usa ese mes (1-12); si no, usa el mes actual del servidor.
+ *
+ * Ordenado por día ascendente. Personas fallecidas se incluyen con
+ * `deceased: true` — el frontend decide si mostrarlas o no.
+ */
+export async function getMonthBirthdays(month?: number): Promise<ActionResult<MonthBirthday[]>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const visibleIds = await getVisiblePersonIds(session)
+
+  const now = new Date()
+  const targetMonth = month ?? (now.getMonth() + 1)   // 1-12
+  const today = now.getDate()
+  const isCurrentMonth = targetMonth === now.getMonth() + 1
+  const currentYear = now.getFullYear()
+
+  // No hay forma directa en Prisma de filtrar por month(birthDate) — traemos
+  // los registros con birthDate definida y filtramos en JS. Para una familia
+  // de cientos de personas esto es trivial.
+  const persons = await prisma.person.findMany({
+    where: {
+      familyId:  session.familyId,
+      deletedAt: null,
+      birthDate: { not: null },
+      ...(visibleIds ? { id: { in: [...visibleIds] } } : {}),
+    },
+    select: {
+      id:         true,
+      firstName:  true,
+      middleName: true,
+      lastName:   true,
+      birthDate:  true,
+      deathDate:  true,
+      gender:     true,
+      nodeKind:   true,
+    },
+  })
+
+  const result: MonthBirthday[] = []
+  for (const p of persons) {
+    if (!p.birthDate) continue
+    const bd = new Date(p.birthDate)
+    if (bd.getMonth() + 1 !== targetMonth) continue
+
+    const day = bd.getDate()
+    const birthYear = bd.getFullYear()
+    const deceased = p.deathDate != null
+    const age = (deceased || !birthYear) ? null : currentYear - birthYear
+
+    result.push({
+      id:        p.id,
+      fullName:  getPersonDisplayName({ firstName: p.firstName, middleName: p.middleName, lastName: p.lastName }),
+      day,
+      birthYear: birthYear ?? null,
+      age,
+      gender:    p.gender as 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN',
+      isPet:     p.nodeKind === 'PET',
+      isPast:    isCurrentMonth ? day < today : false,
+      isToday:   isCurrentMonth && day === today,
+      deceased,
+    })
+  }
+
+  result.sort((a, b) => a.day - b.day)
+  return { ok: true, data: result }
 }
