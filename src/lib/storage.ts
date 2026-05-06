@@ -201,10 +201,24 @@ export function getPublicUrl(key: string): string {
  * Falls back to "bin" only if the MIME is genuinely unknown.
  */
 const MIME_TO_EXT: Record<string, string> = {
+  // Imágenes
   'image/jpeg': 'jpg',
   'image/png':  'png',
   'image/webp': 'webp',
   'image/gif':  'gif',
+  // Audio
+  'audio/mpeg': 'mp3',
+  'audio/mp4':  'm4a',
+  'audio/aac':  'aac',
+  'audio/ogg':  'ogg',
+  'audio/wav':  'wav',
+  'audio/webm': 'webm',
+  'audio/x-m4a': 'm4a',
+  // Video
+  'video/mp4':       'mp4',
+  'video/webm':      'webm',
+  'video/quicktime': 'mov',
+  'video/x-m4v':     'm4v',
 }
 
 export function generateKey(
@@ -390,4 +404,76 @@ export async function deleteFileWithVariants(baseKey: string): Promise<void> {
     deleteFile(`${stem}-medium.webp`),
     deleteFile(`${stem}-large.webp`),
   ])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audio / Video — guarda el original tal cual, sin transcoding
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Para audio/video, en esta primera fase guardamos el archivo SIN transcoding.
+ * Los navegadores modernos reproducen mp4/webm/mp3/m4a/ogg directamente con
+ * <video>/<audio> elements.
+ *
+ * Casos cubiertos sin ffmpeg:
+ *  ✓ MP3, M4A, AAC, OGG, WebM audio — todos reproducen
+ *  ✓ MP4 (H.264) — el formato más común de celular
+ *  ✓ WebM video
+ *  ✗ MOV (QuickTime) — Safari sí, otros NO. Si es problema lo agregamos.
+ *
+ * Si en el futuro necesitamos thumbnails de video o transcoding a MP4,
+ * agregaríamos ffmpeg-static + fluent-ffmpeg al Dockerfile.
+ */
+export const VIDEO_MIME_TYPES = [
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',  // .mov de iPhone
+  'video/x-m4v',
+] as const
+
+export const AUDIO_MIME_TYPES = [
+  'audio/mpeg',       // MP3
+  'audio/mp4',        // M4A
+  'audio/aac',
+  'audio/ogg',
+  'audio/wav',
+  'audio/webm',
+  'audio/x-m4a',
+] as const
+
+export const MAX_AUDIO_SIZE = 50 * 1024 * 1024    // 50 MB → ~50 min de audio
+export const MAX_VIDEO_SIZE = 200 * 1024 * 1024   // 200 MB → ~5-10 min HD
+
+export function classifyMime(mime: string): 'image' | 'audio' | 'video' | 'unknown' {
+  const m = mime.toLowerCase()
+  if (m.startsWith('image/')) return 'image'
+  if (m.startsWith('audio/')) return 'audio'
+  if (m.startsWith('video/')) return 'video'
+  return 'unknown'
+}
+
+export interface SimpleUploadResult {
+  url:         string
+  key:         string
+  mimeType:    string
+  durationSec: number | null    // siempre null en esta fase (sin ffmpeg)
+}
+
+/**
+ * Sube un archivo de audio o video tal cual a MinIO. No genera variantes
+ * ni extrae duración (eso requeriría ffmpeg). El cliente puede leer la
+ * duración del <audio>/<video> element via metadata events si lo necesita.
+ */
+export async function uploadMediaFile(
+  baseKey: string,
+  buffer: Buffer,
+  mimeType: string
+): Promise<SimpleUploadResult> {
+  const result = await uploadFile(baseKey, buffer, mimeType)
+  return {
+    url:         result.url,
+    key:         result.key,
+    mimeType,
+    durationSec: null,
+  }
 }

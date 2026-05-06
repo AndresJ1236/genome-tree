@@ -465,13 +465,22 @@ model Reaction {
 // MEDIA
 // ─────────────────────────────────────────────
 
+enum MediaKind {
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
 model Media {
   id           String   @id @default(cuid())
   personId     String
   familyId     String
-  url          String                 // original (capeado a 3840px lado mayor)
+  url          String                 // original (capeado a 3840px lado mayor; audio/video sin tocar)
   key          String                 // MinIO key del original
   mimeType     String                 // del original
+  kind         MediaKind @default(IMAGE)
+  durationSec  Int?                   // duración en segundos para audio/video
+  posterUrl    String?                // poster (frame extraído) para video
   alt          String?
   caption      String?
   featured     Boolean  @default(false)
