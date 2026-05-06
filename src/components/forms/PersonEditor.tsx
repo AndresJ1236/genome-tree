@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createPerson, createRelationship, deleteRelationship, deletePerson, setParentChild, setPersonCoverPhoto, setRelationshipEndDate, updatePerson } from '@/app/actions/people'
+import { createPerson, createRelationship, deleteRelationship, deletePerson, setParentChild, setPersonCoverPhoto, setRelationshipEndDate, setRelationshipStartDate, updatePerson } from '@/app/actions/people'
 import { proposePeopleUpdate, proposeNewPerson } from '@/app/actions/proposals'
 import { uploadMedia, deleteMedia } from '@/app/actions/media'
 import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF, pickMediaUrl } from '@/lib/content-types'
@@ -111,6 +111,7 @@ export function PersonEditor({
   const [relationships, setRelationships] = useState<RelationshipItem[]>(payload.relationships)
   const [newPartnerType, setNewPartnerType] = useState<'SPOUSE' | 'PARTNER' | 'SIBLING'>('SPOUSE')
   const [newPartnerId, setNewPartnerId] = useState('')
+  const [newPartnerStartDate, setNewPartnerStartDate] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploadCount, setUploadCount] = useState(0)
@@ -401,7 +402,8 @@ export function PersonEditor({
     setError(null)
     setMessage(null)
     startTransition(async () => {
-      const result = await createRelationship({ personId: form.id, partnerId: newPartnerId, type: newPartnerType })
+      const startDate = newPartnerType !== 'SIBLING' && newPartnerStartDate ? newPartnerStartDate : null
+      const result = await createRelationship({ personId: form.id, partnerId: newPartnerId, type: newPartnerType, startDate })
       if (!result.ok) { setError(result.error); return }
       const partner = payload.candidates.find(c => c.id === newPartnerId)
       if (partner) {
@@ -410,10 +412,12 @@ export function PersonEditor({
           type: newPartnerType,
           partnerId: newPartnerId,
           partnerName: getPersonDisplayName(partner),
+          startDate,
           endDate: null,
         }])
       }
       setNewPartnerId('')
+      setNewPartnerStartDate('')
       setMessage('Relación de pareja añadida.')
     })
   }
@@ -916,9 +920,6 @@ export function PersonEditor({
                         {rel.type === 'SPOUSE' ? 'Cónyuge' : rel.type === 'SIBLING' ? 'Hermano/a' : 'Pareja'}
                       </span>
                       <span style={{ fontSize: 14, color: '#2C2C2C', flex: 1 }}>{rel.partnerName}</span>
-                      {rel.endDate && rel.type !== 'SIBLING' && (
-                        <span style={{ fontSize: 11, color: '#8B9E94' }}>Fin: {rel.endDate}</span>
-                      )}
                       <ConfirmButton
                         label="Eliminar"
                         confirmLabel="¿Seguro?"
@@ -928,39 +929,75 @@ export function PersonEditor({
                       />
                     </div>
                     {rel.type !== 'SIBLING' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <label style={{ fontSize: 11, color: '#8B9E94', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                        Fecha de separación
-                      </label>
-                      <input
-                        type="date"
-                        defaultValue={rel.endDate ?? ''}
-                        onChange={e => {
-                          const val = e.target.value || null
-                          startTransition(async () => {
-                            const result = await setRelationshipEndDate({ relationshipId: rel.id, personId: form.id, endDate: val })
-                            if (!result.ok) setError(result.error)
-                            else setRelationships(prev => prev.map(r => r.id === rel.id ? { ...r, endDate: val } : r))
-                          })
-                        }}
-                        style={{ ...inputStyle, width: 160, padding: '6px 10px', fontSize: 13 }}
-                      />
-                      {rel.endDate && (
-                        <button
-                          type="button"
-                          onClick={() => {
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={{ fontSize: 11, color: '#8B9E94', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: 150 }}>
+                          {rel.type === 'SPOUSE' ? 'Fecha de matrimonio' : 'Fecha de unión'}
+                        </label>
+                        <input
+                          type="date"
+                          defaultValue={rel.startDate ?? ''}
+                          onChange={e => {
+                            const val = e.target.value || null
                             startTransition(async () => {
-                              const result = await setRelationshipEndDate({ relationshipId: rel.id, personId: form.id, endDate: null })
+                              const result = await setRelationshipStartDate({ relationshipId: rel.id, personId: form.id, startDate: val })
                               if (!result.ok) setError(result.error)
-                              else setRelationships(prev => prev.map(r => r.id === rel.id ? { ...r, endDate: null } : r))
+                              else setRelationships(prev => prev.map(r => r.id === rel.id ? { ...r, startDate: val } : r))
                             })
                           }}
-                          disabled={isPending}
-                          style={{ border: '1px solid #E0DAD0', background: '#fff', borderRadius: 2, color: '#6B6B6B', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}
-                        >
-                          Quitar fecha
-                        </button>
-                      )}
+                          style={{ ...inputStyle, width: 160, padding: '6px 10px', fontSize: 13 }}
+                        />
+                        {rel.startDate && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              startTransition(async () => {
+                                const result = await setRelationshipStartDate({ relationshipId: rel.id, personId: form.id, startDate: null })
+                                if (!result.ok) setError(result.error)
+                                else setRelationships(prev => prev.map(r => r.id === rel.id ? { ...r, startDate: null } : r))
+                              })
+                            }}
+                            disabled={isPending}
+                            style={{ border: '1px solid #E0DAD0', background: '#fff', borderRadius: 2, color: '#6B6B6B', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}
+                          >
+                            Quitar fecha
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={{ fontSize: 11, color: '#8B9E94', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: 150 }}>
+                          Fecha de separación
+                        </label>
+                        <input
+                          type="date"
+                          defaultValue={rel.endDate ?? ''}
+                          onChange={e => {
+                            const val = e.target.value || null
+                            startTransition(async () => {
+                              const result = await setRelationshipEndDate({ relationshipId: rel.id, personId: form.id, endDate: val })
+                              if (!result.ok) setError(result.error)
+                              else setRelationships(prev => prev.map(r => r.id === rel.id ? { ...r, endDate: val } : r))
+                            })
+                          }}
+                          style={{ ...inputStyle, width: 160, padding: '6px 10px', fontSize: 13 }}
+                        />
+                        {rel.endDate && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              startTransition(async () => {
+                                const result = await setRelationshipEndDate({ relationshipId: rel.id, personId: form.id, endDate: null })
+                                if (!result.ok) setError(result.error)
+                                else setRelationships(prev => prev.map(r => r.id === rel.id ? { ...r, endDate: null } : r))
+                              })
+                            }}
+                            disabled={isPending}
+                            style={{ border: '1px solid #E0DAD0', background: '#fff', borderRadius: 2, color: '#6B6B6B', padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}
+                          >
+                            Quitar fecha
+                          </button>
+                        )}
+                      </div>
                     </div>
                     )}
                   </div>
@@ -968,7 +1005,7 @@ export function PersonEditor({
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr auto', gap: 10, alignItems: 'end' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 170px auto', gap: 10, alignItems: 'end' }}>
               <Field label="Tipo">
                 <select value={newPartnerType} onChange={e => setNewPartnerType(e.target.value as 'SPOUSE' | 'PARTNER' | 'SIBLING')} style={inputStyle}>
                   <option value="SPOUSE">Cónyuge</option>
@@ -984,6 +1021,16 @@ export function PersonEditor({
                   placeholder="Seleccionar..."
                 />
               </Field>
+              {newPartnerType !== 'SIBLING' ? (
+                <Field label={newPartnerType === 'SPOUSE' ? 'Fecha matrimonio' : 'Fecha unión'}>
+                  <input
+                    type="date"
+                    value={newPartnerStartDate}
+                    onChange={e => setNewPartnerStartDate(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+              ) : <div />}
               <button
                 type="button"
                 onClick={handleAddRelationship}

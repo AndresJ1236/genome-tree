@@ -226,7 +226,13 @@ model Relationship {
   person1Id String
   person2Id String
   type      RelationshipType
+  // Para SPOUSE/PARTNER: fecha real de matrimonio o inicio de la pareja
+  // (NO la fecha en que se registró en el sistema). Null si no se conoce.
+  // Para SIBLING: no aplica (los hermanos lo son desde siempre).
+  startDate DateTime?
   endDate   DateTime?
+  // createdAt es la fecha de registro en el sistema, NO de matrimonio.
+  // Usado solo para audit / orden de inserción.
   createdAt DateTime         @default(now())
 
   family  Family @relation(fields: [familyId], references: [id])
