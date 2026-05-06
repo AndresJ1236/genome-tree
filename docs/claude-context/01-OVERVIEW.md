@@ -12,16 +12,18 @@ The product fits a niche between commercial genealogy SaaS (Ancestry, MyHeritage
 - **Visual tree** — custom layout engine, not a generic graph library
 - **Per-user perspective** — each logged-in user sees the tree from THEIR position (their dad's side on the left, mom's side on the right)
 
-## Current version: v2.0.0
+## Current version: v3.0.0
 
-Released May 3, 2026. Major changes vs v1.0:
+Released May 6, 2026. Major changes vs v2.0:
 
-- **Tree layout overhaul**: BFS-from-focus generation algorithm, side-bounded paternal/maternal split, sibling relationships
-- **Audit-driven notifications**: every audit log entry fans out notifications to the appropriate audience; works for offline users
-- **Family unit auto-create**: detects couples from explicit relationships AND from shared children
-- **Member proposals**: non-admins can propose new people (`PersonCreationProposal`), admins review
+- **Photo system overhaul**: `sharp` pipeline generates 4 versions per upload (4K-capped original + 3 WebP variants). 23× lighter page loads on mobile. Backfill of legacy photos done.
+- **Mobile / responsive UX**: bigger fonts, "Ir a mí" recenter button, color legend, simplified Spanish form labels, inline confirm buttons replacing native `confirm()`.
+- **Birthdays of the month**: popover in tree header showing whose birthday falls this month, with today highlighted.
+- **Story comments**: lazy-loaded discussion thread per story, with notifications.
+- **Soft delete**: Person and Content rows are recoverable instead of destructively deleted.
+- **Security**: MinIO bucket policy applied programmatically; robust MIME validation on upload (`resolveMimeType` with extension fallback for browsers that send empty `file.type`).
 
-See [`Version 2.0/RELEASE_NOTES.md`](../../Version%202.0/RELEASE_NOTES.md) for the full changelog.
+See [`Version 3.0/RELEASE_NOTES.md`](../../Version%203.0/RELEASE_NOTES.md) for the full changelog. v2.0 (tree layout overhaul, notifications, sibling relationships, member proposals) is in [`Version 2.0/RELEASE_NOTES.md`](../../Version%202.0/RELEASE_NOTES.md).
 
 ## Production state
 
@@ -78,6 +80,7 @@ genome-tree/
 │   └── *.md                 # Older user-facing docs (some outdated)
 ├── Version 1.0/             # v1.0 release artifacts
 ├── Version 2.0/             # v2.0 release artifacts
+├── Version 3.0/             # v3.0 release artifacts (current)
 ├── docker-compose.yml       # 5 services: db, minio, app, nginx, cloudflared
 └── Dockerfile               # Multi-stage: deps → builder → runner
 ```

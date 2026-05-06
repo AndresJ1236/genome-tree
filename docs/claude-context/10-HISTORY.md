@@ -2,6 +2,53 @@
 
 > Major changes timeline. Detail-level changelog lives in `Version X.Y/RELEASE_NOTES.md`.
 
+## v3.0.0 — May 6, 2026
+
+The "ready for the family" release. Full notes at `Version 3.0/RELEASE_NOTES.md`.
+
+### Photo system rebuilt
+
+- `sharp` + `libvips` pipeline on every upload generates 4 versions: original capped at 4K, plus 1600/400/150px WebP variants.
+- `pickMediaUrl(item, prefer)` helper with graceful fallback for legacy rows.
+- All 11 production photos backfilled. Browsing session weight: ~70 MB → ~3 MB (23× lighter on mobile).
+- EXIF orientation now respected via `sharp.rotate()` — iPhone photos no longer sideways.
+
+### Mobile / responsive UX
+
+- "Ir a mí" button to recenter the tree on the focus person.
+- Collapsible color legend explaining node colors.
+- Bigger fonts everywhere (11px → 13–14px).
+- Visible "? Ayuda" button (was a cryptic 28px circle).
+- Forms simplified with plain Spanish: "Escribe aquí" instead of "Cuerpo", "¿Qué tan seguro es esto?" instead of "Confianza", specific titles ("Nueva historia") instead of generic "Nuevo contenido".
+- Native `confirm()` dialogs replaced with inline `ConfirmButton` (single tap to arm, second tap to commit).
+
+### New family-engagement features
+
+- **Birthdays of the month** popover in the tree header. Today's birthday highlighted with a red dot indicator on the button.
+- **Comments on stories** — lazy-loaded thread per story, with author + relative timestamp, soft-delete-aware. Notifications via new `NEW_COMMENT` type.
+- **Soft delete** — Person and Content rows now have `deletedAt`/`deletedById`. Recoverable via `restorePerson` / `restoreContent` admin actions. All listing queries filter `deletedAt: null`.
+
+### Security improvements
+
+- MinIO bucket policy applied programmatically in `ensureBucket()` (anonymous reads enabled inside Docker network; nginx auth_request gates external access).
+- Robust MIME validation in upload — `resolveMimeType(file)` normalizes informal aliases, falls back to file extension, rejects only unknown types.
+- Soft delete prevents accidental data loss — every destructive action is now recoverable.
+
+### Schema changes
+
+- `Media`: + `thumbUrl`, `mediumUrl`, `largeUrl`, `width`, `height`
+- `Person`: + `deletedAt`, `deletedById`
+- `Content`: + `deletedAt`, `deletedById`
+- New table `Comment` with `(contentId, createdAt)` index
+- `RelationshipType` enum: + `SIBLING`
+- `NotificationType` enum: + `NEW_COMMENT`
+
+### New runtime dependency
+
+- `sharp` 0.34 (with `libvips` Linux musl bindings copied explicitly in the Dockerfile runner stage)
+
+---
+
 ## v2.0.0 — May 3, 2026
 
 ### Tree visualization rewrite
