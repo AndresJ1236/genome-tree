@@ -6,17 +6,36 @@
  * original desde MinIO, ejecuta processImage, sube las 3 variantes y
  * actualiza la fila con los URLs nuevos.
  *
- * Uso:
- *   docker exec -it genome-app-1 sh -c \
- *     'cd /app && node --experimental-vm-modules \
- *      -e "$(cat scripts/backfill-image-variants.js)"'
+ * ⚠️  CRÍTICO: cuando corras esto desde un contenedor temporal, asegúrate
+ *    de pasar TODAS las variables MinIO incluyendo MINIO_PUBLIC_URL. Sin
+ *    esa última, las URLs guardadas en DB serán las internas de Docker
+ *    (http://minio:9000/...), inalcanzables desde el navegador.
  *
- * O más fácil, vía contenedor temporal con tsx:
- *   docker run --rm -v /mnt/vault/Tresure/Genome:/app -w /app \
- *     --network genome_genome_net \
- *     -e DATABASE_URL=... -e MINIO_ENDPOINT=minio -e MINIO_PORT=9000 \
- *     -e MINIO_ROOT_USER=... -e MINIO_ROOT_PASSWORD=... -e MINIO_BUCKET=genome-tree \
- *     node:20-alpine sh -c "npm install --no-save sharp @aws-sdk/client-s3 @prisma/client tsx && npx tsx scripts/backfill-image-variants.ts"
+ * Uso recomendado (extrae las env vars del .env.production):
+ *
+ *   set -a && . /mnt/vault/Tresure/Genome/.env.production && set +a
+ *   docker run --rm --network genome_genome_net \
+ *     -v /mnt/vault/Tresure/Genome:/app -w /app \
+ *     -e DATABASE_URL="$DATABASE_URL" \
+ *     -e MINIO_ENDPOINT=minio -e MINIO_PORT=9000 \
+ *     -e MINIO_ROOT_USER="$MINIO_ROOT_USER" \
+ *     -e MINIO_ROOT_PASSWORD="$MINIO_ROOT_PASSWORD" \
+ *     -e MINIO_BUCKET=genome-tree \
+ *     -e MINIO_PUBLIC_URL="$MINIO_PUBLIC_URL"  \  # ← NO OLVIDAR
+ *     node:20-alpine sh -c \
+ *       'npm install --no-save sharp @aws-sdk/client-s3 \
+ *          @prisma/client@7.8 @prisma/adapter-pg@7.8 prisma@7.8 pg tsx && \
+ *        npx prisma generate --schema /app/prisma/schema.prisma && \
+ *        npx tsx scripts/backfill-image-variants.ts'
+ *
+ * Si olvidas MINIO_PUBLIC_URL y termina con URLs http://minio:9000/...,
+ * arregla con SQL:
+ *
+ *   UPDATE "Media" SET
+ *     "url"       = REPLACE("url",       'http://minio:9000/genome-tree/', 'https://<HOSTNAME>/media/'),
+ *     "thumbUrl"  = REPLACE("thumbUrl",  'http://minio:9000/genome-tree/', 'https://<HOSTNAME>/media/'),
+ *     "mediumUrl" = REPLACE("mediumUrl", 'http://minio:9000/genome-tree/', 'https://<HOSTNAME>/media/'),
+ *     "largeUrl"  = REPLACE("largeUrl",  'http://minio:9000/genome-tree/', 'https://<HOSTNAME>/media/');
  *
  * Idempotente: solo procesa filas con thumbUrl null. Si falla a mitad, se
  * puede re-correr sin duplicar trabajo.
