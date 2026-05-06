@@ -7,7 +7,7 @@ Before making changes to this project, read **[docs/claude-context/README.md](./
 Quick context:
 
 - **Production**: `https://arbol.adastranium.com` (TrueNAS at `192.168.100.58`, exposed via Cloudflare Tunnel)
-- **Current version**: v2.0.0 (May 2026) — see `Version 2.0/RELEASE_NOTES.md`
+- **Current version**: v3.0.0 (May 6, 2026) — see `Version 3.0/RELEASE_NOTES.md`
 - **Stack**: Next.js 16 + React 19 + Prisma 7 + PostgreSQL 16 + MinIO + Docker
 - **Most complex file**: `src/lib/tree-layout.ts` — read `docs/claude-context/04-TREE-ALGORITHM.md` before touching it
 

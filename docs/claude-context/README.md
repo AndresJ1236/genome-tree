@@ -21,7 +21,7 @@
 | Question | Answer |
 |----------|--------|
 | What is this? | Self-hosted genealogy app for a single extended family |
-| Current version | v2.0.0 (May 2026) |
+| Current version | v3.0.0 (May 6, 2026) |
 | Production URL | https://arbol.adastranium.com |
 | Production host | TrueNAS SCALE 192.168.100.58 (private LAN, exposed via Cloudflare Tunnel) |
 | Deploy target | `/mnt/vault/Tresure/Genome` on the NAS |
@@ -44,7 +44,7 @@
 
 ## Project version & changelog
 
-See [`Version 2.0/RELEASE_NOTES.md`](../../Version%202.0/RELEASE_NOTES.md) at the repo root for the v2.0 changelog. Future versions go in `Version X.Y/` siblings (not under a `Final/` folder — that prefix has been retired).
+See [`Version 3.0/RELEASE_NOTES.md`](../../Version%203.0/RELEASE_NOTES.md) at the repo root for the latest changelog. Older versions in their own `Version X.Y/` folders. Future versions go in new `Version X.Y/` siblings (no `Final/` prefix — that's been retired).
 
 ## When in doubt
 
