@@ -7,19 +7,20 @@ import type {
   ClaimedRelation,
   PersonFull, StoryItem, RecipeItem, DiaryItem,
   InterviewItem, ObjectItem, SourceItem, ImportantLinkItem,
-  MediaItem, ConfidenceLevel,
+  MediaItem, ConfidenceLevel, AudioVideoItem,
 } from '@/lib/content-types'
 import { CLAIMED_RELATION_LABELS, CONFIDENCE_LABELS, pickMediaUrl } from '@/lib/content-types'
-import { uploadMedia, deleteMedia, toggleFeaturedMedia } from '@/app/actions/media'
+import { uploadMedia, deleteMedia, toggleFeaturedMedia, uploadAudioVideo } from '@/app/actions/media'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { CommentsThread } from '@/components/ui/CommentsThread'
 import { ReactionBar } from '@/components/ui/ReactionBar'
+import { AudioVideoPlayer } from '@/components/ui/AudioVideoPlayer'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Tab = 'fotos' | 'historias' | 'recetas' | 'objetos' | 'diario' | 'entrevistas' | 'fuentes' | 'relaciones'
+type Tab = 'fotos' | 'voces' | 'historias' | 'recetas' | 'objetos' | 'diario' | 'entrevistas' | 'fuentes' | 'relaciones'
 
 interface TabDef {
   id: Tab
@@ -55,6 +56,7 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
 
   const tabs: TabDef[] = useMemo(() => [
     ...(modules.moduleMedia ? [{ id: 'fotos' as const, label: 'Fotos', count: mediaCount }] : []),
+    ...(modules.moduleAudioVideo ? [{ id: 'voces' as const, label: 'Voces', count: person.counts.audioVideo }] : []),
     ...(modules.moduleStories ? [{ id: 'historias' as const, label: 'Historias', count: person.counts.stories }] : []),
     ...(!isPet && modules.moduleRecipes ? [{ id: 'recetas' as const, label: 'Recetas', count: person.counts.recipes }] : []),
     ...(modules.moduleObjects ? [{ id: 'objetos' as const, label: 'Objetos', count: person.counts.objects }] : []),
@@ -64,7 +66,7 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
     ] : []),
     ...(modules.moduleStories ? [{ id: 'fuentes' as const, label: 'Fuentes', count: person.counts.sources }] : []),
     ...(!isPet && modules.moduleLinks ? [{ id: 'relaciones' as const, label: 'Relaciones', count: person.counts.importantLinks }] : []),
-  ], [isPet, mediaCount, modules, person.counts.diary, person.counts.importantLinks, person.counts.interviews, person.counts.objects, person.counts.recipes, person.counts.sources, person.counts.stories])
+  ], [isPet, mediaCount, modules, person.counts.audioVideo, person.counts.diary, person.counts.importantLinks, person.counts.interviews, person.counts.objects, person.counts.recipes, person.counts.sources, person.counts.stories])
 
   const resolvedActiveTab = tabs.some(tab => tab.id === activeTab)
     ? activeTab
@@ -299,6 +301,7 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
       <main style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <div style={{ padding: isMobile ? '16px 14px' : '32px 24px', maxWidth: 800, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
           {modules.moduleMedia && resolvedActiveTab === 'fotos' && <PhotosTab media={person.allMedia} personId={person.id} onOpen={setLightbox} onCountChange={setMediaCount} />}
+          {modules.moduleAudioVideo && resolvedActiveTab === 'voces' && <AudioVideoTab items={person.audioVideo} personId={person.id} canManage={person.canAddContent} />}
           {modules.moduleStories && resolvedActiveTab === 'historias' && <StoriesTab items={person.stories} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
           {modules.moduleRecipes && resolvedActiveTab === 'recetas' && <RecipesTab items={person.recipes} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
           {modules.moduleObjects && resolvedActiveTab === 'objetos' && <ObjectsTab items={person.objects} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
@@ -1165,6 +1168,163 @@ function LinksTab({
           </ContentCard>
         )
       })}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab VOCES (audio + video)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AudioVideoTab({
+  items: initialItems,
+  personId,
+  canManage,
+}: {
+  items: AudioVideoItem[]
+  personId: string
+  canManage: boolean
+}) {
+  const router = useRouter()
+  const [items, setItems] = useState(initialItems)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Mantener sync con prop cuando cambia (post-revalidate)
+  useEffect(() => { setItems(initialItems) }, [initialItems])
+
+  const handleUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setError(null)
+    setUploading(true)
+    setProgress({ done: 0, total: files.length })
+
+    let done = 0
+    for (const file of Array.from(files)) {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('personId', personId)
+      const res = await uploadAudioVideo(fd)
+      if (!res.ok) {
+        setError(res.error)
+        break
+      }
+      done++
+      setProgress({ done, total: files.length })
+    }
+    setUploading(false)
+    setProgress(null)
+    if (inputRef.current) inputRef.current.value = ''
+    router.refresh()
+  }, [personId, router])
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 18,
+        paddingBottom: 12,
+        borderBottom: '1px solid #E0DAD0',
+        flexWrap: 'wrap',
+        gap: 10,
+      }}>
+        <div>
+          <h3 style={{ fontFamily: 'Georgia, serif', fontSize: 18, color: '#2D4A3E', margin: 0 }}>
+            Voces y videos
+          </h3>
+          <p style={{ fontSize: 11, color: '#8B9E94', margin: '2px 0 0', letterSpacing: '0.04em' }}>
+            La voz de los abuelos vale infinito más que las fotos.
+          </p>
+        </div>
+
+        {canManage && (
+          <label style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 14px',
+            background: '#2D4A3E',
+            color: '#fff',
+            fontSize: 12,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            borderRadius: 2,
+            cursor: uploading ? 'wait' : 'pointer',
+            opacity: uploading ? 0.6 : 1,
+          }}>
+            {uploading
+              ? `Subiendo ${progress?.done ?? 0}/${progress?.total ?? 0}...`
+              : '+ Subir audio/video'}
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept="audio/*,video/*"
+              hidden
+              disabled={uploading}
+              onChange={e => handleUpload(e.target.files)}
+            />
+          </label>
+        )}
+      </div>
+
+      {error && (
+        <div style={{
+          padding: '10px 14px',
+          background: '#FAEBEB',
+          border: '1px solid #E6C1C1',
+          color: '#8B4444',
+          borderRadius: 3,
+          fontSize: 13,
+          marginBottom: 16,
+        }}>
+          {error}
+        </div>
+      )}
+
+      {items.length === 0 && !uploading && (
+        <div style={{
+          padding: '40px 20px',
+          textAlign: 'center',
+          color: '#8B9E94',
+          background: '#FAF7F0',
+          border: '1px dashed #C8D4CE',
+          borderRadius: 4,
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🎙️</div>
+          <p style={{ fontSize: 14, margin: '0 0 6px', color: '#2D4A3E' }}>
+            Sin audios ni videos todavía
+          </p>
+          <p style={{ fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+            {canManage
+              ? 'Sube una entrevista, una historia contada en voz, o un video de un momento importante.'
+              : 'El administrador puede agregar audios y videos.'}
+          </p>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div>
+          {items.map(item => (
+            <AudioVideoPlayer key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+
+      <p style={{
+        fontSize: 11,
+        color: '#9B9B9B',
+        margin: '20px 0 0',
+        lineHeight: 1.6,
+        textAlign: 'center',
+      }}>
+        Formatos soportados: MP3, M4A, WAV, AAC, OGG (audio) · MP4, WebM, MOV (video)<br/>
+        Máximo 50 MB para audio · 200 MB para video
+      </p>
     </div>
   )
 }

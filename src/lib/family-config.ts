@@ -10,7 +10,7 @@ const DEFAULT_MODULES: FamilyConfigData = {
   moduleMedia: true,
   moduleObjects: true,
   moduleLinks: true,
-  moduleAudioVideo: false,
+  moduleAudioVideo: true,    // v3.1+ pipeline conectado (sin transcoding)
   moduleExportImport: false,
   moduleSearch: true,
 }
