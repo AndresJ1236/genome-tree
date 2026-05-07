@@ -8,10 +8,11 @@ import type { ActionResult } from '@/lib/content-types'
 import type { ReactionType } from '@prisma/client'
 import { REACTION_TYPES, type ReactionSummary, type ReactionTypeValue } from '@/lib/reactions-types'
 
-// Re-export es seguro porque Next.js erase los `export type` en build.
-// El runtime const REACTION_TYPES NO se re-exporta desde aquí — los
-// componentes deben importarlo directamente desde `@/lib/reactions-types`.
-export type { ReactionSummary, ReactionTypeValue }
+// IMPORTANTE: NO re-exportar tipos desde aquí. Aunque conceptualmente
+// `export type { ... }` es compile-time-only, Turbopack los procesa como
+// exports en runtime cuando el archivo lleva 'use server' y rompe la
+// carga del módulo SSR ("ReferenceError: ReactionSummary is not defined").
+// Los consumidores deben importar tipos desde `@/lib/reactions-types`.
 
 /**
  * Devuelve el resumen agregado de reacciones para un Content o Media.
