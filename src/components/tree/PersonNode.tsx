@@ -16,8 +16,10 @@ interface PersonNodeProps {
   isCurrentUser: boolean
   onSelect: (id: string) => void
   /** Long-press detectado — el componente padre muestra el menú radial.
-      Recibe el ID y las coordenadas SCREEN del centro del círculo. */
-  onLongPress?: (id: string, screenX: number, screenY: number) => void
+      Recibe el ID, las coordenadas SCREEN del centro del círculo, y el
+      radio del círculo en pantalla (para colocar las burbujas justo
+      afuera del borde sin importar el zoom). */
+  onLongPress?: (id: string, screenX: number, screenY: number, screenRadius: number) => void
   /** Si el viewer tiene permiso para crear personas. Si no, no se activa
       el detector de long-press. */
   longPressEnabled?: boolean
@@ -74,7 +76,10 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
     hoverTimer.current = setTimeout(() => {
       if (circleRef.current) {
         const rect = circleRef.current.getBoundingClientRect()
-        onLongPress(node.id, rect.left + rect.width / 2, rect.top + rect.height / 2)
+        // Radio del círculo EN PANTALLA — refleja el zoom actual del árbol.
+        // Tomamos el min de width/height por si está distorsionado.
+        const screenRadius = Math.min(rect.width, rect.height) / 2
+        onLongPress(node.id, rect.left + rect.width / 2, rect.top + rect.height / 2, screenRadius)
       }
       hoverTimer.current = null
       startCoord.current = null
