@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createPerson, createRelationship, deleteRelationship, deletePerson, setParentChild, setPersonCoverPhoto, setRelationshipEndDate, setRelationshipStartDate, updatePerson } from '@/app/actions/people'
 import { proposePeopleUpdate, proposeNewPerson } from '@/app/actions/proposals'
 import { uploadMedia, deleteMedia } from '@/app/actions/media'
+import { createInviteLink } from '@/app/actions/admin'
 import { CLAIMED_RELATION_LABELS, CLAIMED_RELATION_REQUIRES_REF, pickMediaUrl } from '@/lib/content-types'
 import type { ClaimedRelation, MediaItem, PersonEditorPayload, PersonFormData, RelationshipItem } from '@/lib/content-types'
 import { getPersonDisplayName } from '@/lib/person-name'
@@ -140,6 +141,11 @@ export function PersonEditor({
   const [newPartnerType, setNewPartnerType] = useState<'SPOUSE' | 'PARTNER' | 'SIBLING'>('SPOUSE')
   const [newPartnerId, setNewPartnerId] = useState('')
   const [newPartnerStartDate, setNewPartnerStartDate] = useState('')
+  // Invitación — solo se rellena cuando admin pide el link.
+  // copiedAt: timestamp del último copy exitoso, para feedback temporal
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [inviteCopiedAt, setInviteCopiedAt] = useState<number | null>(null)
+  const [inviteError, setInviteError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploadCount, setUploadCount] = useState(0)
@@ -156,6 +162,13 @@ export function PersonEditor({
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
+
+  // Auto-ocultar el mensaje "Link copiado" después de 4s
+  useEffect(() => {
+    if (!inviteCopiedAt) return
+    const t = setTimeout(() => setInviteCopiedAt(null), 4000)
+    return () => clearTimeout(t)
+  }, [inviteCopiedAt])
 
   // Si vinimos por "sibling-of" desde el menú radial, copiar los padres del
   // hermano al form en cuanto montamos. Esto replica la lógica del auto-fill
@@ -890,6 +903,90 @@ export function PersonEditor({
                   maxWidth={260}
                 />
               </label>
+            </div>
+          )}
+
+          {isAdmin && mode === 'edit' && form.id && form.nodeKind !== 'PET' && (
+            <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid #E7E1D8' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 13, color: '#2D4A3E', fontWeight: 600 }}>
+                Invitar a esta persona
+              </p>
+              <p style={{ margin: '0 0 10px', fontSize: 12, color: '#6B6B6B' }}>
+                Genera un link para que esta persona cree su cuenta y pueda contribuir al árbol. El link queda asociado a este perfil.
+              </p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setInviteError(null)
+                    const result = await createInviteLink({
+                      role: 'MEMBER',
+                      scope: 'FAMILY',
+                      branchRootId: '',
+                      personId: form.id,
+                    })
+                    if (!result.ok) { setInviteError(result.error); return }
+                    setInviteUrl(result.data.url)
+                    // Intentar copiar al portapapeles automáticamente.
+                    // navigator.clipboard.writeText puede fallar si el contexto
+                    // no es secure (http) o el browser lo bloquea — caer en el
+                    // input visible para copy manual en ese caso.
+                    try {
+                      await navigator.clipboard.writeText(result.data.url)
+                      setInviteCopiedAt(Date.now())
+                    } catch {
+                      // Sin error — el usuario verá el link y el botón "Copiar"
+                    }
+                  }}
+                  disabled={isPending}
+                  style={{
+                    border: '1px solid #2D4A3E', background: '#2D4A3E', color: '#F5F0E8',
+                    borderRadius: 2, padding: '8px 14px', cursor: 'pointer',
+                    fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  }}
+                >
+                  {inviteUrl ? 'Generar otro link' : '📨 Generar link de invitación'}
+                </button>
+                {inviteUrl && (
+                  <>
+                    <input
+                      type="text"
+                      readOnly
+                      value={inviteUrl}
+                      onFocus={e => e.target.select()}
+                      style={{ ...inputStyle, flex: 1, minWidth: 220, fontSize: 12, padding: '8px 10px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(inviteUrl)
+                          setInviteCopiedAt(Date.now())
+                          setInviteError(null)
+                        } catch {
+                          setInviteError('No se pudo copiar automáticamente. Selecciona el texto y copia con Ctrl+C.')
+                        }
+                      }}
+                      style={{
+                        border: '1px solid #C8D4CE', background: '#FFFCF8', color: '#2D4A3E',
+                        borderRadius: 2, padding: '8px 14px', cursor: 'pointer', fontSize: 11,
+                      }}
+                    >
+                      Copiar
+                    </button>
+                  </>
+                )}
+              </div>
+              {inviteCopiedAt && (
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#2D4A3E' }}>
+                  ✓ Link copiado al portapapeles
+                </p>
+              )}
+              {inviteError && (
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#8B4444' }}>
+                  {inviteError}
+                </p>
+              )}
             </div>
           )}
 
