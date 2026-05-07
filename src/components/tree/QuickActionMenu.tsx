@@ -29,12 +29,20 @@ interface QuickActionMenuProps {
  * Si la persona ya tiene padre/madre asignado, ese bubble se ve gris y
  * no es clickeable (con tooltip explicando por qué).
  */
-const RADIUS = 58      // distancia del centro del nodo al centro del bubble
+const RADIUS = 64      // distancia del centro del nodo al centro del bubble
 const BUBBLE = 40      // diámetro de cada burbuja (circular)
 const ANIM_MS = 180
+// Radio adicional fuera del cual se cierra el menú (menos esa zona = "out of bounds").
+// Cubre la burbuja + un margen generoso para que pequeños desajustes
+// del mouse no cierren el menú accidentalmente.
+const CLOSE_ZONE_PAD = 26
+const CLOSE_ZONE = RADIUS + BUBBLE / 2 + CLOSE_ZONE_PAD
+// Grace period — al abrir el menú, no cerrar inmediatamente aunque el
+// mouse esté lejos por un instante.
+const GRACE_MS = 250
 
 interface Action {
-  key:      'father' | 'mother' | 'sibling' | 'child'
+  key:      'father' | 'mother' | 'partner' | 'sibling' | 'child'
   icon:     string
   label:    string
   /** Ángulo en grados — 0=arriba, 90=derecha, 180=abajo, 270=izquierda */
@@ -53,36 +61,67 @@ export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenu
     return () => cancelAnimationFrame(id)
   }, [])
 
-  // ESC y click-outside cierran
+  // ESC cierra
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Posiciones evitando el sur (180°) donde está el nombre.
-  // Distribuidas en arco superior + laterales para mantener el árbol legible.
+  // Auto-close cuando el mouse sale del radio que cubre las burbujas.
+  // Con un grace period inicial para no cerrar antes de que el usuario
+  // tenga oportunidad de ver el menú o moverse hacia una burbuja.
+  useEffect(() => {
+    let activeListener: ((e: MouseEvent) => void) | null = null
+    const grace = setTimeout(() => {
+      activeListener = (e: MouseEvent) => {
+        const dx = e.clientX - target.centerX
+        const dy = e.clientY - target.centerY
+        if (Math.hypot(dx, dy) > CLOSE_ZONE) onClose()
+      }
+      window.addEventListener('mousemove', activeListener)
+    }, GRACE_MS)
+    return () => {
+      clearTimeout(grace)
+      if (activeListener) window.removeEventListener('mousemove', activeListener)
+    }
+  }, [target.centerX, target.centerY, onClose])
+
+  // 5 burbujas en el arco superior (270° → 0° → 90°) cada 45°, evitando
+  // el sur (180°) donde está el nombre.
+  //
+  //         🤝 Pareja (0°)
+  //   👨 Padre              👩 Madre
+  //   (315°)                (45°)
+  //   🧑‍🤝‍🧑 Hermano    [JP]    👶 Hijo
+  //   (270°)                (90°)
+  //         (nombre debajo, libre)
   const actions: Action[] = [
-    {
-      key: 'father',  icon: '👨', label: 'Añadir padre',
-      angle: 320, // arriba-izquierda
-      disabled: target.hasFather,
-      disabledReason: 'Ya tiene padre asignado',
-    },
-    {
-      key: 'mother',  icon: '👩', label: 'Añadir madre',
-      angle: 40,  // arriba-derecha
-      disabled: target.hasMother,
-      disabledReason: 'Ya tiene madre asignada',
-    },
     {
       key: 'sibling', icon: '🧑‍🤝‍🧑', label: 'Añadir hermano/a',
       angle: 270, // izquierda
       disabled: false,
     },
     {
+      key: 'father',  icon: '👨', label: 'Añadir padre',
+      angle: 315, // arriba-izquierda
+      disabled: target.hasFather,
+      disabledReason: 'Ya tiene padre asignado',
+    },
+    {
+      key: 'partner', icon: '💑', label: 'Añadir pareja',
+      angle: 0,   // arriba (norte)
+      disabled: false,
+    },
+    {
+      key: 'mother',  icon: '👩', label: 'Añadir madre',
+      angle: 45,  // arriba-derecha
+      disabled: target.hasMother,
+      disabledReason: 'Ya tiene madre asignada',
+    },
+    {
       key: 'child',   icon: '👶', label: 'Añadir hijo/a',
-      angle: 90,  // derecha (no sur — se choca con el nombre)
+      angle: 90,  // derecha
       disabled: false,
     },
   ]
@@ -90,12 +129,25 @@ export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenu
   function handleAction(action: Action) {
     if (action.disabled) return
     const params = new URLSearchParams()
-    if (action.key === 'father')      params.set('childOf', target.personId)
-    else if (action.key === 'mother') params.set('childOf', target.personId)
-    else if (action.key === 'sibling') params.set('siblingOf', target.personId)
-    else if (action.key === 'child')   params.set('parentOf', target.personId)
-    if (action.key === 'father') params.set('asParent', 'father')
-    if (action.key === 'mother') params.set('asParent', 'mother')
+    // father/mother: el nuevo es PADRE/MADRE de la persona target
+    //   → en el editor, target queda como hijo del nuevo (parentOf)
+    // sibling: mismos padres
+    // child: el nuevo es HIJO de la persona target (target queda como padre/madre)
+    //   → en el editor, target queda como padre/madre del nuevo (childOf)
+    // partner: el nuevo es pareja del target
+    if (action.key === 'father') {
+      params.set('parentOf', target.personId)
+      params.set('asParent', 'father')
+    } else if (action.key === 'mother') {
+      params.set('parentOf', target.personId)
+      params.set('asParent', 'mother')
+    } else if (action.key === 'sibling') {
+      params.set('siblingOf', target.personId)
+    } else if (action.key === 'child') {
+      params.set('childOf', target.personId)
+    } else if (action.key === 'partner') {
+      params.set('partnerOf', target.personId)
+    }
     router.push(`/${familySlug}/person/new?${params.toString()}`)
   }
 
