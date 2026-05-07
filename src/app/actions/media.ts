@@ -13,6 +13,7 @@ import {
   VIDEO_MIME_TYPES,
   MAX_AUDIO_SIZE,
   MAX_VIDEO_SIZE,
+  CONTENT_MAX_DIMENSION,
 } from '@/lib/storage'
 import { assertCanManagePerson } from '@/lib/permissions'
 import { assertModuleEnabled, getModuleForContentType } from '@/lib/family-config'
@@ -269,7 +270,9 @@ export async function uploadContentMedia(
 
   let uploaded
   try {
-    const processed = await processImage(buffer, mimeType)
+    // Imágenes anexadas a contenido se capean a HD (1920px), no a 4K.
+    // Suficiente para galería y reduce ~75% el peso de almacenamiento.
+    const processed = await processImage(buffer, mimeType, { maxDimension: CONTENT_MAX_DIMENSION })
     uploaded = await uploadProcessedImage(baseKey, processed)
   } catch (e: unknown) {
     console.error('[uploadContentMedia] Error procesando o subiendo:', e)

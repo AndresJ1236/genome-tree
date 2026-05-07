@@ -365,6 +365,7 @@ export async function getPersonFull(
       authorName:      c.authorName,
       createdBy:       c.createdBy,
       canEdit:         canEditItem(c, session, canManageTargetPerson),
+      media:           c.media.map(cm => toMediaItem(cm.media)),
     }))
 
   const recipes: RecipeItem[] = content
@@ -402,6 +403,7 @@ export async function getPersonFull(
       entryDate:  serializeDate(c.entryDate),
       createdBy:  c.createdBy,
       canEdit:    canEditItem(c, session, canManageTargetPerson),
+      media:      c.media.map(cm => toMediaItem(cm.media)),
     }))
 
   const interviews: InterviewItem[] = content
@@ -421,6 +423,7 @@ export async function getPersonFull(
       authorName:      c.authorName,
       createdBy:       c.createdBy,
       canEdit:         canEditItem(c, session, canManageTargetPerson),
+      media:           c.media.map(cm => toMediaItem(cm.media)),
     }))
 
   const objects: ObjectItem[] = content

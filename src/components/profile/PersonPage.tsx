@@ -302,11 +302,11 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
         <div style={{ padding: isMobile ? '16px 14px' : '32px 24px', maxWidth: 800, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
           {modules.moduleMedia && resolvedActiveTab === 'fotos' && <PhotosTab media={person.allMedia} personId={person.id} onOpen={setLightbox} onCountChange={setMediaCount} />}
           {modules.moduleAudioVideo && resolvedActiveTab === 'voces' && <AudioVideoTab items={person.audioVideo} personId={person.id} canManage={person.canAddContent} />}
-          {modules.moduleStories && resolvedActiveTab === 'historias' && <StoriesTab items={person.stories} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
+          {modules.moduleStories && resolvedActiveTab === 'historias' && <StoriesTab items={person.stories} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} onOpen={setLightbox} />}
           {modules.moduleRecipes && resolvedActiveTab === 'recetas' && <RecipesTab items={person.recipes} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
           {modules.moduleObjects && resolvedActiveTab === 'objetos' && <ObjectsTab items={person.objects} onOpen={setLightbox} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
-          {modules.moduleDiary && resolvedActiveTab === 'diario' && <DiaryTab items={person.diaryEntries} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
-          {modules.moduleDiary && resolvedActiveTab === 'entrevistas' && <InterviewsTab items={person.interviews} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
+          {modules.moduleDiary && resolvedActiveTab === 'diario' && <DiaryTab items={person.diaryEntries} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} onOpen={setLightbox} />}
+          {modules.moduleDiary && resolvedActiveTab === 'entrevistas' && <InterviewsTab items={person.interviews} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} onOpen={setLightbox} />}
           {modules.moduleStories && resolvedActiveTab === 'fuentes' && <SourcesTab items={person.sources} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
           {modules.moduleLinks && resolvedActiveTab === 'relaciones' && <LinksTab items={person.importantLinks} familySlug={familySlug} personId={person.id} canManage={person.canAddContent} />}
         </div>
@@ -690,11 +690,13 @@ function StoriesTab({
   familySlug,
   personId,
   canManage,
+  onOpen,
 }: {
   items: StoryItem[]
   familySlug: string
   personId: string
   canManage: boolean
+  onOpen: (m: MediaItem) => void
 }) {
   if (items.length === 0) {
     return (
@@ -729,13 +731,26 @@ function StoriesTab({
           </CardMeta>
           {s.confidence && <div style={{ marginBottom: 12 }}><ConfidencePill level={s.confidence} /></div>}
           <CardBody text={s.body} />
+          {s.media.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14, marginBottom: 8 }}>
+              {s.media.map(m => (
+                <img
+                  key={m.id}
+                  src={pickMediaUrl(m, 'medium')}
+                  alt={m.alt ?? ''}
+                  onClick={() => onOpen(m)}
+                  style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 3, cursor: 'pointer', border: '1px solid #E0DAD0' }}
+                />
+              ))}
+            </div>
+          )}
           {s.source && (
             <p style={{ fontSize: 11, color: '#9BA89F', marginTop: 14, marginBottom: 0 }}>
               Fuente: {s.source}
             </p>
           )}
           <ReactionBar contentId={s.id} variant="full" />
-          <CommentsThread contentId={s.id} placeholder="Comparte un recuerdo o una pregunta..." />
+          <CommentsThread contentId={s.id} familySlug={familySlug} placeholder="Comparte un recuerdo o una pregunta..." />
         </ContentCard>
       ))}
     </div>
@@ -918,11 +933,13 @@ function DiaryTab({
   familySlug,
   personId,
   canManage,
+  onOpen,
 }: {
   items: DiaryItem[]
   familySlug: string
   personId: string
   canManage: boolean
+  onOpen: (m: MediaItem) => void
 }) {
   if (items.length === 0) {
     return (
@@ -958,6 +975,19 @@ function DiaryTab({
             )}
           </div>
           <CardBody text={d.body} />
+          {d.media.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+              {d.media.map(m => (
+                <img
+                  key={m.id}
+                  src={pickMediaUrl(m, 'medium')}
+                  alt={m.alt ?? ''}
+                  onClick={() => onOpen(m)}
+                  style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 3, cursor: 'pointer', border: '1px solid #E0DAD0' }}
+                />
+              ))}
+            </div>
+          )}
         </ContentCard>
       ))}
     </div>
@@ -973,11 +1003,13 @@ function InterviewsTab({
   familySlug,
   personId,
   canManage,
+  onOpen,
 }: {
   items: InterviewItem[]
   familySlug: string
   personId: string
   canManage: boolean
+  onOpen: (m: MediaItem) => void
 }) {
   if (items.length === 0) {
     return (
@@ -1016,6 +1048,19 @@ function InterviewsTab({
             </p>
           </div>
           <CardBody text={iv.body} />
+          {iv.media.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+              {iv.media.map(m => (
+                <img
+                  key={m.id}
+                  src={pickMediaUrl(m, 'medium')}
+                  alt={m.alt ?? ''}
+                  onClick={() => onOpen(m)}
+                  style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 3, cursor: 'pointer', border: '1px solid #E0DAD0' }}
+                />
+              ))}
+            </div>
+          )}
         </ContentCard>
       ))}
     </div>

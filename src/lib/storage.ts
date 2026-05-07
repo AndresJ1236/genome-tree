@@ -247,6 +247,10 @@ export const VARIANT_SIZES = {
 // chica, se sube tal cual sin re-codificar (preserva calidad y metadata).
 export const ORIGINAL_MAX_DIMENSION = 3840
 
+// Cap más bajo para imágenes anexadas a contenido (historias, recetas).
+// HD 1920px es suficiente para galería y reduce ~75% el peso.
+export const CONTENT_MAX_DIMENSION = 1920
+
 export interface ProcessedImage {
   original: { buffer: Buffer; mimeType: string; width: number; height: number }
   large:    Buffer
@@ -264,14 +268,19 @@ export interface ProcessedImage {
  * `.rotate()` aplicado en cada variante respeta la orientación EXIF — sin esto,
  * fotos de iPhone aparecen rotadas en navegadores que ignoran EXIF.
  */
-export async function processImage(input: Buffer, inputMimeType: string): Promise<ProcessedImage> {
+export async function processImage(
+  input: Buffer,
+  inputMimeType: string,
+  options: { maxDimension?: number } = {}
+): Promise<ProcessedImage> {
   // Import dinámico para no cargar sharp en cold path si solo se borra
   const sharp = (await import('sharp')).default
+  const cap = options.maxDimension ?? ORIGINAL_MAX_DIMENSION
 
   const meta = await sharp(input).metadata()
   const w = meta.width ?? 0
   const h = meta.height ?? 0
-  const needsCap = w > ORIGINAL_MAX_DIMENSION || h > ORIGINAL_MAX_DIMENSION
+  const needsCap = w > cap || h > cap
 
   // Original: si la imagen es muy grande, recodificar capeada (preservando formato).
   // Si ya es chica, devolver el buffer original sin tocar.
@@ -282,8 +291,8 @@ export async function processImage(input: Buffer, inputMimeType: string): Promis
 
   if (needsCap) {
     const pipe = sharp(input).rotate().resize({
-      width:  ORIGINAL_MAX_DIMENSION,
-      height: ORIGINAL_MAX_DIMENSION,
+      width:  cap,
+      height: cap,
       fit:    'inside',
       withoutEnlargement: true,
     })

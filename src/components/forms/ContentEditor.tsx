@@ -228,8 +228,15 @@ export function ContentEditor({
     })
   }
 
+  // Tipos de contenido que aceptan imágenes adjuntas. Las imágenes se
+  // capean a 1920px (HD) en el upload — ver CONTENT_MAX_DIMENSION en
+  // src/lib/storage.ts.
+  const ALLOWS_MEDIA = ['STORY', 'RECIPE', 'OBJECT', 'DIARY', 'INTERVIEW'] as const
+  type ContentTypeWithMedia = typeof ALLOWS_MEDIA[number]
+  const allowsMedia = (ALLOWS_MEDIA as readonly string[]).includes(form.type)
+
   function handleUpload(files: FileList | null) {
-    if (!files || !contentId || (form.type !== 'RECIPE' && form.type !== 'OBJECT')) return
+    if (!files || !contentId || !allowsMedia) return
     setError(null)
 
     startTransition(async () => {
@@ -301,13 +308,13 @@ export function ContentEditor({
       <div style={cardStyle}>
         {renderFields(form, update, people, isAdmin)}
 
-        {isEdit && (form.type === 'RECIPE' || form.type === 'OBJECT') && (
+        {isEdit && allowsMedia && (
           <div style={{ marginTop: 24, borderTop: '1px solid #EAE5DB', paddingTop: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div>
-                <p style={{ margin: 0, fontFamily: 'Georgia, serif', fontSize: 20, color: '#2D4A3E' }}>Imagenes del contenido</p>
+                <p style={{ margin: 0, fontFamily: 'Georgia, serif', fontSize: 20, color: '#2D4A3E' }}>Imágenes del contenido</p>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6B6B6B' }}>
-                  Puedes subir hasta 3 imagenes para esta {form.type === 'RECIPE' ? 'receta' : 'pieza'}.
+                  Puedes subir hasta 3 imágenes (calidad HD, max 1920px).
                 </p>
               </div>
               <label style={secondaryButtonStyle}>
