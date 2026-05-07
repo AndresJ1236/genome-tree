@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { listReactions, toggleReaction, REACTION_TYPES, type ReactionSummary, type ReactionTypeValue } from '@/app/actions/reactions'
+import { listReactions, toggleReaction } from '@/app/actions/reactions'
+import { REACTION_TYPES, type ReactionSummary, type ReactionTypeValue } from '@/lib/reactions-types'
 
 interface ReactionBarProps {
   contentId?: string
