@@ -11,9 +11,6 @@ export interface QuickActionTarget {
   /** Coord SCREEN del centro del círculo del nodo (post zoom/pan) */
   centerX:   number
   centerY:   number
-  /** Radio EN PANTALLA del círculo del nodo (post zoom). Usado para
-      colocar las burbujas justo afuera del borde sin importar el zoom. */
-  nodeScreenRadius: number
 }
 
 interface QuickActionMenuProps {
@@ -25,31 +22,37 @@ interface QuickActionMenuProps {
 }
 
 const BUBBLE = 36           // diámetro fijo de cada burbuja en px screen
-const GAP    = 10           // espacio entre el borde del nodo y el borde de la burbuja
 const BUBBLE_GAP = 6        // espacio mínimo entre burbujas adyacentes
+const RADIUS_FLOOR = 56     // distancia mínima del centro al centro del bubble
 const CLOSE_PAD = 28        // margen adicional fuera del cual se cierra el menú
 const ANIM_MS = 180
 const GRACE_MS = 250
 
 /**
- * Radio mínimo para que N burbujas distribuidas en 180° de arco no se
- * solapen. Geometría: si la separación angular es α, la distancia entre
- * centros de burbujas adyacentes es 2·R·sin(α/2). Para que no se choquen,
- * esa distancia debe ser ≥ BUBBLE + BUBBLE_GAP.
+ * Radio del menú radial — depende ÚNICAMENTE del número de burbujas, no
+ * del zoom del árbol. Decisión de UX: las burbujas tienen tamaño fijo
+ * (36px) y posición fija; lo que se vea bien a zoom medio/cercano es
+ * lo que importa. Si el usuario hace zoom-out extremo, las burbujas
+ * pueden lucir grandes en proporción al árbol — eso está OK.
  *
- *     2·R·sin(α/2) ≥ BUBBLE + BUBBLE_GAP
- *     R ≥ (BUBBLE + BUBBLE_GAP) / (2·sin(α/2))
+ * Geometría: para N burbujas en arco de 180° (separadas α = 180/(N-1)°),
+ * la distancia entre centros adyacentes es 2·R·sin(α/2). Para no
+ * solaparse: R ≥ (BUBBLE + BUBBLE_GAP) / (2·sin(α/2)).
  *
- * Para 6 burbujas en 180° → α = 36° → R_min ≈ 68px
- * Para 5 burbujas → α = 45° → R_min ≈ 55px
- * Para 4 burbujas → α = 60° → R_min ≈ 42px
+ *   N=6 → α=36° → R_min ≈ 68px
+ *   N=5 → α=45° → R_min ≈ 55px
+ *   N=4 → α=60° → R_min ≈ 42px
+ *
+ * Aplicamos un piso de RADIUS_FLOOR (56px) para evitar que con pocas
+ * burbujas el menú quede demasiado pegado al nodo.
  */
-function overlapMinRadius(n: number): number {
-  if (n <= 1) return 0
-  if (n === 2) return (BUBBLE + BUBBLE_GAP) / 2  // 21px — caso compacto NW+NE
+function computeRadius(n: number): number {
+  if (n <= 1) return RADIUS_FLOOR
+  if (n === 2) return RADIUS_FLOOR  // caso compacto, separación naturalmente amplia
   const stepDeg = 180 / (n - 1)
   const stepRad = (stepDeg * Math.PI) / 180
-  return (BUBBLE + BUBBLE_GAP) / (2 * Math.sin(stepRad / 2))
+  const overlapMin = (BUBBLE + BUBBLE_GAP) / (2 * Math.sin(stepRad / 2))
+  return Math.max(RADIUS_FLOOR, overlapMin)
 }
 
 interface Action {
@@ -178,15 +181,11 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
     baseActions.push({ key: 'invite', label: 'Generar link de invitación', Icon: IconMail, disabled: false })
   }
 
-  // Auto-close al salir del radio que cubre las burbujas, con grace period.
-  // RADIUS = max de (borde del nodo + gap) y (radio mínimo anti-overlap).
-  // Cuando el nodo está zoomed-in, manda el primero — burbujas pegadas al
-  // borde. Cuando está zoomed-out, manda el segundo — burbujas separadas
-  // entre sí lo suficiente para no chocar.
-  const RADIUS = Math.max(
-    target.nodeScreenRadius + GAP + BUBBLE / 2,
-    overlapMinRadius(baseActions.length),
-  )
+  // RADIUS depende solo del número de burbujas — no del zoom. Layout
+  // predecible y consistente, dimensionado para verse bien a zoom
+  // medio/cercano. A zoom extremo lejano se acepta que se vea
+  // desproporcionado: el usuario probablemente no abre el menú así.
+  const RADIUS = computeRadius(baseActions.length)
   const CLOSE_ZONE = RADIUS + BUBBLE / 2 + CLOSE_PAD
 
   useEffect(() => {
