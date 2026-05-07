@@ -396,7 +396,7 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
                   isCurrentUser={focusPersonId === node.id}
                   onSelect={id => setSelectedId(prev => (prev === id ? null : id))}
                   longPressEnabled={!!canCreatePerson}
-                  onLongPress={(id, x, y) => {
+                  onLongPress={(id, x, y, screenRadius) => {
                     const p = personById.get(id)
                     if (!p) return
                     setQuickAction({
@@ -405,6 +405,7 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
                       hasMother: !!p.motherId,
                       centerX: x,
                       centerY: y,
+                      nodeScreenRadius: screenRadius,
                     })
                   }}
                   animDelay={i * 60}

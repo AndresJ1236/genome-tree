@@ -11,6 +11,8 @@ export interface QuickActionTarget {
   /** Coord SCREEN del centro del círculo del nodo (post zoom/pan) */
   centerX:   number
   centerY:   number
+  /** Radio EN PANTALLA del círculo del nodo (post zoom). */
+  nodeScreenRadius: number
 }
 
 interface QuickActionMenuProps {
@@ -21,38 +23,24 @@ interface QuickActionMenuProps {
   onClose:    () => void
 }
 
-const BUBBLE = 36           // diámetro fijo de cada burbuja en px screen
-const BUBBLE_GAP = 6        // espacio mínimo entre burbujas adyacentes
-const RADIUS_FLOOR = 56     // distancia mínima del centro al centro del bubble
+const BUBBLE = 32           // diámetro fijo de cada burbuja en px screen — más discreto
+const GAP    = 8            // distancia entre el borde del nodo y el borde de la burbuja
 const CLOSE_PAD = 28        // margen adicional fuera del cual se cierra el menú
 const ANIM_MS = 180
 const GRACE_MS = 250
 
 /**
- * Radio del menú radial — depende ÚNICAMENTE del número de burbujas, no
- * del zoom del árbol. Decisión de UX: las burbujas tienen tamaño fijo
- * (36px) y posición fija; lo que se vea bien a zoom medio/cercano es
- * lo que importa. Si el usuario hace zoom-out extremo, las burbujas
- * pueden lucir grandes en proporción al árbol — eso está OK.
+ * Radio del menú radial — pegado al borde del nodo en pantalla.
+ * RADIUS = nodeScreenRadius + GAP + BUBBLE/2.
  *
- * Geometría: para N burbujas en arco de 180° (separadas α = 180/(N-1)°),
- * la distancia entre centros adyacentes es 2·R·sin(α/2). Para no
- * solaparse: R ≥ (BUBBLE + BUBBLE_GAP) / (2·sin(α/2)).
- *
- *   N=6 → α=36° → R_min ≈ 68px
- *   N=5 → α=45° → R_min ≈ 55px
- *   N=4 → α=60° → R_min ≈ 42px
- *
- * Aplicamos un piso de RADIUS_FLOOR (56px) para evitar que con pocas
- * burbujas el menú quede demasiado pegado al nodo.
+ * Decisión de UX: las burbujas son fijas (32px) pero su POSICIÓN sigue
+ * el borde del nodo, así que a zoom medio/cercano (que es cuando el
+ * usuario las usa) se ven discretas y pegadas al nodo, sin meterse
+ * adentro del círculo. A zoom extremo lejano puede haber overlap entre
+ * burbujas — eso está OK, el usuario explícitamente dijo no importa.
  */
-function computeRadius(n: number): number {
-  if (n <= 1) return RADIUS_FLOOR
-  if (n === 2) return RADIUS_FLOOR  // caso compacto, separación naturalmente amplia
-  const stepDeg = 180 / (n - 1)
-  const stepRad = (stepDeg * Math.PI) / 180
-  const overlapMin = (BUBBLE + BUBBLE_GAP) / (2 * Math.sin(stepRad / 2))
-  return Math.max(RADIUS_FLOOR, overlapMin)
+function computeRadius(nodeScreenRadius: number): number {
+  return nodeScreenRadius + GAP + BUBBLE / 2
 }
 
 interface Action {
@@ -78,12 +66,24 @@ const SVG_PROPS = {
   strokeLinejoin: 'round' as const,
 }
 
-function IconParent({ size = 18 }: { size?: number }) {
-  // user con corona/cabello más alto — silueta de adulto
+function IconFather({ size = 18 }: { size?: number }) {
+  // Silueta masculina — cabeza + hombros rectos + línea de corbata vertical
   return (
     <svg width={size} height={size} {...SVG_PROPS}>
-      <circle cx="12" cy="8" r="3.5" />
-      <path d="M5 21v-1a7 7 0 0 1 14 0v1" />
+      <circle cx="12" cy="6" r="2.6" />
+      <path d="M6 21v-2a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v2" />
+      <path d="M12 14v3.5" />
+    </svg>
+  )
+}
+
+function IconMother({ size = 18 }: { size?: number }) {
+  // Silueta femenina — cabeza + falda triangular (estilo letrero universal)
+  return (
+    <svg width={size} height={size} {...SVG_PROPS}>
+      <circle cx="12" cy="6" r="2.6" />
+      <path d="M9 9h6" />
+      <path d="M6 21l3-12h6l3 12z" />
     </svg>
   )
 }
@@ -172,20 +172,20 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
   // cuando el nodo está muy zoomed-out).
   const baseActions: Action[] = [
     { key: 'sibling', label: 'Añadir hermano/a', Icon: IconSibling, disabled: false },
-    { key: 'father',  label: 'Añadir padre',     Icon: IconParent,  disabled: target.hasFather, disabledReason: 'Ya tiene padre asignado' },
+    { key: 'father',  label: 'Añadir padre',     Icon: IconFather,  disabled: target.hasFather, disabledReason: 'Ya tiene padre asignado' },
     { key: 'partner', label: 'Añadir pareja',    Icon: IconHeart,   disabled: false },
-    { key: 'mother',  label: 'Añadir madre',     Icon: IconParent,  disabled: target.hasMother, disabledReason: 'Ya tiene madre asignada' },
+    { key: 'mother',  label: 'Añadir madre',     Icon: IconMother,  disabled: target.hasMother, disabledReason: 'Ya tiene madre asignada' },
     { key: 'child',   label: 'Añadir hijo/a',    Icon: IconChild,   disabled: false },
   ]
   if (canInvite) {
     baseActions.push({ key: 'invite', label: 'Generar link de invitación', Icon: IconMail, disabled: false })
   }
 
-  // RADIUS depende solo del número de burbujas — no del zoom. Layout
-  // predecible y consistente, dimensionado para verse bien a zoom
-  // medio/cercano. A zoom extremo lejano se acepta que se vea
-  // desproporcionado: el usuario probablemente no abre el menú así.
-  const RADIUS = computeRadius(baseActions.length)
+  // RADIUS sigue el borde del nodo en pantalla — siempre afuera del
+  // círculo sin importar el zoom. A zoom-out extremo puede haber overlap
+  // entre burbujas; user explicitamente dijo "no importa cómo se vea de
+  // lejos, lo que importa es medio/cerca".
+  const RADIUS = computeRadius(target.nodeScreenRadius)
   const CLOSE_ZONE = RADIUS + BUBBLE / 2 + CLOSE_PAD
 
   useEffect(() => {
