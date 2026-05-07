@@ -207,6 +207,17 @@ export function ContentEditor({
         return
       }
 
+      // Si acabamos de CREAR contenido que admite imágenes, vamos directo
+      // a la vista de edición — ahí aparece la zona de subida de imágenes.
+      // En la vista de creación no podemos mostrarla porque aún no hay
+      // contentId al que asociar las imágenes.
+      const ALLOWS_MEDIA_TYPES = ['STORY', 'RECIPE', 'OBJECT', 'DIARY', 'INTERVIEW']
+      if (!isEdit && form.type !== 'IMPORTANT_LINK' && ALLOWS_MEDIA_TYPES.includes(form.type) && 'data' in result && result.data) {
+        const newId = (result.data as { id: string }).id
+        router.push(`/${familySlug}/person/${personId}/content/${newId}/edit`)
+        return
+      }
+
       router.push(backHref)
     })
   }
@@ -306,6 +317,15 @@ export function ContentEditor({
       </div>
 
       <div style={cardStyle}>
+        {!isEdit && allowsMedia && (
+          <div style={{
+            marginBottom: 18, padding: '10px 14px',
+            background: '#FFF8E6', border: '1px solid #E8D68A', borderRadius: 3,
+            fontSize: 12, color: '#6B5A35',
+          }}>
+            💡 Después de guardar podrás añadir hasta 3 imágenes (calidad HD).
+          </div>
+        )}
         {renderFields(form, update, people, isAdmin)}
 
         {isEdit && allowsMedia && (
