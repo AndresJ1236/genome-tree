@@ -1,12 +1,60 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
-import { listComments, createComment, deleteComment, type CommentItem } from '@/app/actions/comments'
+import { useEffect, useMemo, useState, useTransition } from 'react'
+import Link from 'next/link'
+import { listComments, createComment, deleteComment, listFamilyMembersForMention, type CommentItem } from '@/app/actions/comments'
+import { MENTION_REGEX, type MentionedUser } from '@/lib/mentions'
 
 interface CommentsThreadProps {
   contentId: string
+  /** Slug de la familia, para construir links de @menciones al perfil. */
+  familySlug?: string
   /** Texto del placeholder; depende del tipo de contenido (historia, receta, etc.) */
   placeholder?: string
+}
+
+/**
+ * Renderiza el body de un comentario reemplazando `@palabra` con un span
+ * destacado o un Link al perfil del mencionado si tiene Person.
+ */
+function renderBodyWithMentions(
+  body: string,
+  mentions: MentionedUser[],
+  familySlug: string | undefined
+): React.ReactNode {
+  if (mentions.length === 0) return body
+
+  const byUsernameLc = new Map(mentions.map(m => [m.username.toLowerCase(), m]))
+  const byFirstNameLc = new Map(mentions.map(m => [m.name.split(/\s+/)[0]?.toLowerCase() ?? '', m]))
+
+  const out: React.ReactNode[] = []
+  let lastIndex = 0
+  let key = 0
+  for (const match of body.matchAll(MENTION_REGEX)) {
+    const start = match.index ?? 0
+    const token = match[1].toLowerCase()
+    const user = byUsernameLc.get(token) ?? byFirstNameLc.get(token)
+    if (!user) continue
+    if (start > lastIndex) out.push(body.slice(lastIndex, start))
+    const href = familySlug && user.personId
+      ? `/${familySlug}/person/${user.personId}`
+      : null
+    const tag = `@${user.name.split(/\s+/)[0]}`
+    out.push(
+      href ? (
+        <Link key={key++} href={href} style={{ color: '#2D4A3E', fontWeight: 600, textDecoration: 'none', background: '#EAF0ED', padding: '0 4px', borderRadius: 2 }}>
+          {tag}
+        </Link>
+      ) : (
+        <span key={key++} style={{ color: '#2D4A3E', fontWeight: 600, background: '#EAF0ED', padding: '0 4px', borderRadius: 2 }}>
+          {tag}
+        </span>
+      )
+    )
+    lastIndex = start + match[0].length
+  }
+  if (lastIndex < body.length) out.push(body.slice(lastIndex))
+  return out
 }
 
 /**
@@ -14,13 +62,47 @@ interface CommentsThreadProps {
  * Carga lazy: solo pide los comentarios cuando se hace clic en "Mostrar".
  * Esto evita N queries cuando un perfil tiene 30 historias.
  */
-export function CommentsThread({ contentId, placeholder = 'Escribe un comentario...' }: CommentsThreadProps) {
+export function CommentsThread({ contentId, familySlug, placeholder = 'Escribe un comentario...' }: CommentsThreadProps) {
   const [items, setItems] = useState<CommentItem[] | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const [count, setCount] = useState<number | null>(null)
+  const [members, setMembers] = useState<MentionedUser[]>([])
+
+  // Cargar la lista de miembros la primera vez que se expande, para
+  // autocompletado de @menciones. Lazy: no cargarlo hasta que se necesite.
+  useEffect(() => {
+    if (!expanded || members.length > 0) return
+    listFamilyMembersForMention().then(r => {
+      if (r.ok) setMembers(r.data)
+    })
+  }, [expanded, members.length])
+
+  // Sugerencias de @ basadas en la palabra que está escribiendo después del último @
+  const mentionSuggestions = useMemo(() => {
+    const lastAtIdx = draft.lastIndexOf('@')
+    if (lastAtIdx === -1) return null
+    const after = draft.slice(lastAtIdx + 1)
+    // Si ya escribió un espacio o un salto de línea, no es un mention activo
+    if (/\s/.test(after)) return null
+    const query = after.toLowerCase()
+    const matches = members
+      .filter(m =>
+        m.username.toLowerCase().startsWith(query) ||
+        m.name.toLowerCase().startsWith(query) ||
+        (m.name.split(/\s+/)[0]?.toLowerCase() ?? '').startsWith(query)
+      )
+      .slice(0, 5)
+    return matches.length > 0 ? { query, matches, atIndex: lastAtIdx } : null
+  }, [draft, members])
+
+  function applyMention(member: MentionedUser, atIndex: number) {
+    // Reemplaza desde el último @ hasta el final del draft con @firstName
+    const firstName = member.name.split(/\s+/)[0] || member.username
+    setDraft(draft.slice(0, atIndex) + `@${firstName} `)
+  }
 
   // Lazy load on first expansion
   useEffect(() => {
@@ -136,7 +218,7 @@ export function CommentsThread({ contentId, placeholder = 'Escribe un comentario
                       {formatRelative(c.createdAt)}
                     </span>
                   </div>
-                  <p style={{
+                  <p id={`comment-${c.id}`} style={{
                     margin: 0,
                     fontSize: 13,
                     color: '#2C2C2C',
@@ -144,7 +226,7 @@ export function CommentsThread({ contentId, placeholder = 'Escribe un comentario
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                   }}>
-                    {c.body}
+                    {renderBodyWithMentions(c.body, c.mentions, familySlug)}
                   </p>
                   {c.isMine && (
                     <button
@@ -170,11 +252,11 @@ export function CommentsThread({ contentId, placeholder = 'Escribe un comentario
             </ul>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}>
             <textarea
               value={draft}
               onChange={e => setDraft(e.target.value)}
-              placeholder={placeholder}
+              placeholder={placeholder + ' (usa @ para mencionar a alguien)'}
               rows={2}
               maxLength={2000}
               disabled={pending}
@@ -189,6 +271,20 @@ export function CommentsThread({ contentId, placeholder = 'Escribe un comentario
                 background: '#FFFDF9',
               }}
             />
+            {mentionSuggestions && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#FFFDF9', border: '1px solid #C8D4CE', borderRadius: 2, zIndex: 10, marginTop: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                {mentionSuggestions.matches.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => applyMention(m, mentionSuggestions.atIndex)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: '#2D4A3E', borderBottom: '1px solid #F0EDE5' }}
+                  >
+                    <strong>@{m.name.split(/\s+/)[0]}</strong> <span style={{ color: '#8B9E94' }}>{m.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {error && (
               <p style={{ fontSize: 11, color: '#8B4444', margin: 0 }}>{error}</p>
             )}
