@@ -28,6 +28,16 @@ enum RelationshipType {
   SIBLING
 }
 
+// Tipo de relación parento-filial. Default: BIOLOGICAL.
+// ADOPTIVE: adopción legal. STEP: padrastro/madrastra (cónyuge actual del
+// padre/madre biológico, sin adopción formal). Útil para representar el
+// vínculo afectivo en el árbol sin perder la verdad genética.
+enum RelationKind {
+  BIOLOGICAL
+  ADOPTIVE
+  STEP
+}
+
 enum UserRole {
   ADMIN
   MEMBER
@@ -100,6 +110,7 @@ enum NotificationType {
   NEW_COMMENT
   SECURITY_ALERT
   NEW_REACTION
+  MENTION_IN_COMMENT
 }
 
 // Tipos de reacciones — selección curada (no se ofrece toda la galería de
@@ -162,6 +173,10 @@ model Person {
   // ── Parentesco directo ────────────────────────────────────────────
   fatherId   String?
   motherId   String?
+  // Tipo de vínculo. Null = legacy (asume BIOLOGICAL). Las nuevas filas
+  // deben llenar estos campos si fatherId/motherId no es null.
+  fatherKind RelationKind?
+  motherKind RelationKind?
 
   // ── Familia central (solo admin puede editar) ─────────────────────
   isCore     Boolean  @default(false)
@@ -428,6 +443,10 @@ model Comment {
   familyId    String
   authorId    String                 // User que escribió
   body        String   @db.Text
+  // IDs de usuarios mencionados con @nombre — al guardar el comentario se
+  // parsea el body y se llena este array. Cada usuario aquí recibe una
+  // notificación tipo MENTION_IN_COMMENT al guardar.
+  mentionedUserIds String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   deletedAt   DateTime?              // soft delete
