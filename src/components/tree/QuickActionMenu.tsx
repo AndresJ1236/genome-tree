@@ -2,58 +2,132 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createInviteLink } from '@/app/actions/admin'
 
 export interface QuickActionTarget {
   personId:  string
   hasFather: boolean
   hasMother: boolean
-  /** Coordenada del centro del círculo en SCREEN-space (post zoom/pan) */
+  /** Coord SCREEN del centro del círculo del nodo (post zoom/pan) */
   centerX:   number
   centerY:   number
+  /** Radio EN PANTALLA del círculo del nodo (post zoom). Usado para
+      colocar las burbujas justo afuera del borde sin importar el zoom. */
+  nodeScreenRadius: number
 }
 
 interface QuickActionMenuProps {
   target:     QuickActionTarget
   familySlug: string
+  /** Si el viewer es admin, se añade la 6ª burbuja "Invitar" */
+  canInvite:  boolean
   onClose:    () => void
 }
 
-/**
- * Menú radial de acciones rápidas que se despliega alrededor de un nodo
- * tras hover quieto. 4 burbujas circulares pequeñas con solo emoji,
- * tooltip nativo para el label.
- *
- * Posiciones: N, W, E + esquinas — TODAS evitan el sur (180°) porque
- * ahí está el nombre de la persona.
- *
- * Si la persona ya tiene padre/madre asignado, ese bubble se ve gris y
- * no es clickeable (con tooltip explicando por qué).
- */
-const RADIUS = 64      // distancia del centro del nodo al centro del bubble
-const BUBBLE = 40      // diámetro de cada burbuja (circular)
+const BUBBLE = 36           // diámetro fijo de cada burbuja en px screen
+const GAP    = 10           // espacio entre el borde del nodo y el borde de la burbuja
+const CLOSE_PAD = 28        // margen adicional fuera del cual se cierra el menú
 const ANIM_MS = 180
-// Radio adicional fuera del cual se cierra el menú (menos esa zona = "out of bounds").
-// Cubre la burbuja + un margen generoso para que pequeños desajustes
-// del mouse no cierren el menú accidentalmente.
-const CLOSE_ZONE_PAD = 26
-const CLOSE_ZONE = RADIUS + BUBBLE / 2 + CLOSE_ZONE_PAD
-// Grace period — al abrir el menú, no cerrar inmediatamente aunque el
-// mouse esté lejos por un instante.
 const GRACE_MS = 250
 
 interface Action {
-  key:      'father' | 'mother' | 'partner' | 'sibling' | 'child'
-  icon:     string
+  key:      'father' | 'mother' | 'partner' | 'sibling' | 'child' | 'invite'
   label:    string
-  /** Ángulo en grados — 0=arriba, 90=derecha, 180=abajo, 270=izquierda */
-  angle:    number
+  /** Renderer del icono — recibe color (currentColor en stroke) */
+  Icon:     React.ComponentType<{ size?: number }>
   disabled: boolean
   disabledReason?: string
 }
 
-export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenuProps) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Iconos SVG inline (estilo Lucide, line-based) — más discretos que emojis
+// y con tamaño/color totalmente controlable
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SVG_PROPS = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.7,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+}
+
+function IconParent({ size = 18 }: { size?: number }) {
+  // user con corona/cabello más alto — silueta de adulto
+  return (
+    <svg width={size} height={size} {...SVG_PROPS}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 21v-1a7 7 0 0 1 14 0v1" />
+    </svg>
+  )
+}
+
+function IconChild({ size = 18 }: { size?: number }) {
+  // figura más pequeña — bebé/niño
+  return (
+    <svg width={size} height={size} {...SVG_PROPS}>
+      <circle cx="12" cy="9" r="3" />
+      <path d="M7 21v-1a5 5 0 0 1 10 0v1" />
+      <path d="M10 9.5h.01M14 9.5h.01" />
+    </svg>
+  )
+}
+
+function IconSibling({ size = 18 }: { size?: number }) {
+  // dos personas lado a lado
+  return (
+    <svg width={size} height={size} {...SVG_PROPS}>
+      <circle cx="8" cy="9" r="2.5" />
+      <circle cx="16" cy="9" r="2.5" />
+      <path d="M3 20v-1a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v1" />
+      <path d="M13 20v-1a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v1" />
+    </svg>
+  )
+}
+
+function IconHeart({ size = 18 }: { size?: number }) {
+  // corazón — pareja
+  return (
+    <svg width={size} height={size} {...SVG_PROPS}>
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  )
+}
+
+function IconMail({ size = 18 }: { size?: number }) {
+  // sobre — invitar
+  return (
+    <svg width={size} height={size} {...SVG_PROPS}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" />
+    </svg>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Algoritmo de distribución — ángulos derivados del número de burbujas,
+// no hardcoded. Para N burbujas, distribuye en arco superior 180° desde
+// W (270°) pasando por N (0°) hasta E (90°), evitando el sur (180°).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function distributeAngles(n: number): number[] {
+  if (n === 0) return []
+  if (n === 1) return [0]                  // norte (arriba)
+  if (n === 2) return [315, 45]            // NW + NE — más compacto que W+E
+  // n >= 3: span 180° de 270° a 90° (clockwise por el norte)
+  const start = 270
+  const span  = 180
+  const step  = span / (n - 1)
+  return Array.from({ length: n }, (_, i) => (start + step * i) % 360)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function QuickActionMenu({ target, familySlug, canInvite, onClose }: QuickActionMenuProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [inviteFeedback, setInviteFeedback] = useState<string | null>(null)
 
   // Trigger la animación de entrada en el siguiente frame
   useEffect(() => {
@@ -68,79 +142,78 @@ export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenu
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Auto-close cuando el mouse sale del radio que cubre las burbujas.
-  // Con un grace period inicial para no cerrar antes de que el usuario
-  // tenga oportunidad de ver el menú o moverse hacia una burbuja.
+  // Auto-close al salir del radio que cubre las burbujas, con grace period
+  // inicial. El radio se calcula dinámicamente según el tamaño del nodo
+  // en pantalla — más lejos cuando el zoom es alto, cerca cuando es bajo.
+  const RADIUS = target.nodeScreenRadius + GAP + BUBBLE / 2
+  const CLOSE_ZONE = RADIUS + BUBBLE / 2 + CLOSE_PAD
+
   useEffect(() => {
-    let activeListener: ((e: MouseEvent) => void) | null = null
+    let listener: ((e: MouseEvent) => void) | null = null
     const grace = setTimeout(() => {
-      activeListener = (e: MouseEvent) => {
+      listener = (e: MouseEvent) => {
         const dx = e.clientX - target.centerX
         const dy = e.clientY - target.centerY
         if (Math.hypot(dx, dy) > CLOSE_ZONE) onClose()
       }
-      window.addEventListener('mousemove', activeListener)
+      window.addEventListener('mousemove', listener)
     }, GRACE_MS)
     return () => {
       clearTimeout(grace)
-      if (activeListener) window.removeEventListener('mousemove', activeListener)
+      if (listener) window.removeEventListener('mousemove', listener)
     }
-  }, [target.centerX, target.centerY, onClose])
+  }, [target.centerX, target.centerY, CLOSE_ZONE, onClose])
 
-  // 5 burbujas en el arco superior (270° → 0° → 90°) cada 45°, evitando
-  // el sur (180°) donde está el nombre.
-  //
-  //         🤝 Pareja (0°)
-  //   👨 Padre              👩 Madre
-  //   (315°)                (45°)
-  //   🧑‍🤝‍🧑 Hermano    [JP]    👶 Hijo
-  //   (270°)                (90°)
-  //         (nombre debajo, libre)
+  // Construir lista de actions — el orden define la posición en el arco
+  // (de izquierda a derecha pasando por arriba). El algoritmo de distribución
+  // se encarga del cálculo angular.
   const actions: Action[] = [
-    {
-      key: 'sibling', icon: '🧑‍🤝‍🧑', label: 'Añadir hermano/a',
-      angle: 270, // izquierda
-      disabled: false,
-    },
-    {
-      key: 'father',  icon: '👨', label: 'Añadir padre',
-      angle: 315, // arriba-izquierda
-      disabled: target.hasFather,
-      disabledReason: 'Ya tiene padre asignado',
-    },
-    {
-      key: 'partner', icon: '💑', label: 'Añadir pareja',
-      angle: 0,   // arriba (norte)
-      disabled: false,
-    },
-    {
-      key: 'mother',  icon: '👩', label: 'Añadir madre',
-      angle: 45,  // arriba-derecha
-      disabled: target.hasMother,
-      disabledReason: 'Ya tiene madre asignada',
-    },
-    {
-      key: 'child',   icon: '👶', label: 'Añadir hijo/a',
-      angle: 90,  // derecha
-      disabled: false,
-    },
+    { key: 'sibling', label: 'Añadir hermano/a', Icon: IconSibling, disabled: false },
+    { key: 'father',  label: 'Añadir padre',     Icon: IconParent,  disabled: target.hasFather, disabledReason: 'Ya tiene padre asignado' },
+    { key: 'partner', label: 'Añadir pareja',    Icon: IconHeart,   disabled: false },
+    { key: 'mother',  label: 'Añadir madre',     Icon: IconParent,  disabled: target.hasMother, disabledReason: 'Ya tiene madre asignada' },
+    { key: 'child',   label: 'Añadir hijo/a',    Icon: IconChild,   disabled: false },
   ]
 
-  function handleAction(action: Action) {
+  if (canInvite) {
+    actions.push({ key: 'invite', label: 'Generar link de invitación', Icon: IconMail, disabled: false })
+  }
+
+  const angles = distributeAngles(actions.length)
+
+  async function handleAction(action: Action) {
     if (action.disabled) return
+
+    if (action.key === 'invite') {
+      // Crear invite + copy al portapapeles, sin redirección. Mostramos
+      // feedback inline por 2 segundos y luego cerramos.
+      setInviteFeedback('Generando…')
+      const result = await createInviteLink({
+        role: 'MEMBER',
+        scope: 'FAMILY',
+        branchRootId: '',
+        personId: target.personId,
+      })
+      if (!result.ok) {
+        setInviteFeedback(`Error: ${result.error}`)
+        setTimeout(onClose, 2200)
+        return
+      }
+      try {
+        await navigator.clipboard.writeText(result.data.url)
+        setInviteFeedback('✓ Link copiado al portapapeles')
+      } catch {
+        setInviteFeedback('Link generado — copia desde el editor')
+      }
+      setTimeout(onClose, 1800)
+      return
+    }
+
     const params = new URLSearchParams()
-    // father/mother: el nuevo es PADRE/MADRE de la persona target
-    //   → en el editor, target queda como hijo del nuevo (parentOf)
-    // sibling: mismos padres
-    // child: el nuevo es HIJO de la persona target (target queda como padre/madre)
-    //   → en el editor, target queda como padre/madre del nuevo (childOf)
-    // partner: el nuevo es pareja del target
     if (action.key === 'father') {
-      params.set('parentOf', target.personId)
-      params.set('asParent', 'father')
+      params.set('parentOf', target.personId); params.set('asParent', 'father')
     } else if (action.key === 'mother') {
-      params.set('parentOf', target.personId)
-      params.set('asParent', 'mother')
+      params.set('parentOf', target.personId); params.set('asParent', 'mother')
     } else if (action.key === 'sibling') {
       params.set('siblingOf', target.personId)
     } else if (action.key === 'child') {
@@ -153,20 +226,19 @@ export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenu
 
   return (
     <>
-      {/* Backdrop transparente que captura el click-outside.
-          Sin color de fondo para no oscurecer la vista del árbol. */}
+      {/* Backdrop transparente que captura el click-outside */}
       <div
         onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0, zIndex: 200,
-          cursor: 'default',
-        }}
+        style={{ position: 'fixed', inset: 0, zIndex: 200 }}
       />
 
-      {/* Burbujas circulares pequeñas — solo emoji, tooltip nativo del browser
-          muestra el label completo al hover. Discretas pero claras. */}
+      {/* Burbujas — tamaño fijo (BUBBLE px) sin importar el zoom del árbol.
+          Posición: a RADIUS px del centro del nodo, donde RADIUS depende
+          del tamaño actual del nodo en pantalla. Así siempre quedan
+          justo afuera del borde del círculo, no dentro. */}
       {actions.map((action, i) => {
-        const rad = (action.angle - 90) * Math.PI / 180  // -90 para que 0=arriba
+        const angle = angles[i]
+        const rad = (angle - 90) * Math.PI / 180  // -90 → 0° = arriba
         const dx = Math.cos(rad) * RADIUS
         const dy = Math.sin(rad) * RADIUS
         return (
@@ -182,43 +254,58 @@ export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenu
               top:  target.centerY + dy - BUBBLE / 2,
               width: BUBBLE, height: BUBBLE,
               borderRadius: '50%',
-              border: action.disabled ? '1.5px solid #C8C2B8' : '1.5px solid #2D4A3E',
-              background: action.disabled ? '#E8E5DD' : '#FFFDF9',
+              border: action.disabled ? '1.2px solid #C8C2B8' : '1.2px solid #2D4A3E',
+              background: action.disabled ? '#EDEAE3' : '#FFFDF9',
               color: action.disabled ? '#9B9690' : '#2D4A3E',
               cursor: action.disabled ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               padding: 0,
-              boxShadow: action.disabled ? 'none' : '0 3px 10px rgba(45,74,62,0.22)',
+              boxShadow: action.disabled ? 'none' : '0 2px 8px rgba(45,74,62,0.18)',
               zIndex: 201,
               transform: open ? 'scale(1)' : 'scale(0.3)',
-              opacity: open ? (action.disabled ? 0.7 : 1) : 0,
-              transition: `transform ${ANIM_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 30}ms, opacity ${ANIM_MS}ms ease-out ${i * 30}ms`,
+              opacity: open ? (action.disabled ? 0.55 : 1) : 0,
+              transition: `transform ${ANIM_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 25}ms, opacity ${ANIM_MS}ms ease-out ${i * 25}ms, box-shadow 150ms ease, background 150ms ease`,
               willChange: 'transform, opacity',
             }}
             onMouseEnter={e => {
               if (!action.disabled) {
-                e.currentTarget.style.transform = 'scale(1.12)'
-                e.currentTarget.style.boxShadow = '0 5px 14px rgba(45,74,62,0.32)'
+                e.currentTarget.style.background = '#EAF0ED'
+                e.currentTarget.style.boxShadow = '0 3px 12px rgba(45,74,62,0.28)'
               }
             }}
             onMouseLeave={e => {
               if (!action.disabled) {
-                e.currentTarget.style.transform = 'scale(1)'
-                e.currentTarget.style.boxShadow = '0 3px 10px rgba(45,74,62,0.22)'
+                e.currentTarget.style.background = '#FFFDF9'
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(45,74,62,0.18)'
               }
             }}
           >
-            <span style={{ fontSize: 20, lineHeight: 1, filter: action.disabled ? 'grayscale(0.7)' : 'none' }}>
-              {action.icon}
-            </span>
+            <action.Icon size={18} />
           </button>
         )
       })}
+
+      {/* Feedback inline (solo para invite — el resto navega) */}
+      {inviteFeedback && (
+        <div
+          style={{
+            position: 'fixed',
+            left: target.centerX,
+            top:  target.centerY + RADIUS + BUBBLE / 2 + 14,
+            transform: 'translateX(-50%)',
+            background: '#2D4A3E', color: '#F5F0E8',
+            padding: '6px 12px', borderRadius: 14,
+            fontSize: 11, letterSpacing: '0.04em',
+            zIndex: 202,
+            whiteSpace: 'nowrap',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+          }}
+        >
+          {inviteFeedback}
+        </div>
+      )}
     </>
   )
 }
-
-// Helpers compartidos para el componente del nodo
-export const QUICK_PRESS_MS = 600

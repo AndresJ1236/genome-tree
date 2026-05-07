@@ -173,6 +173,7 @@ export default async function TreePage({
           searchEnabled={modules.moduleSearch}
           focusPersonId={session?.personId ?? undefined}
           canCreatePerson={userCanCreatePerson}
+          isAdmin={session?.role === 'ADMIN'}
         />
       </div>
     </div>
