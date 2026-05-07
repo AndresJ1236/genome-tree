@@ -102,6 +102,8 @@ export interface PersonEditorPrefill {
   parentOf?:  string
   /** El nuevo se crea como hermano/a de este target (mismos padres) */
   siblingOf?: string
+  /** El nuevo se crea como pareja de este target */
+  partnerOf?: string
   /** Cuando viene parentOf: rol del nuevo respecto al hijo */
   asParent?:  'father' | 'mother'
 }
@@ -177,9 +179,10 @@ export function PersonEditor({
   const [quickRelType, setQuickRelType] = useState<'' | 'child-of' | 'sibling-of' | 'parent-of' | 'partner-of'>(() => {
     if (prefill?.parentOf)  return 'parent-of'
     if (prefill?.siblingOf) return 'sibling-of'
+    if (prefill?.partnerOf) return 'partner-of'
     return ''
   })
-  const [quickTargetId, setQuickTargetId] = useState<string>(() => prefill?.parentOf ?? prefill?.siblingOf ?? '')
+  const [quickTargetId, setQuickTargetId] = useState<string>(() => prefill?.parentOf ?? prefill?.siblingOf ?? prefill?.partnerOf ?? '')
   const [quickParentRole, setQuickParentRole] = useState<'father' | 'mother'>(prefill?.asParent ?? 'father')
   const [quickPartnerType, setQuickPartnerType] = useState<'SPOUSE' | 'PARTNER'>('SPOUSE')
   // Track whether surname fields were manually touched

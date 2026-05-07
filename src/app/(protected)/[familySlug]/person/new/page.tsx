@@ -13,6 +13,7 @@ export default async function NewPersonPage({
     childOf?:   string
     parentOf?:  string
     siblingOf?: string
+    partnerOf?: string
     asParent?:  string
   }>
 }) {
@@ -32,6 +33,7 @@ export default async function NewPersonPage({
     childOf:   sp.childOf,
     parentOf:  sp.parentOf,
     siblingOf: sp.siblingOf,
+    partnerOf: sp.partnerOf,
     asParent:  sp.asParent === 'mother' ? 'mother' : sp.asParent === 'father' ? 'father' : undefined,
   }
 
