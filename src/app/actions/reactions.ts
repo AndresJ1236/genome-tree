@@ -6,18 +6,12 @@ import { assertPersonAccess } from '@/lib/permissions'
 import { revalidatePath } from 'next/cache'
 import type { ActionResult } from '@/lib/content-types'
 import type { ReactionType } from '@prisma/client'
+import { REACTION_TYPES, type ReactionSummary, type ReactionTypeValue } from '@/lib/reactions-types'
 
-export const REACTION_TYPES = ['HEART', 'LAUGH', 'WOW', 'SAD', 'PRAY'] as const
-export type ReactionTypeValue = typeof REACTION_TYPES[number]
-
-export interface ReactionSummary {
-  type:    ReactionTypeValue
-  count:   number
-  /** True si el usuario actual ya reaccionó con este tipo */
-  mine:    boolean
-  /** Hasta 3 nombres de quienes reaccionaron, para tooltip "Ana, Pedro y 2 más" */
-  preview: string[]
-}
+// Re-export es seguro porque Next.js erase los `export type` en build.
+// El runtime const REACTION_TYPES NO se re-exporta desde aquí — los
+// componentes deben importarlo directamente desde `@/lib/reactions-types`.
+export type { ReactionSummary, ReactionTypeValue }
 
 /**
  * Devuelve el resumen agregado de reacciones para un Content o Media.
