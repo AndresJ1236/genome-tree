@@ -396,36 +396,41 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
                   isCurrentUser={focusPersonId === node.id}
                   onSelect={id => setSelectedId(prev => (prev === id ? null : id))}
                   longPressEnabled={!!canCreatePerson}
-                  onLongPress={(id, x, y, screenRadius) => {
+                  onLongPress={(id) => {
                     const p = personById.get(id)
-                    if (!p) return
+                    const layoutNode = nodes.find(n => n.id === id)
+                    if (!p || !layoutNode) return
                     setQuickAction({
                       personId: id,
                       hasFather: !!p.fatherId,
                       hasMother: !!p.motherId,
-                      centerX: x,
-                      centerY: y,
-                      nodeScreenRadius: screenRadius,
+                      nodeX: layoutNode.x,
+                      nodeY: layoutNode.y,
                     })
                   }}
                   animDelay={i * 60}
                 />
               )
             })}
+
+            {/* Menú radial — DENTRO del contenedor tree-space para que
+                herede la transformación de zoom/pan. Las burbujas se
+                posicionan en coordenadas tree-space relativas al nodo,
+                así que escalan automáticamente con el árbol y siempre
+                quedan justo afuera del borde del nodo. */}
+            {quickAction && (
+              <QuickActionMenu
+                target={quickAction}
+                familySlug={familySlug}
+                canInvite={!!isAdmin}
+                onClose={() => setQuickAction(null)}
+              />
+            )}
           </div>
         </div>
       </div>
 
       <OnboardingOverlay />
-
-      {quickAction && (
-        <QuickActionMenu
-          target={quickAction}
-          familySlug={familySlug}
-          canInvite={!!isAdmin}
-          onClose={() => setQuickAction(null)}
-        />
-      )}
 
       <PersonPanel
         personId={selectedId}

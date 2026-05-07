@@ -1,18 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createInviteLink } from '@/app/actions/admin'
+import { NODE_W, NODE_H } from '@/lib/tree-layout'
 
 export interface QuickActionTarget {
   personId:  string
   hasFather: boolean
   hasMother: boolean
-  /** Coord SCREEN del centro del círculo del nodo (post zoom/pan) */
-  centerX:   number
-  centerY:   number
-  /** Radio EN PANTALLA del círculo del nodo (post zoom). */
-  nodeScreenRadius: number
+  /** Posición del nodo en TREE coordinates (top-left del cuadrado del nodo).
+      El menú se renderiza dentro del mismo contenedor transformado que los
+      PersonNode, así que comparte el sistema de coordenadas y se escala
+      automáticamente con el zoom/pan del árbol. */
+  nodeX: number
+  nodeY: number
 }
 
 interface QuickActionMenuProps {
@@ -23,38 +25,29 @@ interface QuickActionMenuProps {
   onClose:    () => void
 }
 
-const BUBBLE = 32           // diámetro fijo de cada burbuja en px screen — más discreto
-const GAP    = 8            // distancia entre el borde del nodo y el borde de la burbuja
-const CLOSE_PAD = 28        // margen adicional fuera del cual se cierra el menú
+// Tamaños en TREE-COORDS px — al estar dentro del transformed container
+// del árbol, escalan automáticamente con el zoom. Esto significa:
+//   - A zoom 1x: BUBBLE se ve a BUBBLE_TREE_PX en pantalla
+//   - A zoom 2x: BUBBLE se ve al doble
+//   - La POSICIÓN relativa al nodo es siempre la misma
+// Resultado: las burbujas siempre quedan justo afuera del borde del nodo
+// con el mismo gap relativo, sin importar el zoom.
+const BUBBLE = 36           // diámetro de cada burbuja en tree-px
+const GAP    = 8            // espacio entre el borde del nodo y la burbuja en tree-px
+const CLOSE_PAD = 36        // padding adicional EN PANTALLA para auto-close
 const ANIM_MS = 180
 const GRACE_MS = 250
-
-/**
- * Radio del menú radial — pegado al borde del nodo en pantalla.
- * RADIUS = nodeScreenRadius + GAP + BUBBLE/2.
- *
- * Decisión de UX: las burbujas son fijas (32px) pero su POSICIÓN sigue
- * el borde del nodo, así que a zoom medio/cercano (que es cuando el
- * usuario las usa) se ven discretas y pegadas al nodo, sin meterse
- * adentro del círculo. A zoom extremo lejano puede haber overlap entre
- * burbujas — eso está OK, el usuario explícitamente dijo no importa.
- */
-function computeRadius(nodeScreenRadius: number): number {
-  return nodeScreenRadius + GAP + BUBBLE / 2
-}
 
 interface Action {
   key:      'father' | 'mother' | 'partner' | 'sibling' | 'child' | 'invite'
   label:    string
-  /** Renderer del icono — recibe color (currentColor en stroke) */
   Icon:     React.ComponentType<{ size?: number }>
   disabled: boolean
   disabledReason?: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Iconos SVG inline (estilo Lucide, line-based) — más discretos que emojis
-// y con tamaño/color totalmente controlable
+// Iconos SVG inline — line-based, monocromos, estilo Lucide
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SVG_PROPS = {
@@ -66,8 +59,8 @@ const SVG_PROPS = {
   strokeLinejoin: 'round' as const,
 }
 
-function IconFather({ size = 18 }: { size?: number }) {
-  // Silueta masculina — cabeza + hombros rectos + línea de corbata vertical
+function IconFather({ size = 20 }: { size?: number }) {
+  // Silueta masculina — cabeza + hombros rectos + corbata vertical
   return (
     <svg width={size} height={size} {...SVG_PROPS}>
       <circle cx="12" cy="6" r="2.6" />
@@ -77,8 +70,8 @@ function IconFather({ size = 18 }: { size?: number }) {
   )
 }
 
-function IconMother({ size = 18 }: { size?: number }) {
-  // Silueta femenina — cabeza + falda triangular (estilo letrero universal)
+function IconMother({ size = 20 }: { size?: number }) {
+  // Silueta femenina — cabeza + falda triangular tipo letrero universal
   return (
     <svg width={size} height={size} {...SVG_PROPS}>
       <circle cx="12" cy="6" r="2.6" />
@@ -88,8 +81,7 @@ function IconMother({ size = 18 }: { size?: number }) {
   )
 }
 
-function IconChild({ size = 18 }: { size?: number }) {
-  // figura más pequeña — bebé/niño
+function IconChild({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} {...SVG_PROPS}>
       <circle cx="12" cy="9" r="3" />
@@ -99,8 +91,7 @@ function IconChild({ size = 18 }: { size?: number }) {
   )
 }
 
-function IconSibling({ size = 18 }: { size?: number }) {
-  // dos personas lado a lado
+function IconSibling({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} {...SVG_PROPS}>
       <circle cx="8" cy="9" r="2.5" />
@@ -111,8 +102,7 @@ function IconSibling({ size = 18 }: { size?: number }) {
   )
 }
 
-function IconHeart({ size = 18 }: { size?: number }) {
-  // corazón — pareja
+function IconHeart({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} {...SVG_PROPS}>
       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
@@ -120,8 +110,7 @@ function IconHeart({ size = 18 }: { size?: number }) {
   )
 }
 
-function IconMail({ size = 18 }: { size?: number }) {
-  // sobre — invitar
+function IconMail({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} {...SVG_PROPS}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -131,20 +120,16 @@ function IconMail({ size = 18 }: { size?: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Algoritmo de distribución — ángulos derivados del número de burbujas,
-// no hardcoded. Para N burbujas, distribuye en arco superior 180° desde
-// W (270°) pasando por N (0°) hasta E (90°), evitando el sur (180°).
+// Algoritmo de distribución — reparte N burbujas en arco superior 180°
+// (W → N → E), evitando el sur (180°) donde está el nombre.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function distributeAngles(n: number): number[] {
   if (n === 0) return []
-  if (n === 1) return [0]                  // norte (arriba)
-  if (n === 2) return [315, 45]            // NW + NE — más compacto que W+E
-  // n >= 3: span 180° de 270° a 90° (clockwise por el norte)
-  const start = 270
-  const span  = 180
-  const step  = span / (n - 1)
-  return Array.from({ length: n }, (_, i) => (start + step * i) % 360)
+  if (n === 1) return [0]
+  if (n === 2) return [315, 45]
+  const step = 180 / (n - 1)
+  return Array.from({ length: n }, (_, i) => (270 + step * i) % 360)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,8 +138,9 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [inviteFeedback, setInviteFeedback] = useState<string | null>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
-  // Trigger la animación de entrada en el siguiente frame
+  // Trigger animación de entrada en el siguiente frame
   useEffect(() => {
     const id = requestAnimationFrame(() => setOpen(true))
     return () => cancelAnimationFrame(id)
@@ -167,34 +153,21 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Construir lista de actions ANTES de calcular RADIUS, porque RADIUS
-  // depende del número de burbujas (para evitar overlap entre ellas
-  // cuando el nodo está muy zoomed-out).
-  const baseActions: Action[] = [
-    { key: 'sibling', label: 'Añadir hermano/a', Icon: IconSibling, disabled: false },
-    { key: 'father',  label: 'Añadir padre',     Icon: IconFather,  disabled: target.hasFather, disabledReason: 'Ya tiene padre asignado' },
-    { key: 'partner', label: 'Añadir pareja',    Icon: IconHeart,   disabled: false },
-    { key: 'mother',  label: 'Añadir madre',     Icon: IconMother,  disabled: target.hasMother, disabledReason: 'Ya tiene madre asignada' },
-    { key: 'child',   label: 'Añadir hijo/a',    Icon: IconChild,   disabled: false },
-  ]
-  if (canInvite) {
-    baseActions.push({ key: 'invite', label: 'Generar link de invitación', Icon: IconMail, disabled: false })
-  }
-
-  // RADIUS sigue el borde del nodo en pantalla — siempre afuera del
-  // círculo sin importar el zoom. A zoom-out extremo puede haber overlap
-  // entre burbujas; user explicitamente dijo "no importa cómo se vea de
-  // lejos, lo que importa es medio/cerca".
-  const RADIUS = computeRadius(target.nodeScreenRadius)
-  const CLOSE_ZONE = RADIUS + BUBBLE / 2 + CLOSE_PAD
-
+  // Auto-close cuando el cursor sale del radio que cubre las burbujas.
+  // wrapperRef.getBoundingClientRect() devuelve coords SCREEN ya con el
+  // transform del árbol aplicado, así que el centro y el tamaño cambian
+  // automáticamente con el zoom — todo en pantalla.
   useEffect(() => {
     let listener: ((e: MouseEvent) => void) | null = null
     const grace = setTimeout(() => {
       listener = (e: MouseEvent) => {
-        const dx = e.clientX - target.centerX
-        const dy = e.clientY - target.centerY
-        if (Math.hypot(dx, dy) > CLOSE_ZONE) onClose()
+        if (!wrapperRef.current) return
+        const rect = wrapperRef.current.getBoundingClientRect()
+        const cx = rect.left + rect.width / 2
+        const cy = rect.top + rect.height / 2
+        const dist = Math.hypot(e.clientX - cx, e.clientY - cy)
+        const closeZone = rect.width / 2 + CLOSE_PAD
+        if (dist > closeZone) onClose()
       }
       window.addEventListener('mousemove', listener)
     }, GRACE_MS)
@@ -202,20 +175,40 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
       clearTimeout(grace)
       if (listener) window.removeEventListener('mousemove', listener)
     }
-  }, [target.centerX, target.centerY, CLOSE_ZONE, onClose])
+  }, [onClose])
 
-  // El orden de baseActions (definido arriba) determina la posición en el
-  // arco — de izquierda a derecha pasando por arriba. distributeAngles()
-  // se encarga del cálculo angular.
-  const actions = baseActions
+  // Construcción de actions — el orden define la posición en el arco
+  const actions: Action[] = [
+    { key: 'sibling', label: 'Añadir hermano/a', Icon: IconSibling, disabled: false },
+    { key: 'father',  label: 'Añadir padre',     Icon: IconFather,  disabled: target.hasFather, disabledReason: 'Ya tiene padre asignado' },
+    { key: 'partner', label: 'Añadir pareja',    Icon: IconHeart,   disabled: false },
+    { key: 'mother',  label: 'Añadir madre',     Icon: IconMother,  disabled: target.hasMother, disabledReason: 'Ya tiene madre asignada' },
+    { key: 'child',   label: 'Añadir hijo/a',    Icon: IconChild,   disabled: false },
+  ]
+  if (canInvite) {
+    actions.push({ key: 'invite', label: 'Generar link de invitación', Icon: IconMail, disabled: false })
+  }
   const angles = distributeAngles(actions.length)
+
+  // Centro del nodo en TREE coords. NODE_W ≈ NODE_H (círculo aproximado).
+  const nodeRadius = Math.min(NODE_W, NODE_H) / 2
+  const cx = target.nodeX + NODE_W / 2
+  const cy = target.nodeY + NODE_H / 2
+
+  // RADIUS en TREE-px — distancia del centro del nodo al centro de la
+  // burbuja. = radio del nodo + GAP + radio de la burbuja. Garantiza que
+  // las burbujas siempre estén justo afuera del borde del nodo, no
+  // adentro, sin importar zoom (porque todo está en mismas coords).
+  const RADIUS = nodeRadius + GAP + BUBBLE / 2
+
+  // Tamaño del wrapper que encompass las burbujas — necesario para
+  // que getBoundingClientRect dé el centro y radio del cluster.
+  const HALF = RADIUS + BUBBLE / 2 + 2
 
   async function handleAction(action: Action) {
     if (action.disabled) return
 
     if (action.key === 'invite') {
-      // Crear invite + copy al portapapeles, sin redirección. Mostramos
-      // feedback inline por 2 segundos y luego cerramos.
       setInviteFeedback('Generando…')
       const result = await createInviteLink({
         role: 'MEMBER',
@@ -254,20 +247,24 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
   }
 
   return (
-    <>
-      {/* Backdrop transparente que captura el click-outside */}
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 200 }}
-      />
-
-      {/* Burbujas — tamaño fijo (BUBBLE px) sin importar el zoom del árbol.
-          Posición: a RADIUS px del centro del nodo, donde RADIUS depende
-          del tamaño actual del nodo en pantalla. Así siempre quedan
-          justo afuera del borde del círculo, no dentro. */}
+    <div
+      ref={wrapperRef}
+      style={{
+        position: 'absolute',
+        left: cx - HALF,
+        top:  cy - HALF,
+        width: HALF * 2,
+        height: HALF * 2,
+        // pointerEvents:none en el wrapper para que clicks en el espacio
+        // entre burbujas pasen al árbol que está debajo. Las burbujas
+        // re-habilitan pointerEvents:auto.
+        pointerEvents: 'none',
+        zIndex: 50,
+      }}
+    >
       {actions.map((action, i) => {
         const angle = angles[i]
-        const rad = (angle - 90) * Math.PI / 180  // -90 → 0° = arriba
+        const rad = (angle - 90) * Math.PI / 180
         const dx = Math.cos(rad) * RADIUS
         const dy = Math.sin(rad) * RADIUS
         return (
@@ -278,10 +275,11 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
             onClick={() => handleAction(action)}
             title={action.disabled ? action.disabledReason : action.label}
             style={{
-              position: 'fixed',
-              left: target.centerX + dx - BUBBLE / 2,
-              top:  target.centerY + dy - BUBBLE / 2,
-              width: BUBBLE, height: BUBBLE,
+              position: 'absolute',
+              left: HALF + dx - BUBBLE / 2,
+              top:  HALF + dy - BUBBLE / 2,
+              width: BUBBLE,
+              height: BUBBLE,
               borderRadius: '50%',
               border: action.disabled ? '1.2px solid #C8C2B8' : '1.2px solid #2D4A3E',
               background: action.disabled ? '#EDEAE3' : '#FFFDF9',
@@ -292,7 +290,7 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
               justifyContent: 'center',
               padding: 0,
               boxShadow: action.disabled ? 'none' : '0 2px 8px rgba(45,74,62,0.18)',
-              zIndex: 201,
+              pointerEvents: 'auto',
               transform: open ? 'scale(1)' : 'scale(0.3)',
               opacity: open ? (action.disabled ? 0.55 : 1) : 0,
               transition: `transform ${ANIM_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 25}ms, opacity ${ANIM_MS}ms ease-out ${i * 25}ms, box-shadow 150ms ease, background 150ms ease`,
@@ -311,30 +309,28 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
               }
             }}
           >
-            <action.Icon size={18} />
+            <action.Icon size={Math.round(BUBBLE * 0.55)} />
           </button>
         )
       })}
 
-      {/* Feedback inline (solo para invite — el resto navega) */}
       {inviteFeedback && (
         <div
           style={{
-            position: 'fixed',
-            left: target.centerX,
-            top:  target.centerY + RADIUS + BUBBLE / 2 + 14,
+            position: 'absolute',
+            left: HALF,
+            top:  HALF + RADIUS + BUBBLE / 2 + 8,
             transform: 'translateX(-50%)',
             background: '#2D4A3E', color: '#F5F0E8',
-            padding: '6px 12px', borderRadius: 14,
-            fontSize: 11, letterSpacing: '0.04em',
-            zIndex: 202,
+            padding: '4px 10px', borderRadius: 12,
+            fontSize: 10, letterSpacing: '0.04em',
             whiteSpace: 'nowrap',
-            boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+            pointerEvents: 'none',
           }}
         >
           {inviteFeedback}
         </div>
       )}
-    </>
+    </div>
   )
 }

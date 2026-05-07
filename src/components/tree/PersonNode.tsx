@@ -16,10 +16,9 @@ interface PersonNodeProps {
   isCurrentUser: boolean
   onSelect: (id: string) => void
   /** Long-press detectado — el componente padre muestra el menú radial.
-      Recibe el ID, las coordenadas SCREEN del centro del círculo, y el
-      radio del círculo en pantalla (para colocar las burbujas justo
-      afuera del borde sin importar el zoom). */
-  onLongPress?: (id: string, screenX: number, screenY: number, screenRadius: number) => void
+      El menú se posiciona con las coordenadas tree-space del nodo
+      (el padre las conoce vía el layout), así que solo pasamos el ID. */
+  onLongPress?: (id: string) => void
   /** Si el viewer tiene permiso para crear personas. Si no, no se activa
       el detector de long-press. */
   longPressEnabled?: boolean
@@ -59,7 +58,6 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
   // No hace falta suprimir el click porque el trigger es hover, no press.
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const startCoord = useRef<{ x: number; y: number } | null>(null)
-  const circleRef = useRef<HTMLDivElement>(null)
 
   function clearTimer() {
     if (hoverTimer.current) {
@@ -74,12 +72,7 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
     startCoord.current = { x: clientX, y: clientY }
     clearTimer()
     hoverTimer.current = setTimeout(() => {
-      if (circleRef.current) {
-        const rect = circleRef.current.getBoundingClientRect()
-        // Radio del círculo EN PANTALLA — refleja el zoom actual del árbol
-        const screenRadius = Math.min(rect.width, rect.height) / 2
-        onLongPress(node.id, rect.left + rect.width / 2, rect.top + rect.height / 2, screenRadius)
-      }
+      onLongPress(node.id)
       hoverTimer.current = null
       startCoord.current = null
     }, HOVER_STILL_MS)
@@ -117,7 +110,6 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
       style={{ left: node.x, top: node.y, width: NODE_W, animationDelay: `${animDelay}ms` }}
     >
       <div
-        ref={circleRef}
         className={selected ? 'person-circle person-circle--selected' : 'person-circle'}
         style={{
           width: NODE_W,
