@@ -95,20 +95,44 @@ function emptyForm(): PersonFormData {
   }
 }
 
+export interface PersonEditorPrefill {
+  /** El nuevo se crea como hijo/a de este target (target = padre/madre) */
+  childOf?:   string
+  /** El nuevo se crea como padre/madre de este target (target = hijo/a) */
+  parentOf?:  string
+  /** El nuevo se crea como hermano/a de este target (mismos padres) */
+  siblingOf?: string
+  /** Cuando viene parentOf: rol del nuevo respecto al hijo */
+  asParent?:  'father' | 'mother'
+}
+
 export function PersonEditor({
   payload,
   mode,
   defaultNodeKind = 'PERSON',
+  prefill,
 }: {
   payload: PersonEditorPayload
   mode: 'create' | 'edit'
   defaultNodeKind?: 'PERSON' | 'PET'
+  prefill?: PersonEditorPrefill
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [form, setForm] = useState<PersonFormData>(
-    payload.person ?? { ...emptyForm(), nodeKind: defaultNodeKind }
-  )
+  const [form, setForm] = useState<PersonFormData>(() => {
+    if (payload.person) return payload.person
+    const base = { ...emptyForm(), nodeKind: defaultNodeKind }
+    // Prefill desde URL params del menú radial del árbol:
+    // childOf → el nuevo es hijo del target (target = padre o madre)
+    if (prefill?.childOf) {
+      const parent = payload.candidates.find(c => c.id === prefill.childOf)
+      if (parent) {
+        if (parent.gender === 'FEMALE') { base.motherId = parent.id; base.motherKind = 'BIOLOGICAL' }
+        else                            { base.fatherId = parent.id; base.fatherKind = 'BIOLOGICAL' }
+      }
+    }
+    return base
+  })
   const [media, setMedia] = useState<MediaItem[]>(payload.media)
   const [relationships, setRelationships] = useState<RelationshipItem[]>(payload.relationships)
   const [newPartnerType, setNewPartnerType] = useState<'SPOUSE' | 'PARTNER' | 'SIBLING'>('SPOUSE')
@@ -131,10 +155,32 @@ export function PersonEditor({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
 
+  // Si vinimos por "sibling-of" desde el menú radial, copiar los padres del
+  // hermano al form en cuanto montamos. Esto replica la lógica del auto-fill
+  // en el onChange del select.
+  useEffect(() => {
+    if (mode !== 'create' || !prefill?.siblingOf) return
+    const sib = payload.candidates.find(c => c.id === prefill.siblingOf)
+    if (!sib) return
+    setForm(prev => ({
+      ...prev,
+      fatherId: sib.fatherId ?? '',
+      motherId: sib.motherId ?? '',
+      fatherKind: sib.fatherId ? 'BIOLOGICAL' : '',
+      motherKind: sib.motherId ? 'BIOLOGICAL' : '',
+    }))
+    // Reseteamos al monte; no corre de nuevo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Quick connection (create mode only)
-  const [quickRelType, setQuickRelType] = useState<'' | 'child-of' | 'sibling-of' | 'parent-of' | 'partner-of'>('')
-  const [quickTargetId, setQuickTargetId] = useState('')
-  const [quickParentRole, setQuickParentRole] = useState<'father' | 'mother'>('father')
+  const [quickRelType, setQuickRelType] = useState<'' | 'child-of' | 'sibling-of' | 'parent-of' | 'partner-of'>(() => {
+    if (prefill?.parentOf)  return 'parent-of'
+    if (prefill?.siblingOf) return 'sibling-of'
+    return ''
+  })
+  const [quickTargetId, setQuickTargetId] = useState<string>(() => prefill?.parentOf ?? prefill?.siblingOf ?? '')
+  const [quickParentRole, setQuickParentRole] = useState<'father' | 'mother'>(prefill?.asParent ?? 'father')
   const [quickPartnerType, setQuickPartnerType] = useState<'SPOUSE' | 'PARTNER'>('SPOUSE')
   // Track whether surname fields were manually touched
   const [birthSurname1Touched, setBirthSurname1Touched] = useState(mode === 'edit' && !!form.birthSurname1)

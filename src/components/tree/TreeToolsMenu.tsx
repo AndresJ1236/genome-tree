@@ -8,32 +8,45 @@ interface TreeToolsMenuProps {
   isAdmin: boolean
 }
 
+const ANIM_MS = 220
+
 /**
- * Botón hamburguesa en la cabecera del árbol que abre un panel deslizante
- * por el lado derecho con las herramientas secundarias (Tiempo, Mapa,
- * exports). Antes estaban todos inline en la barra superior y abarrotaban
- * el espacio horizontal — peor en mobile y en navegadores estrechos.
- *
- * Las acciones primarias (Cumpleaños, "Nuevo") siguen visibles inline en
- * la barra principal porque se usan a diario; estas secundarias quedan a
- * un click pero fuera del campo visual.
+ * Botón hamburguesa que abre un panel deslizante con animación desde el
+ * lado derecho (transform: translateX). Estados:
+ *   • mounted=false           — DOM no renderizado, drawer cerrado
+ *   • mounted=true, open=false — DOM renderizado, animando salida
+ *   • mounted=true, open=true  — drawer visible, animación entrada
  */
 export function TreeToolsMenu({ familySlug, isAdmin }: TreeToolsMenuProps) {
+  const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false)
+
+  function openDrawer() {
+    setMounted(true)
+    // requestAnimationFrame asegura que React aplica el estado inicial
+    // (translateX(100%)) ANTES de cambiar a translateX(0), para que CSS
+    // detecte el cambio y dispare la transición.
+    requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)))
+  }
+
+  function closeDrawer() {
+    setOpen(false)
+    setTimeout(() => setMounted(false), ANIM_MS)
+  }
 
   // Cerrar con ESC para no atrapar al usuario
   useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    if (!mounted) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDrawer() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  }, [mounted])
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openDrawer}
         title="Más herramientas"
         className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0"
         style={{
@@ -45,24 +58,30 @@ export function TreeToolsMenu({ familySlug, isAdmin }: TreeToolsMenuProps) {
         ☰
       </button>
 
-      {open && (
+      {mounted && (
         <>
-          {/* Backdrop semitransparente — click cierra el panel */}
+          {/* Backdrop con fade — click cierra el panel */}
           <div
-            onClick={() => setOpen(false)}
+            onClick={closeDrawer}
             style={{
-              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)',
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.25)',
               zIndex: 49,
+              opacity: open ? 1 : 0,
+              transition: `opacity ${ANIM_MS}ms ease-out`,
             }}
           />
-          {/* Panel deslizante */}
+          {/* Panel deslizante con translateX */}
           <aside
             style={{
               position: 'fixed', top: 0, right: 0, bottom: 0,
               width: 'min(320px, 88vw)', background: '#F5F0E8',
               borderLeft: '1px solid #D8D2C7', zIndex: 50,
               display: 'flex', flexDirection: 'column',
-              boxShadow: '-4px 0 20px rgba(0,0,0,0.08)',
+              boxShadow: '-4px 0 20px rgba(0,0,0,0.12)',
+              transform: open ? 'translateX(0)' : 'translateX(100%)',
+              transition: `transform ${ANIM_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+              willChange: 'transform',
             }}
           >
             <div style={{
@@ -76,7 +95,7 @@ export function TreeToolsMenu({ familySlug, isAdmin }: TreeToolsMenuProps) {
               </h2>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={closeDrawer}
                 style={{
                   background: 'transparent', border: 'none', fontSize: 22,
                   color: '#6B6B6B', cursor: 'pointer', padding: 0, lineHeight: 1,
@@ -93,14 +112,14 @@ export function TreeToolsMenu({ familySlug, isAdmin }: TreeToolsMenuProps) {
                 icon="🕒"
                 label="Línea de tiempo"
                 description="Eventos familiares por década"
-                onClick={() => setOpen(false)}
+                onClick={closeDrawer}
               />
               <MenuItem
                 href={`/${familySlug}/map`}
                 icon="🗺️"
                 label="Mapa de orígenes"
                 description="Lugares de nacimiento en el mapa"
-                onClick={() => setOpen(false)}
+                onClick={closeDrawer}
               />
 
               {isAdmin && (
@@ -129,7 +148,7 @@ export function TreeToolsMenu({ familySlug, isAdmin }: TreeToolsMenuProps) {
                 icon="⚙️"
                 label="Configuración"
                 description="Preferencias y cuenta"
-                onClick={() => setOpen(false)}
+                onClick={closeDrawer}
               />
             </nav>
           </aside>
