@@ -272,6 +272,8 @@ export async function getPersonEditorPayload(personId?: string): Promise<ActionR
             bio: person.bio ?? '',
             fatherId: person.fatherId ?? '',
             motherId: person.motherId ?? '',
+            fatherKind: (person.fatherKind ?? '') as PersonFormData['fatherKind'],
+            motherKind: (person.motherKind ?? '') as PersonFormData['motherKind'],
             coverPhoto: person.coverPhoto ?? '',
             isCore: person.isCore,
             unitAffiliationId: person.unitAffiliationId ?? '',
@@ -497,6 +499,10 @@ export async function createPerson(input: Omit<PersonFormData, 'id' | 'coverPhot
     const bio = normalizeText(input.bio) || null
     if (bio && bio.length > 5000) return { ok: false, error: 'La biografía no puede superar los 5000 caracteres.' }
 
+    // Default a BIOLOGICAL si hay padre/madre y no se especificó kind
+    const fatherKind = fatherId ? (input.fatherKind || 'BIOLOGICAL') : null
+    const motherKind = motherId ? (input.motherKind || 'BIOLOGICAL') : null
+
     const person = await prisma.person.create({
       data: {
         familyId: session.familyId,
@@ -513,6 +519,8 @@ export async function createPerson(input: Omit<PersonFormData, 'id' | 'coverPhot
         bio,
         fatherId,
         motherId,
+        fatherKind,
+        motherKind,
         unitAffiliationId,
         claimedRelation,
         claimedRelationOfId,
@@ -568,6 +576,8 @@ export async function updatePerson(input: PersonFormData): Promise<ActionResult>
 
     let fatherId = existing.fatherId
     let motherId = existing.motherId
+    let fatherKind = existing.fatherKind
+    let motherKind = existing.motherKind
 
     if (canChangeRel) {
       fatherId = await validateParent(input.fatherId || undefined, session, input.id)
@@ -576,6 +586,12 @@ export async function updatePerson(input: PersonFormData): Promise<ActionResult>
         return { ok: false, error: 'Padre y madre deben ser personas distintas.' }
       }
       await assertNoCycle(input.id, fatherId, motherId, session.familyId)
+
+      // Sincronizar fatherKind/motherKind con fatherId/motherId. Si se quita
+      // el padre/madre, el kind queda null. Si se asigna sin elegir kind,
+      // default BIOLOGICAL.
+      fatherKind = fatherId ? (input.fatherKind || existing.fatherKind || 'BIOLOGICAL') : null
+      motherKind = motherId ? (input.motherKind || existing.motherKind || 'BIOLOGICAL') : null
     }
 
     let unitAffiliationId = existing.unitAffiliationId
@@ -625,6 +641,8 @@ export async function updatePerson(input: PersonFormData): Promise<ActionResult>
         bio,
         fatherId,
         motherId,
+        fatherKind,
+        motherKind,
         coverPhoto: normalizeText(input.coverPhoto) || null,
         isCore: session.role === 'ADMIN' ? input.isCore : existing.isCore,
         unitAffiliationId,

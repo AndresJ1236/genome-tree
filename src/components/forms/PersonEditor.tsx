@@ -85,6 +85,8 @@ function emptyForm(): PersonFormData {
     bio: '',
     fatherId: '',
     motherId: '',
+    fatherKind: '',
+    motherKind: '',
     coverPhoto: '',
     isCore: false,
     unitAffiliationId: '',
@@ -585,6 +587,11 @@ export function PersonEditor({
                           ...prev,
                           fatherId: sib.fatherId ?? '',
                           motherId: sib.motherId ?? '',
+                          // El hermano comparte padres biológicos por default;
+                          // si la persona tiene una relación distinta puede
+                          // cambiarla luego en la UI.
+                          fatherKind: sib.fatherId ? 'BIOLOGICAL' : '',
+                          motherKind: sib.motherId ? 'BIOLOGICAL' : '',
                         }))
                         setLastNameTouched(false)
                         setBirthSurname1Touched(false)
@@ -738,9 +745,14 @@ export function PersonEditor({
                 value={form.fatherId}
                 onChange={id => {
                   updateField('fatherId', id)
+                  if (!id) updateField('fatherKind', '')
+                  else if (!form.fatherKind) updateField('fatherKind', 'BIOLOGICAL')
                   if (id && !form.motherId) {
                     const inferred = coupleMap.get(id)
-                    if (inferred) updateField('motherId', inferred)
+                    if (inferred) {
+                      updateField('motherId', inferred)
+                      if (!form.motherKind) updateField('motherKind', 'BIOLOGICAL')
+                    }
                   }
                   setBirthSurname1Touched(false)
                   setLastNameTouched(false)
@@ -750,15 +762,34 @@ export function PersonEditor({
                 disabled={!canChangeRel}
               />
             </Field>
+            {form.nodeKind !== 'PET' && form.fatherId && (
+              <Field label="Tipo de vínculo (padre)" help="Biológico = sangre. Adoptivo = adopción legal. Padrastro = pareja del padre/madre biológico, sin adopción.">
+                <select
+                  value={form.fatherKind || 'BIOLOGICAL'}
+                  onChange={e => updateField('fatherKind', e.target.value as PersonFormData['fatherKind'])}
+                  style={inputStyle}
+                  disabled={!canChangeRel}
+                >
+                  <option value="BIOLOGICAL">Biológico</option>
+                  <option value="ADOPTIVE">Adoptivo</option>
+                  <option value="STEP">Padrastro</option>
+                </select>
+              </Field>
+            )}
             {form.nodeKind !== 'PET' && (
               <Field label="Madre" help="Madre biológica o adoptiva registrada en el árbol.">
                 <SearchablePersonSelect
                   value={form.motherId}
                   onChange={id => {
                     updateField('motherId', id)
+                    if (!id) updateField('motherKind', '')
+                    else if (!form.motherKind) updateField('motherKind', 'BIOLOGICAL')
                     if (id && !form.fatherId) {
                       const inferred = coupleMap.get(id)
-                      if (inferred) updateField('fatherId', inferred)
+                      if (inferred) {
+                        updateField('fatherId', inferred)
+                        if (!form.fatherKind) updateField('fatherKind', 'BIOLOGICAL')
+                      }
                     }
                     setBirthSurname2Touched(false)
                     setLastNameTouched(false)
@@ -767,6 +798,20 @@ export function PersonEditor({
                   placeholder="Sin asignar"
                   disabled={!canChangeRel}
                 />
+              </Field>
+            )}
+            {form.nodeKind !== 'PET' && form.motherId && (
+              <Field label="Tipo de vínculo (madre)" help="Biológico = sangre. Adoptivo = adopción legal. Madrastra = pareja del padre/madre biológico, sin adopción.">
+                <select
+                  value={form.motherKind || 'BIOLOGICAL'}
+                  onChange={e => updateField('motherKind', e.target.value as PersonFormData['motherKind'])}
+                  style={inputStyle}
+                  disabled={!canChangeRel}
+                >
+                  <option value="BIOLOGICAL">Biológico</option>
+                  <option value="ADOPTIVE">Adoptivo</option>
+                  <option value="STEP">Madrastra</option>
+                </select>
               </Field>
             )}
           </div>
