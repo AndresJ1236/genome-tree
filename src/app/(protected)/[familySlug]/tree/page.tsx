@@ -158,6 +158,17 @@ export default async function TreePage({
             🕒<span className="hidden sm:inline ml-1">Tiempo</span>
           </Link>
           <Link
+            href={`/${familySlug}/actividad`}
+            className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0"
+            style={{
+              border: '1px solid #C8D4CE', color: '#2D4A3E',
+              padding: '6px 8px', fontSize: 10, background: '#FFFDF9',
+            }}
+            title="Actividad familiar"
+          >
+            📰<span className="hidden sm:inline ml-1">Actividad</span>
+          </Link>
+          <Link
             href={`/${familySlug}/map`}
             className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0"
             style={{
@@ -178,6 +189,19 @@ export default async function TreePage({
           >
             JSON
           </a>
+          {session?.role === 'ADMIN' && (
+            <a
+              href="/api/gedcom/export"
+              className="no-underline border rounded-sm uppercase tracking-wide flex-shrink-0 hidden sm:inline-block"
+              style={{
+                border: '1px solid #C8D4CE', color: '#2D4A3E',
+                padding: '6px 8px', fontSize: 10, background: '#FFFDF9',
+              }}
+              title="Exportar árbol en formato GEDCOM (Ancestry, MyHeritage, FamilySearch)"
+            >
+              GEDCOM
+            </a>
+          )}
           {session?.role === 'ADMIN' && (
             <Link
               href={`/${familySlug}/person/new`}
