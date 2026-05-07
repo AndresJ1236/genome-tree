@@ -91,6 +91,7 @@ export interface StoryItem extends ContentBase {
   body: string
   approximateDate: string | null
   authorName: string | null
+  media: MediaItem[]
 }
 
 export interface RecipeItem extends ContentBase {
@@ -104,6 +105,7 @@ export interface RecipeItem extends ContentBase {
 export interface DiaryItem extends ContentBase {
   body: string
   entryDate: string | null
+  media: MediaItem[]
 }
 
 export interface InterviewItem extends ContentBase {
@@ -111,6 +113,7 @@ export interface InterviewItem extends ContentBase {
   body: string
   approximateDate: string | null
   authorName: string | null
+  media: MediaItem[]
 }
 
 export interface ObjectItem extends ContentBase {
@@ -270,6 +273,14 @@ export interface CreateImportantLinkInput {
 
 export type PersonKind = 'PERSON' | 'PET'
 
+export type RelationKind = 'BIOLOGICAL' | 'ADOPTIVE' | 'STEP'
+
+export const RELATION_KIND_LABELS: Record<RelationKind, string> = {
+  BIOLOGICAL: 'Biológico',
+  ADOPTIVE:   'Adoptivo',
+  STEP:       'Padrastro/Madrastra',
+}
+
 export interface PersonFormData {
   id: string
   firstName: string
@@ -285,6 +296,8 @@ export interface PersonFormData {
   bio: string
   fatherId: string
   motherId: string
+  fatherKind: RelationKind | ''  // '' cuando fatherId está vacío
+  motherKind: RelationKind | ''
   coverPhoto: string
   isCore: boolean
   unitAffiliationId: string
