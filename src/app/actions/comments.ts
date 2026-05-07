@@ -6,6 +6,7 @@ import { logAudit } from '@/lib/audit'
 import { revalidatePath } from 'next/cache'
 import { assertPersonAccess } from '@/lib/permissions'
 import type { ActionResult } from '@/lib/content-types'
+import { parseMentions, type MentionedUser } from '@/lib/mentions'
 
 const MAX_BODY_CHARS = 2000
 
@@ -16,6 +17,33 @@ export interface CommentItem {
   authorName: string
   createdAt: string         // ISO
   isMine:    boolean        // true si el viewer es el autor
+  /** Usuarios mencionados con @nombre. Vacío si no hay menciones. */
+  mentions:  MentionedUser[]
+}
+
+/**
+ * Devuelve los miembros de la familia para autocompletado de @menciones.
+ * Lista corta, ya que se carga al abrir el editor de comentarios.
+ */
+export async function listFamilyMembersForMention(): Promise<ActionResult<MentionedUser[]>> {
+  const session = await getSession()
+  if (!session) return { ok: false, error: 'No autenticado' }
+
+  const users = await prisma.user.findMany({
+    where:   { familyId: session.familyId },
+    select:  { id: true, name: true, username: true, person: { select: { id: true } } },
+    orderBy: { name: 'asc' },
+  })
+
+  return {
+    ok: true,
+    data: users.map(u => ({
+      id:       u.id,
+      name:     u.name,
+      username: u.username,
+      personId: u.person?.id ?? null,
+    })),
+  }
 }
 
 /**
@@ -52,6 +80,17 @@ export async function listComments(contentId: string): Promise<ActionResult<Comm
     orderBy: { createdAt: 'asc' },
   })
 
+  // Cargar info de todos los usuarios mencionados en cualquier comentario
+  // de este contenido — una sola query para resolver todos los mentions.
+  const allMentionedIds = [...new Set(rows.flatMap(r => r.mentionedUserIds))]
+  const mentionedUsers = allMentionedIds.length > 0
+    ? await prisma.user.findMany({
+        where:  { id: { in: allMentionedIds } },
+        select: { id: true, name: true, username: true, person: { select: { id: true } } },
+      })
+    : []
+  const userById = new Map(mentionedUsers.map(u => [u.id, u]))
+
   const items: CommentItem[] = rows.map(r => ({
     id:         r.id,
     body:       r.body,
@@ -59,6 +98,12 @@ export async function listComments(contentId: string): Promise<ActionResult<Comm
     authorName: r.author.name,
     createdAt:  r.createdAt.toISOString(),
     isMine:     r.authorId === session.userId,
+    mentions:   r.mentionedUserIds
+      .map(id => userById.get(id))
+      .filter((u): u is NonNullable<typeof u> => u != null)
+      .map(u => ({
+        id: u.id, name: u.name, username: u.username, personId: u.person?.id ?? null,
+      })),
   }))
 
   return { ok: true, data: items }
@@ -98,15 +143,48 @@ export async function createComment(
     return { ok: false, error: (e as Error).message }
   }
 
+  // Parsear @menciones contra los miembros de la familia
+  const familyUsers = await prisma.user.findMany({
+    where:  { familyId: session.familyId },
+    select: { id: true, name: true, username: true, person: { select: { id: true } } },
+  })
+  const mentions = parseMentions(trimmed, familyUsers.map(u => ({
+    id: u.id, name: u.name, username: u.username, personId: u.person?.id ?? null,
+  })))
+  // Excluir auto-menciones del autor (no vale notificarse a uno mismo)
+  const mentionedUserIds = mentions.filter(m => m.id !== session.userId).map(m => m.id)
+
   const created = await prisma.comment.create({
     data: {
       contentId,
       familyId: session.familyId,
       authorId: session.userId,
       body:     trimmed,
+      mentionedUserIds,
     },
     include: { author: { select: { name: true } } },
   })
+
+  // Crear notificaciones para los usuarios mencionados.
+  // Importante: estas son notificaciones DIRIGIDAS — distintas del fan-out
+  // genérico de NEW_COMMENT que avisa al dueño del contenido.
+  if (mentionedUserIds.length > 0) {
+    const family = await prisma.family.findUnique({
+      where: { id: session.familyId },
+      select: { slug: true },
+    })
+    const href = family ? `/${family.slug}/person/${content.personId}#comment-${created.id}` : null
+    await prisma.notification.createMany({
+      data: mentionedUserIds.map(userId => ({
+        userId,
+        familyId: session.familyId,
+        type:     'MENTION_IN_COMMENT' as const,
+        title:    `${created.author.name} te mencionó en un comentario`,
+        body:     trimmed.slice(0, 140),
+        href,
+      })),
+    })
+  }
 
   // El audit log dispara la fan-out de notificaciones automáticamente
   void logAudit({
@@ -119,6 +197,7 @@ export async function createComment(
       contentId,
       personId: content.personId,
       preview:  trimmed.slice(0, 80),
+      mentionedCount: mentionedUserIds.length,
     },
   })
 
@@ -137,6 +216,7 @@ export async function createComment(
       authorName: created.author.name,
       createdAt:  created.createdAt.toISOString(),
       isMine:     true,
+      mentions,
     },
   }
 }
