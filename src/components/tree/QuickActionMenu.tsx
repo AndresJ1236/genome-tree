@@ -32,8 +32,8 @@ interface QuickActionMenuProps {
 //   - La POSICIÓN relativa al nodo es siempre la misma
 // Resultado: las burbujas siempre quedan justo afuera del borde del nodo
 // con el mismo gap relativo, sin importar el zoom.
-const BUBBLE = 36           // diámetro de cada burbuja en tree-px
-const GAP    = 8            // espacio entre el borde del nodo y la burbuja en tree-px
+const BUBBLE = 26           // diámetro de cada burbuja en tree-px
+const GAP    = 7            // espacio entre el borde del nodo y la burbuja en tree-px
 const CLOSE_PAD = 36        // padding adicional EN PANTALLA para auto-close
 const ANIM_MS = 180
 const GRACE_MS = 250
