@@ -6,9 +6,13 @@ import { createInviteLink } from '@/app/actions/admin'
 import { NODE_W, NODE_H } from '@/lib/tree-layout'
 
 export interface QuickActionTarget {
-  personId:  string
-  hasFather: boolean
-  hasMother: boolean
+  personId:   string
+  hasFather:  boolean
+  hasMother:  boolean
+  /** True si la persona tiene una pareja ACTIVA (SPOUSE o PARTNER sin
+      endDate, o con endDate en el futuro). Las parejas terminadas no
+      cuentan — se puede añadir una nueva. */
+  hasPartner: boolean
   /** Posición del nodo en TREE coordinates (top-left del cuadrado del nodo).
       El menú se renderiza dentro del mismo contenedor transformado que los
       PersonNode, así que comparte el sistema de coordenadas y se escala
@@ -181,7 +185,7 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
   const actions: Action[] = [
     { key: 'sibling', label: 'Añadir hermano/a', Icon: IconSibling, disabled: false },
     { key: 'father',  label: 'Añadir padre',     Icon: IconFather,  disabled: target.hasFather, disabledReason: 'Ya tiene padre asignado' },
-    { key: 'partner', label: 'Añadir pareja',    Icon: IconHeart,   disabled: false },
+    { key: 'partner', label: 'Añadir pareja',    Icon: IconHeart,   disabled: target.hasPartner, disabledReason: 'Ya tiene pareja activa' },
     { key: 'mother',  label: 'Añadir madre',     Icon: IconMother,  disabled: target.hasMother, disabledReason: 'Ya tiene madre asignada' },
     { key: 'child',   label: 'Añadir hijo/a',    Icon: IconChild,   disabled: false },
   ]
