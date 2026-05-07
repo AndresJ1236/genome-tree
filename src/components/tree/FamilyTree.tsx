@@ -43,6 +43,21 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
     return m
   }, [persons])
 
+  // Set de IDs con pareja ACTIVA — SPOUSE o PARTNER sin endDate, o con
+  // endDate en el futuro. Las relaciones ya separadas (con endDate
+  // pasado) no cuentan — el viewer puede añadir una nueva pareja.
+  const peopleWithActivePartner = useMemo(() => {
+    const set = new Set<string>()
+    const today = new Date().toISOString().slice(0, 10)
+    for (const r of relationships) {
+      if (r.type !== 'SPOUSE' && r.type !== 'PARTNER') continue
+      if (r.endDate && r.endDate <= today) continue  // relación terminada
+      set.add(r.person1Id)
+      set.add(r.person2Id)
+    }
+    return set
+  }, [relationships])
+
   const highlighted = useMemo(() => {
     if (!selectedId) return new Set<string>()
     const set = new Set<string>()
@@ -404,6 +419,7 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
                       personId: id,
                       hasFather: !!p.fatherId,
                       hasMother: !!p.motherId,
+                      hasPartner: peopleWithActivePartner.has(id),
                       nodeX: layoutNode.x,
                       nodeY: layoutNode.y,
                     })
