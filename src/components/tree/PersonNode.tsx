@@ -4,8 +4,10 @@ import { useRef } from 'react'
 import { NODE_W, NODE_H } from '@/lib/tree-layout'
 import type { LayoutNode } from '@/lib/tree-types'
 
-const LONG_PRESS_MS = 600
-const LONG_PRESS_MOVE_TOLERANCE = 6  // px — si el mouse se mueve más, no es long-press
+// Trigger discreto: el mouse debe quedarse quieto sobre el nodo durante 1 sec.
+// Touch usa el mismo timing — un "tap and hold" estándar.
+const HOVER_STILL_MS = 1000
+const STILL_MOVE_TOLERANCE = 8  // px — si se mueve más, reseteamos el timer
 
 interface PersonNodeProps {
   node: LayoutNode
@@ -41,82 +43,72 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
   const birthYear = node.birthDate ? new Date(node.birthDate).getFullYear() : null
   const deathYear = node.deathDate ? new Date(node.deathDate).getFullYear() : null
 
-  // ── Long-press detection ────────────────────────────────────────────
-  // Esquema:
-  //   • mousedown / touchstart → arrancar timer + guardar coords
-  //   • si mouse se mueve > N px o se suelta antes → cancelar
-  //   • si timer cumple → onLongPress() y marcar suppressClick para que
-  //     el click subsecuente no abra el panel del perfil
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // ── Hover-still detection ───────────────────────────────────────────
+  // Esquema discreto:
+  //   • mouseenter (o touchstart) → arrancar timer + guardar coords iniciales
+  //   • mousemove → si el mouse se desplazó > N px, reseteamos el timer
+  //                 (la idea es "quedarse quieto", micro-movimientos OK)
+  //   • mouseleave / touchend / click → cancelar
+  //   • timer cumple → onLongPress() abre el menú radial. Los bubbles
+  //                    están en un overlay con su propio backdrop, así
+  //                    que un mouseleave subsecuente NO los cierra.
+  //
+  // Click (corto) sigue funcionando normal: abre el panel del perfil.
+  // No hace falta suprimir el click porque el trigger es hover, no press.
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const startCoord = useRef<{ x: number; y: number } | null>(null)
-  const triggered = useRef(false)
   const circleRef = useRef<HTMLDivElement>(null)
 
   function clearTimer() {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current)
-      pressTimer.current = null
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current)
+      hoverTimer.current = null
     }
+    startCoord.current = null
   }
 
-  function handlePressStart(clientX: number, clientY: number) {
+  function startHoverTimer(clientX: number, clientY: number) {
     if (!longPressEnabled || !onLongPress) return
-    triggered.current = false
     startCoord.current = { x: clientX, y: clientY }
     clearTimer()
-    pressTimer.current = setTimeout(() => {
-      triggered.current = true
-      // Calcular el centro del círculo en coords SCREEN para posicionar
-      // el menú radial encima.
+    hoverTimer.current = setTimeout(() => {
       if (circleRef.current) {
         const rect = circleRef.current.getBoundingClientRect()
         onLongPress(node.id, rect.left + rect.width / 2, rect.top + rect.height / 2)
       }
-    }, LONG_PRESS_MS)
+      hoverTimer.current = null
+      startCoord.current = null
+    }, HOVER_STILL_MS)
   }
 
-  function handlePressMove(clientX: number, clientY: number) {
-    if (!startCoord.current || !pressTimer.current) return
+  function handleMove(clientX: number, clientY: number) {
+    if (!startCoord.current || !hoverTimer.current) return
     const dx = clientX - startCoord.current.x
     const dy = clientY - startCoord.current.y
-    if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE) {
-      // El usuario está arrastrando, cancelar
-      clearTimer()
+    if (Math.hypot(dx, dy) > STILL_MOVE_TOLERANCE) {
+      // No se quedó quieto — reiniciar el timer en la nueva posición.
+      // De esta forma, parar de mover en cualquier momento sigue contando.
+      startHoverTimer(clientX, clientY)
     }
-  }
-
-  function handlePressEnd() {
-    clearTimer()
-    startCoord.current = null
-  }
-
-  function handleClick(e: React.MouseEvent) {
-    // Si fue long-press, suprimir el click — no abrir el panel de perfil
-    if (triggered.current) {
-      triggered.current = false
-      e.stopPropagation()
-      return
-    }
-    onSelect(node.id)
   }
 
   return (
     <div
-      onClick={handleClick}
-      onMouseDown={e => handlePressStart(e.clientX, e.clientY)}
-      onMouseMove={e => handlePressMove(e.clientX, e.clientY)}
-      onMouseUp={handlePressEnd}
-      onMouseLeave={handlePressEnd}
+      onClick={() => onSelect(node.id)}
+      onMouseEnter={e => startHoverTimer(e.clientX, e.clientY)}
+      onMouseMove={e => handleMove(e.clientX, e.clientY)}
+      onMouseLeave={clearTimer}
+      onMouseDown={clearTimer}
       onTouchStart={e => {
         const t = e.touches[0]
-        if (t) handlePressStart(t.clientX, t.clientY)
+        if (t) startHoverTimer(t.clientX, t.clientY)
       }}
       onTouchMove={e => {
         const t = e.touches[0]
-        if (t) handlePressMove(t.clientX, t.clientY)
+        if (t) handleMove(t.clientX, t.clientY)
       }}
-      onTouchEnd={handlePressEnd}
-      onTouchCancel={handlePressEnd}
+      onTouchEnd={clearTimer}
+      onTouchCancel={clearTimer}
       className="person-node absolute cursor-pointer select-none flex flex-col items-center"
       style={{ left: node.x, top: node.y, width: NODE_W, animationDelay: `${animDelay}ms` }}
     >

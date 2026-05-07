@@ -20,15 +20,17 @@ interface QuickActionMenuProps {
 
 /**
  * Menú radial de acciones rápidas que se despliega alrededor de un nodo
- * tras un long-press. Las 4 burbujas se posicionan en N/E/S/W (no
- * diagonales para evitar superposición con el nombre debajo del nodo).
+ * tras hover quieto. 4 burbujas circulares pequeñas con solo emoji,
+ * tooltip nativo para el label.
+ *
+ * Posiciones: N, W, E + esquinas — TODAS evitan el sur (180°) porque
+ * ahí está el nombre de la persona.
  *
  * Si la persona ya tiene padre/madre asignado, ese bubble se ve gris y
  * no es clickeable (con tooltip explicando por qué).
  */
-const RADIUS = 80      // distancia del centro del nodo al centro del bubble
-const BUBBLE_W = 84
-const BUBBLE_H = 64
+const RADIUS = 58      // distancia del centro del nodo al centro del bubble
+const BUBBLE = 40      // diámetro de cada burbuja (circular)
 const ANIM_MS = 180
 
 interface Action {
@@ -58,27 +60,29 @@ export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenu
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // Posiciones evitando el sur (180°) donde está el nombre.
+  // Distribuidas en arco superior + laterales para mantener el árbol legible.
   const actions: Action[] = [
     {
-      key: 'father',  icon: '👨', label: 'Padre',
-      angle: 315, // arriba-izquierda
+      key: 'father',  icon: '👨', label: 'Añadir padre',
+      angle: 320, // arriba-izquierda
       disabled: target.hasFather,
-      disabledReason: 'Esta persona ya tiene padre asignado',
+      disabledReason: 'Ya tiene padre asignado',
     },
     {
-      key: 'mother',  icon: '👩', label: 'Madre',
-      angle: 45,  // arriba-derecha
+      key: 'mother',  icon: '👩', label: 'Añadir madre',
+      angle: 40,  // arriba-derecha
       disabled: target.hasMother,
-      disabledReason: 'Esta persona ya tiene madre asignada',
+      disabledReason: 'Ya tiene madre asignada',
     },
     {
-      key: 'sibling', icon: '🧑‍🤝‍🧑', label: 'Hermano/a',
+      key: 'sibling', icon: '🧑‍🤝‍🧑', label: 'Añadir hermano/a',
       angle: 270, // izquierda
       disabled: false,
     },
     {
-      key: 'child',   icon: '👶', label: 'Hijo/a',
-      angle: 180, // abajo
+      key: 'child',   icon: '👶', label: 'Añadir hijo/a',
+      angle: 90,  // derecha (no sur — se choca con el nombre)
       disabled: false,
     },
   ]
@@ -107,7 +111,8 @@ export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenu
         }}
       />
 
-      {/* Bubbles — posicionados absolutamente sobre el viewport */}
+      {/* Burbujas circulares pequeñas — solo emoji, tooltip nativo del browser
+          muestra el label completo al hover. Discretas pero claras. */}
       {actions.map((action, i) => {
         const rad = (action.angle - 90) * Math.PI / 180  // -90 para que 0=arriba
         const dx = Math.cos(rad) * RADIUS
@@ -118,34 +123,44 @@ export function QuickActionMenu({ target, familySlug, onClose }: QuickActionMenu
             type="button"
             disabled={action.disabled}
             onClick={() => handleAction(action)}
-            title={action.disabled ? action.disabledReason : `Añadir ${action.label.toLowerCase()}`}
+            title={action.disabled ? action.disabledReason : action.label}
             style={{
               position: 'fixed',
-              left: target.centerX + dx - BUBBLE_W / 2,
-              top:  target.centerY + dy - BUBBLE_H / 2,
-              width: BUBBLE_W, height: BUBBLE_H,
-              borderRadius: 8,
+              left: target.centerX + dx - BUBBLE / 2,
+              top:  target.centerY + dy - BUBBLE / 2,
+              width: BUBBLE, height: BUBBLE,
+              borderRadius: '50%',
               border: action.disabled ? '1.5px solid #C8C2B8' : '1.5px solid #2D4A3E',
               background: action.disabled ? '#E8E5DD' : '#FFFDF9',
               color: action.disabled ? '#9B9690' : '#2D4A3E',
               cursor: action.disabled ? 'not-allowed' : 'pointer',
-              fontSize: 11,
-              fontFamily: 'Georgia, serif',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 2,
-              boxShadow: action.disabled ? 'none' : '0 4px 14px rgba(45,74,62,0.18)',
+              padding: 0,
+              boxShadow: action.disabled ? 'none' : '0 3px 10px rgba(45,74,62,0.22)',
               zIndex: 201,
-              transform: open ? 'scale(1)' : 'scale(0.4)',
-              opacity: open ? 1 : 0,
+              transform: open ? 'scale(1)' : 'scale(0.3)',
+              opacity: open ? (action.disabled ? 0.7 : 1) : 0,
               transition: `transform ${ANIM_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 30}ms, opacity ${ANIM_MS}ms ease-out ${i * 30}ms`,
               willChange: 'transform, opacity',
             }}
+            onMouseEnter={e => {
+              if (!action.disabled) {
+                e.currentTarget.style.transform = 'scale(1.12)'
+                e.currentTarget.style.boxShadow = '0 5px 14px rgba(45,74,62,0.32)'
+              }
+            }}
+            onMouseLeave={e => {
+              if (!action.disabled) {
+                e.currentTarget.style.transform = 'scale(1)'
+                e.currentTarget.style.boxShadow = '0 3px 10px rgba(45,74,62,0.22)'
+              }
+            }}
           >
-            <span style={{ fontSize: 22, lineHeight: 1 }}>{action.icon}</span>
-            <span style={{ letterSpacing: '0.04em' }}>{action.label}</span>
+            <span style={{ fontSize: 20, lineHeight: 1, filter: action.disabled ? 'grayscale(0.7)' : 'none' }}>
+              {action.icon}
+            </span>
           </button>
         )
       })}
