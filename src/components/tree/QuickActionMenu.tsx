@@ -26,9 +26,31 @@ interface QuickActionMenuProps {
 
 const BUBBLE = 36           // diámetro fijo de cada burbuja en px screen
 const GAP    = 10           // espacio entre el borde del nodo y el borde de la burbuja
+const BUBBLE_GAP = 6        // espacio mínimo entre burbujas adyacentes
 const CLOSE_PAD = 28        // margen adicional fuera del cual se cierra el menú
 const ANIM_MS = 180
 const GRACE_MS = 250
+
+/**
+ * Radio mínimo para que N burbujas distribuidas en 180° de arco no se
+ * solapen. Geometría: si la separación angular es α, la distancia entre
+ * centros de burbujas adyacentes es 2·R·sin(α/2). Para que no se choquen,
+ * esa distancia debe ser ≥ BUBBLE + BUBBLE_GAP.
+ *
+ *     2·R·sin(α/2) ≥ BUBBLE + BUBBLE_GAP
+ *     R ≥ (BUBBLE + BUBBLE_GAP) / (2·sin(α/2))
+ *
+ * Para 6 burbujas en 180° → α = 36° → R_min ≈ 68px
+ * Para 5 burbujas → α = 45° → R_min ≈ 55px
+ * Para 4 burbujas → α = 60° → R_min ≈ 42px
+ */
+function overlapMinRadius(n: number): number {
+  if (n <= 1) return 0
+  if (n === 2) return (BUBBLE + BUBBLE_GAP) / 2  // 21px — caso compacto NW+NE
+  const stepDeg = 180 / (n - 1)
+  const stepRad = (stepDeg * Math.PI) / 180
+  return (BUBBLE + BUBBLE_GAP) / (2 * Math.sin(stepRad / 2))
+}
 
 interface Action {
   key:      'father' | 'mother' | 'partner' | 'sibling' | 'child' | 'invite'
@@ -142,10 +164,29 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Auto-close al salir del radio que cubre las burbujas, con grace period
-  // inicial. El radio se calcula dinámicamente según el tamaño del nodo
-  // en pantalla — más lejos cuando el zoom es alto, cerca cuando es bajo.
-  const RADIUS = target.nodeScreenRadius + GAP + BUBBLE / 2
+  // Construir lista de actions ANTES de calcular RADIUS, porque RADIUS
+  // depende del número de burbujas (para evitar overlap entre ellas
+  // cuando el nodo está muy zoomed-out).
+  const baseActions: Action[] = [
+    { key: 'sibling', label: 'Añadir hermano/a', Icon: IconSibling, disabled: false },
+    { key: 'father',  label: 'Añadir padre',     Icon: IconParent,  disabled: target.hasFather, disabledReason: 'Ya tiene padre asignado' },
+    { key: 'partner', label: 'Añadir pareja',    Icon: IconHeart,   disabled: false },
+    { key: 'mother',  label: 'Añadir madre',     Icon: IconParent,  disabled: target.hasMother, disabledReason: 'Ya tiene madre asignada' },
+    { key: 'child',   label: 'Añadir hijo/a',    Icon: IconChild,   disabled: false },
+  ]
+  if (canInvite) {
+    baseActions.push({ key: 'invite', label: 'Generar link de invitación', Icon: IconMail, disabled: false })
+  }
+
+  // Auto-close al salir del radio que cubre las burbujas, con grace period.
+  // RADIUS = max de (borde del nodo + gap) y (radio mínimo anti-overlap).
+  // Cuando el nodo está zoomed-in, manda el primero — burbujas pegadas al
+  // borde. Cuando está zoomed-out, manda el segundo — burbujas separadas
+  // entre sí lo suficiente para no chocar.
+  const RADIUS = Math.max(
+    target.nodeScreenRadius + GAP + BUBBLE / 2,
+    overlapMinRadius(baseActions.length),
+  )
   const CLOSE_ZONE = RADIUS + BUBBLE / 2 + CLOSE_PAD
 
   useEffect(() => {
@@ -164,21 +205,10 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
     }
   }, [target.centerX, target.centerY, CLOSE_ZONE, onClose])
 
-  // Construir lista de actions — el orden define la posición en el arco
-  // (de izquierda a derecha pasando por arriba). El algoritmo de distribución
+  // El orden de baseActions (definido arriba) determina la posición en el
+  // arco — de izquierda a derecha pasando por arriba. distributeAngles()
   // se encarga del cálculo angular.
-  const actions: Action[] = [
-    { key: 'sibling', label: 'Añadir hermano/a', Icon: IconSibling, disabled: false },
-    { key: 'father',  label: 'Añadir padre',     Icon: IconParent,  disabled: target.hasFather, disabledReason: 'Ya tiene padre asignado' },
-    { key: 'partner', label: 'Añadir pareja',    Icon: IconHeart,   disabled: false },
-    { key: 'mother',  label: 'Añadir madre',     Icon: IconParent,  disabled: target.hasMother, disabledReason: 'Ya tiene madre asignada' },
-    { key: 'child',   label: 'Añadir hijo/a',    Icon: IconChild,   disabled: false },
-  ]
-
-  if (canInvite) {
-    actions.push({ key: 'invite', label: 'Generar link de invitación', Icon: IconMail, disabled: false })
-  }
-
+  const actions = baseActions
   const angles = distributeAngles(actions.length)
 
   async function handleAction(action: Action) {
