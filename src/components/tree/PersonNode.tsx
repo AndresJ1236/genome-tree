@@ -1,7 +1,11 @@
 'use client'
 
+import { useRef } from 'react'
 import { NODE_W, NODE_H } from '@/lib/tree-layout'
 import type { LayoutNode } from '@/lib/tree-types'
+
+const LONG_PRESS_MS = 600
+const LONG_PRESS_MOVE_TOLERANCE = 6  // px — si el mouse se mueve más, no es long-press
 
 interface PersonNodeProps {
   node: LayoutNode
@@ -9,10 +13,16 @@ interface PersonNodeProps {
   highlighted: boolean
   isCurrentUser: boolean
   onSelect: (id: string) => void
+  /** Long-press detectado — el componente padre muestra el menú radial.
+      Recibe el ID y las coordenadas SCREEN del centro del círculo. */
+  onLongPress?: (id: string, screenX: number, screenY: number) => void
+  /** Si el viewer tiene permiso para crear personas. Si no, no se activa
+      el detector de long-press. */
+  longPressEnabled?: boolean
   animDelay: number
 }
 
-export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelect, animDelay }: PersonNodeProps) {
+export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelect, onLongPress, longPressEnabled, animDelay }: PersonNodeProps) {
   if (node.nodeKind === 'PET') {
     return (
       <PetNode
@@ -31,13 +41,87 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
   const birthYear = node.birthDate ? new Date(node.birthDate).getFullYear() : null
   const deathYear = node.deathDate ? new Date(node.deathDate).getFullYear() : null
 
+  // ── Long-press detection ────────────────────────────────────────────
+  // Esquema:
+  //   • mousedown / touchstart → arrancar timer + guardar coords
+  //   • si mouse se mueve > N px o se suelta antes → cancelar
+  //   • si timer cumple → onLongPress() y marcar suppressClick para que
+  //     el click subsecuente no abra el panel del perfil
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const startCoord = useRef<{ x: number; y: number } | null>(null)
+  const triggered = useRef(false)
+  const circleRef = useRef<HTMLDivElement>(null)
+
+  function clearTimer() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
+  }
+
+  function handlePressStart(clientX: number, clientY: number) {
+    if (!longPressEnabled || !onLongPress) return
+    triggered.current = false
+    startCoord.current = { x: clientX, y: clientY }
+    clearTimer()
+    pressTimer.current = setTimeout(() => {
+      triggered.current = true
+      // Calcular el centro del círculo en coords SCREEN para posicionar
+      // el menú radial encima.
+      if (circleRef.current) {
+        const rect = circleRef.current.getBoundingClientRect()
+        onLongPress(node.id, rect.left + rect.width / 2, rect.top + rect.height / 2)
+      }
+    }, LONG_PRESS_MS)
+  }
+
+  function handlePressMove(clientX: number, clientY: number) {
+    if (!startCoord.current || !pressTimer.current) return
+    const dx = clientX - startCoord.current.x
+    const dy = clientY - startCoord.current.y
+    if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE) {
+      // El usuario está arrastrando, cancelar
+      clearTimer()
+    }
+  }
+
+  function handlePressEnd() {
+    clearTimer()
+    startCoord.current = null
+  }
+
+  function handleClick(e: React.MouseEvent) {
+    // Si fue long-press, suprimir el click — no abrir el panel de perfil
+    if (triggered.current) {
+      triggered.current = false
+      e.stopPropagation()
+      return
+    }
+    onSelect(node.id)
+  }
+
   return (
     <div
-      onClick={() => onSelect(node.id)}
+      onClick={handleClick}
+      onMouseDown={e => handlePressStart(e.clientX, e.clientY)}
+      onMouseMove={e => handlePressMove(e.clientX, e.clientY)}
+      onMouseUp={handlePressEnd}
+      onMouseLeave={handlePressEnd}
+      onTouchStart={e => {
+        const t = e.touches[0]
+        if (t) handlePressStart(t.clientX, t.clientY)
+      }}
+      onTouchMove={e => {
+        const t = e.touches[0]
+        if (t) handlePressMove(t.clientX, t.clientY)
+      }}
+      onTouchEnd={handlePressEnd}
+      onTouchCancel={handlePressEnd}
       className="person-node absolute cursor-pointer select-none flex flex-col items-center"
       style={{ left: node.x, top: node.y, width: NODE_W, animationDelay: `${animDelay}ms` }}
     >
       <div
+        ref={circleRef}
         className={selected ? 'person-circle person-circle--selected' : 'person-circle'}
         style={{
           width: NODE_W,

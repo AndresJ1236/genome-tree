@@ -8,6 +8,7 @@ import { FamilyEdges } from './FamilyEdges'
 import { PersonPanel } from './PersonPanel'
 import { TreeSearch } from './TreeSearch'
 import { OnboardingOverlay } from './OnboardingOverlay'
+import { QuickActionMenu, type QuickActionTarget } from './QuickActionMenu'
 
 const CANVAS_PAD = 120
 const CENTER_SCALE = 1.2
@@ -20,15 +21,25 @@ interface FamilyTreeProps {
   familySlug:     string
   searchEnabled:  boolean
   focusPersonId?: string
+  /** Si el viewer puede crear personas — habilita el menú radial de acciones rápidas. */
+  canCreatePerson?: boolean
 }
 
-export function FamilyTree({ persons, relationships, familySlug, searchEnabled, focusPersonId }: FamilyTreeProps) {
+export function FamilyTree({ persons, relationships, familySlug, searchEnabled, focusPersonId, canCreatePerson }: FamilyTreeProps) {
   const { nodes, familyUnits, petLinks, siblingLinks, bounds } = useMemo(
     () => computeTreeLayout(persons, relationships, { focusPersonId }),
     [persons, relationships, focusPersonId]
   )
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [quickAction, setQuickAction] = useState<QuickActionTarget | null>(null)
+
+  // Index rápido de persons para resolver hasFather/hasMother en long-press
+  const personById = useMemo(() => {
+    const m = new Map<string, PersonData>()
+    for (const p of persons) m.set(p.id, p)
+    return m
+  }, [persons])
 
   const highlighted = useMemo(() => {
     if (!selectedId) return new Set<string>()
@@ -382,6 +393,18 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
                   highlighted={highlighted.has(node.id)}
                   isCurrentUser={focusPersonId === node.id}
                   onSelect={id => setSelectedId(prev => (prev === id ? null : id))}
+                  longPressEnabled={!!canCreatePerson}
+                  onLongPress={(id, x, y) => {
+                    const p = personById.get(id)
+                    if (!p) return
+                    setQuickAction({
+                      personId: id,
+                      hasFather: !!p.fatherId,
+                      hasMother: !!p.motherId,
+                      centerX: x,
+                      centerY: y,
+                    })
+                  }}
                   animDelay={i * 60}
                 />
               )
@@ -391,6 +414,14 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
       </div>
 
       <OnboardingOverlay />
+
+      {quickAction && (
+        <QuickActionMenu
+          target={quickAction}
+          familySlug={familySlug}
+          onClose={() => setQuickAction(null)}
+        />
+      )}
 
       <PersonPanel
         personId={selectedId}

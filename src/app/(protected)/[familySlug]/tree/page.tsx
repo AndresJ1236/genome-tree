@@ -5,7 +5,7 @@ import Link from 'next/link'
 import type { PersonData, RelationshipData } from '@/lib/tree-types'
 import { FamilyTree } from '@/components/tree/FamilyTree'
 import { getFamilyModules } from '@/lib/family-config'
-import { getVisiblePersonIds } from '@/lib/permissions'
+import { getVisiblePersonIds, canCreatePerson } from '@/lib/permissions'
 import { BirthdayPanel } from '@/components/ui/BirthdayPanel'
 import { TreeToolsMenu } from '@/components/tree/TreeToolsMenu'
 
@@ -22,6 +22,7 @@ export default async function TreePage({
   const modules = await getFamilyModules(session.familyId)
 
   const visibleIds = await getVisiblePersonIds(session)
+  const userCanCreatePerson = await canCreatePerson(session)
   const [rawPersons, rawRelationships] = await Promise.all([
     prisma.person.findMany({
       where: {
@@ -171,6 +172,7 @@ export default async function TreePage({
           familySlug={familySlug}
           searchEnabled={modules.moduleSearch}
           focusPersonId={session?.personId ?? undefined}
+          canCreatePerson={userCanCreatePerson}
         />
       </div>
     </div>
