@@ -29,29 +29,228 @@ body {
 }
 
 /* ── Dark mode ──────────────────────────────────────────────────────────────
-   Approach: CSS filter on html que invierte colores y aplica hue-rotate
-   para preservar matices. Imágenes y videos llevan filter inverso para
-   que se vean tal como son. Pragmático con inline-styles del proyecto.
+   Paleta nocturna basada en los colores del usuario:
+     --night-bg:        #120909  (fondo principal)
+     --night-surface:   #1c1c2e  (cards, paneles, inputs)
+     --night-elevated:  #2d2c43  (elementos destacados, hover)
+     --night-border:    #3a3856  (bordes sutiles)
+     --night-muted:     #6b648c  (texto secundario, placeholders)
+     --night-text:      #f8daed  (texto principal)
+     --night-accent:    #b5a0e2  (links, botones, acentos)
+
+   Approach: targeting de estilos inline más comunes via attribute
+   selectors. No usa filter — los emojis y fotos se ven naturales.
+   Los inline styles ganan por specificity, así que necesitamos !important.
    ──────────────────────────────────────────────────────────────────────── */
 html[data-theme="dark"] {
-  background-color: #0d0d0d;
-  filter: invert(0.92) hue-rotate(180deg);
+  background-color: #120909;
+  color-scheme: dark;
 }
 
-/* Restablecer el color original en imágenes y videos. Sin esto los
-   rostros se ven como un negativo fotográfico horrible. */
-html[data-theme="dark"] img,
-html[data-theme="dark"] video,
-html[data-theme="dark"] svg image {
-  filter: invert(1) hue-rotate(180deg);
+html[data-theme="dark"] body {
+  background-color: #120909 !important;
+  color: #f8daed !important;
 }
 
-/* Preservar también iconos PNG embebidos como background-image y emojis
-   inline. La mayoría del proyecto usa SVG/text — los emojis dentro de
-   spans heredan el filter del body así que se ven invertidos. Re-aplicar
-   filter inverso a contenedores marcados como .preserve-color. */
-html[data-theme="dark"] .preserve-color {
-  filter: invert(1) hue-rotate(180deg);
+/* Body container con bg cream → bg oscuro */
+html[data-theme="dark"] [style*="background: #F5F0E8"],
+html[data-theme="dark"] [style*="background:#F5F0E8"],
+html[data-theme="dark"] [style*="background-color: #F5F0E8"],
+html[data-theme="dark"] .tree-viewport {
+  background-color: #120909 !important;
+}
+
+/* Cards / paneles (fondo blanco o casi blanco) */
+html[data-theme="dark"] [style*="background: #fff"],
+html[data-theme="dark"] [style*="background:#fff"],
+html[data-theme="dark"] [style*="background: #FFF"],
+html[data-theme="dark"] [style*="background:#FFF"],
+html[data-theme="dark"] [style*="background: white"],
+html[data-theme="dark"] [style*="background-color: #fff"],
+html[data-theme="dark"] [style*="background: #FFFCF8"],
+html[data-theme="dark"] [style*="background:#FFFCF8"],
+html[data-theme="dark"] [style*="background: #FFFDF9"],
+html[data-theme="dark"] [style*="background:#FFFDF9"],
+html[data-theme="dark"] [style*="background: #FAF7F0"],
+html[data-theme="dark"] [style*="background:#FAF7F0"] {
+  background-color: #1c1c2e !important;
+  color: #f8daed !important;
+}
+
+/* Cards "calientes" / con highlight (cream-tinted) */
+html[data-theme="dark"] [style*="background: #F8F5EE"],
+html[data-theme="dark"] [style*="background:#F8F5EE"],
+html[data-theme="dark"] [style*="background: #EAF0ED"],
+html[data-theme="dark"] [style*="background:#EAF0ED"],
+html[data-theme="dark"] [style*="background: #EBE6DB"],
+html[data-theme="dark"] [style*="background:#EBE6DB"],
+html[data-theme="dark"] [style*="background: #F0EDE5"],
+html[data-theme="dark"] [style*="background:#F0EDE5"],
+html[data-theme="dark"] [style*="background: #EAE5DB"],
+html[data-theme="dark"] [style*="background:#EAE5DB"],
+html[data-theme="dark"] [style*="background: #F0EBE2"],
+html[data-theme="dark"] [style*="background:#F0EBE2"] {
+  background-color: #2d2c43 !important;
+  color: #f8daed !important;
+}
+
+/* Cards de "atención" amarillas → púrpura sutil */
+html[data-theme="dark"] [style*="background: #FFF8E6"],
+html[data-theme="dark"] [style*="background:#FFF8E6"],
+html[data-theme="dark"] [style*="background: #FFFCEF"],
+html[data-theme="dark"] [style*="background:#FFFCEF"],
+html[data-theme="dark"] [style*="background: #FFF9EC"],
+html[data-theme="dark"] [style*="background:#FFF9EC"] {
+  background-color: #3a3856 !important;
+  color: #f8daed !important;
+}
+
+/* Cards de error / rojas → mantener tinte rojizo pero adaptado */
+html[data-theme="dark"] [style*="background: #FFF1F1"],
+html[data-theme="dark"] [style*="background:#FFF1F1"],
+html[data-theme="dark"] [style*="background: #FAEBEB"],
+html[data-theme="dark"] [style*="background:#FAEBEB"],
+html[data-theme="dark"] [style*="background: #fdf0ee"] {
+  background-color: #3a1f2a !important;
+  color: #f8daed !important;
+}
+
+/* Botón primario verde oscuro → púrpura medio en dark mode */
+html[data-theme="dark"] [style*="background: #2D4A3E"],
+html[data-theme="dark"] [style*="background:#2D4A3E"],
+html[data-theme="dark"] [style*="background-color: #2D4A3E"] {
+  background-color: #6b648c !important;
+  color: #f8daed !important;
+}
+
+/* Tree node colors — círculos de personas */
+html[data-theme="dark"] [style*="background: #EAF0ED"],
+html[data-theme="dark"] [style*="background:#EAF0ED"] {
+  background-color: #2d2c43 !important;
+}
+html[data-theme="dark"] [style*="background: #FFF3D6"],
+html[data-theme="dark"] [style*="background:#FFF3D6"] {
+  background-color: #3a3856 !important;
+}
+html[data-theme="dark"] [style*="background: #C8D9D2"],
+html[data-theme="dark"] [style*="background:#C8D9D2"] {
+  background-color: #4a4870 !important;
+}
+html[data-theme="dark"] [style*="background: #EDE8E0"],
+html[data-theme="dark"] [style*="background:#EDE8E0"] {
+  background-color: #25242f !important;
+}
+
+/* Color del texto verde oscuro (encabezados) → púrpura claro */
+html[data-theme="dark"] [style*="color: #2D4A3E"],
+html[data-theme="dark"] [style*="color:#2D4A3E"] {
+  color: #b5a0e2 !important;
+}
+
+/* Texto oscuro normal → claro */
+html[data-theme="dark"] [style*="color: #2C2C2C"],
+html[data-theme="dark"] [style*="color:#2C2C2C"],
+html[data-theme="dark"] [style*="color: #3a3a3a"],
+html[data-theme="dark"] [style*="color:#3a3a3a"],
+html[data-theme="dark"] [style*="color: #4a4a4a"],
+html[data-theme="dark"] [style*="color:#4a4a4a"] {
+  color: #f8daed !important;
+}
+
+/* Texto secundario gris → púrpura medio */
+html[data-theme="dark"] [style*="color: #6B6B6B"],
+html[data-theme="dark"] [style*="color:#6B6B6B"],
+html[data-theme="dark"] [style*="color: #8B9E94"],
+html[data-theme="dark"] [style*="color:#8B9E94"],
+html[data-theme="dark"] [style*="color: #9B9690"],
+html[data-theme="dark"] [style*="color:#9B9690"],
+html[data-theme="dark"] [style*="color: #5A615C"],
+html[data-theme="dark"] [style*="color:#5A615C"],
+html[data-theme="dark"] [style*="color: #6B7B70"],
+html[data-theme="dark"] [style*="color:#6B7B70"] {
+  color: #6b648c !important;
+}
+
+/* Bordes claros → bordes oscuros sutiles */
+html[data-theme="dark"] [style*="border: 1px solid #D8D3CA"],
+html[data-theme="dark"] [style*="border:1px solid #D8D3CA"],
+html[data-theme="dark"] [style*="border: 1px solid #E0DAD0"],
+html[data-theme="dark"] [style*="border:1px solid #E0DAD0"],
+html[data-theme="dark"] [style*="border: 1px solid #C8D4CE"],
+html[data-theme="dark"] [style*="border:1px solid #C8D4CE"],
+html[data-theme="dark"] [style*="border: 1px solid #E7E1D8"],
+html[data-theme="dark"] [style*="border:1px solid #E7E1D8"],
+html[data-theme="dark"] [style*="border: 1px solid #EAE5DB"],
+html[data-theme="dark"] [style*="border:1px solid #EAE5DB"] {
+  border-color: #3a3856 !important;
+}
+
+/* Headers verde oscuro → fondo elevado oscuro */
+html[data-theme="dark"] header[style*="#2D4A3E"],
+html[data-theme="dark"] [style*="background:#2D4A3E"] header {
+  background-color: #2d2c43 !important;
+  color: #f8daed !important;
+}
+
+/* Inputs */
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: #1c1c2e !important;
+  color: #f8daed !important;
+  border-color: #3a3856 !important;
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #6b648c !important;
+}
+
+/* Scrollbar */
+html[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+html[data-theme="dark"] ::-webkit-scrollbar-track { background: #120909; }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #3a3856; border-radius: 5px; }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #6b648c; }
+
+/* AppHeader / topbar — color cream FDFAF5 */
+html[data-theme="dark"] [style*="background: #FDFAF5"],
+html[data-theme="dark"] [style*="background:#FDFAF5"],
+html[data-theme="dark"] [style*="background-color: #FDFAF5"] {
+  background-color: #1c1c2e !important;
+}
+
+/* Bordes / pills laterales */
+html[data-theme="dark"] [style*="border: 1px solid #C5B99A"],
+html[data-theme="dark"] [style*="border:1px solid #C5B99A"],
+html[data-theme="dark"] [style*="border: 1px solid #E8E4DC"],
+html[data-theme="dark"] [style*="border:1px solid #E8E4DC"],
+html[data-theme="dark"] [style*="border: 1px solid #D8D2C7"],
+html[data-theme="dark"] [style*="border:1px solid #D8D2C7"],
+html[data-theme="dark"] [style*="borderColor: \"#D8D3CA\""] {
+  border-color: #3a3856 !important;
+}
+
+/* Drawer lateral */
+html[data-theme="dark"] aside[style*="#F5F0E8"] {
+  background-color: #1c1c2e !important;
+}
+
+/* Indicador "Admin" rojo en topbar — mantener pero ajustar */
+html[data-theme="dark"] [style*="color: #C5973A"] {
+  color: #b5a0e2 !important;
+}
+
+/* Hovers comunes en menús */
+html[data-theme="dark"] [style*="background: #F4F1EC"],
+html[data-theme="dark"] [style*="background:#F4F1EC"] {
+  background-color: #2d2c43 !important;
+}
+
+/* "Bajo revisión" pill amarillo */
+html[data-theme="dark"] [style*="color: #8B6914"],
+html[data-theme="dark"] [style*="color:#8B6914"],
+html[data-theme="dark"] [style*="color: #8B6411"],
+html[data-theme="dark"] [style*="color:#8B6411"] {
+  color: #e8d68a !important;
 }
 
 /* ── Tree canvas ──────────────────────────────────────────────────────────── */
