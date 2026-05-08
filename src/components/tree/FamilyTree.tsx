@@ -270,7 +270,14 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
   }, [])
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('.person-node')) return
+    const target = e.target as HTMLElement
+    // Exenciones del pan/drag — clicks dentro de estos elementos NO inician
+    // arrastre del árbol porque ya tienen su propia interacción:
+    //   • .person-node       — clic abre panel del perfil, hover abre menú
+    //   • .quick-action-bubble — burbujas del menú radial (bug previo: el
+    //                            pointer capture del tree robaba el click)
+    if (target.closest('.person-node')) return
+    if (target.closest('.quick-action-bubble')) return
     if (isPinchingRef.current) return
     dragRef.current = { active: true, lastX: e.clientX, lastY: e.clientY }
     e.currentTarget.setPointerCapture(e.pointerId)

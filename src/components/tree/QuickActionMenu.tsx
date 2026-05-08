@@ -275,6 +275,7 @@ export function QuickActionMenu({ target, familySlug, canInvite, onClose }: Quic
           <button
             key={action.key}
             type="button"
+            className="quick-action-bubble"
             disabled={action.disabled}
             onClick={() => handleAction(action)}
             title={action.disabled ? action.disabledReason : action.label}
