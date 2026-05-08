@@ -29,21 +29,29 @@ export interface PersonRichness {
   }
 }
 
-// Pesos por tipo de contenido — calibrados para que ~5 cosas variadas
-// alcancen el verde, mientras que solo fotos no llegue (las fotos son
-// fáciles de subir, los textos requieren más trabajo).
+// Pesos por tipo de contenido. Filosofía: las fotos son fáciles de subir
+// (y se cap a 10 para evitar que alguien con 100 fotos sin más contenido
+// llegue a verde), los textos pesan más porque requieren esfuerzo, los
+// audios/videos son los más valiosos (preservar voces de los abuelos).
 const W = {
-  photo:      2,    // cap a 10 fotos = 20 puntos
-  audioVideo: 8,    // raro y valioso
-  story:      6,
-  recipe:     6,
-  diary:      4,
-  interview:  6,
-  object:     4,
-  source:     4,
-  link:       2,
+  photo:      2,    // cap a 10 fotos = 20 puntos máximo
+  audioVideo: 10,   // raro y valioso
+  story:      8,
+  recipe:     7,
+  diary:      5,
+  interview:  8,
+  object:     5,
+  source:     6,    // documentos importantes
+  link:       3,
 }
-const MAX_SCORE = 100  // score escalado al final
+
+// Puntos brutos necesarios para llegar al "verde pleno" (score 100).
+// 60 puntos = ej: 1 audio (10) + 2 historias (16) + 1 receta (7) +
+//                1 entrevista (8) + 5 fotos (10) + 1 fuente (6) ≈ 57.
+// O bien: 6 historias + audio + foto = 60.
+// Calibrado para que una persona "bien documentada" llegue a verde
+// sin necesidad de tener todas las categorías llenas.
+const RAW_FOR_FULL_GREEN = 60
 
 /**
  * Devuelve la riqueza de contenido de cada persona de la familia.
@@ -121,7 +129,8 @@ export async function getFamilyContentRichness(): Promise<ActionResult<PersonRic
     if (r) r.counts.links += row._count._all
   }
 
-  // Calcular score con caps
+  // Calcular score con caps. Score 0..100 escalado contra
+  // RAW_FOR_FULL_GREEN: 100 = verde pleno, 50 = amarillo, 0 = rojo.
   for (const r of byPerson.values()) {
     const c = r.counts
     const raw =
@@ -134,7 +143,7 @@ export async function getFamilyContentRichness(): Promise<ActionResult<PersonRic
       + c.objects    * W.object
       + c.sources    * W.source
       + c.links      * W.link
-    r.score = Math.min(MAX_SCORE, raw)
+    r.score = Math.min(100, Math.round((raw / RAW_FOR_FULL_GREEN) * 100))
   }
 
   return { ok: true, data: [...byPerson.values()] }

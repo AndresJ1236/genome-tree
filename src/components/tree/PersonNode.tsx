@@ -30,18 +30,31 @@ interface PersonNodeProps {
 }
 
 /**
- * Genera un color HSL interpolando rojo → amarillo → verde según el score
- * 0..100. Devuelve un par (color base, color para el halo translúcido).
+ * Genera un color HSL en gradiente rojo → naranja → amarillo → verde
+ * según el score 0..100. Interpolación en 3 segmentos para que el
+ * usuario vea variedad de tonos intermedios — antes era una rampa
+ * lineal en HSL que se sentía como "solo rojo o verde".
+ *
+ *   0   → rojo  (hue=0)
+ *   33  → naranja (hue=20)
+ *   50  → amarillo (hue=50)
+ *   75  → lima (hue=85)
+ *   100 → verde (hue=120)
  */
 function heatmapColor(score: number): { color: string; halo: string } {
-  // 0   → rojo (hue=0)
-  // 50  → amarillo (hue=60)
-  // 100 → verde (hue=130)
-  const clamped = Math.max(0, Math.min(100, score))
-  const hue = (clamped / 100) * 130
+  const s = Math.max(0, Math.min(100, score))
+  let hue: number
+  if (s < 50) {
+    // 0..50 → 0°..50° (rojo a amarillo, pasando por naranjas)
+    hue = (s / 50) * 50
+  } else {
+    // 50..100 → 50°..120° (amarillo a verde, pasando por lima)
+    hue = 50 + ((s - 50) / 50) * 70
+  }
+  // Saturación y luminosidad fijas para mantener intensidad visual constante
   return {
-    color: `hsl(${hue}, 70%, 45%)`,
-    halo:  `hsla(${hue}, 70%, 50%, 0.35)`,
+    color: `hsl(${hue}, 75%, 45%)`,
+    halo:  `hsla(${hue}, 75%, 55%, 0.40)`,
   }
 }
 
@@ -230,6 +243,7 @@ function PetNode({ node, selected, highlighted, isCurrentUser: _isCurrentUser, o
       }}
     >
       <div
+        className={selected ? 'pet-circle pet-circle--selected' : 'pet-circle'}
         style={{
           width: PET_SIZE,
           height: PET_SIZE,

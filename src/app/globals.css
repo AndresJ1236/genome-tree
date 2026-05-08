@@ -178,6 +178,23 @@ html[data-theme="dark"] .person-circle--selected > span {
   color: #d4eef2 !important;
 }
 
+/* Mascotas — mismo tratamiento: bg claro, letras oscuras adentro. El
+   nombre afuera ya está cubierto por la regla de .person-node p. */
+html[data-theme="dark"] .pet-circle {
+  background: #ebe0c8 !important;       /* tinte sepia/beige cálido */
+  border-color: #8b7755 !important;
+}
+html[data-theme="dark"] .pet-circle--selected {
+  background: #8b7755 !important;
+  border-color: #b89c6e !important;
+}
+html[data-theme="dark"] .pet-circle > span {
+  color: #2a1f10 !important;            /* letras café muy oscuras */
+}
+html[data-theme="dark"] .pet-circle--selected > span {
+  color: #f5ebd6 !important;
+}
+
 /* Headings y enlaces con color verde oscuro #2D4A3E → cyan brillante */
 html[data-theme="dark"] [style*="color: #2D4A3E"],
 html[data-theme="dark"] [style*="color:#2D4A3E"] {
