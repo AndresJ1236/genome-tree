@@ -29,38 +29,65 @@ body {
 }
 
 /* ── Dark mode ──────────────────────────────────────────────────────────────
-   Paleta nocturna basada en los colores del usuario:
-     --night-bg:        #120909  (fondo principal)
-     --night-surface:   #1c1c2e  (cards, paneles, inputs)
-     --night-elevated:  #2d2c43  (elementos destacados, hover)
-     --night-border:    #3a3856  (bordes sutiles)
-     --night-muted:     #6b648c  (texto secundario, placeholders)
-     --night-text:      #f8daed  (texto principal)
-     --night-accent:    #b5a0e2  (links, botones, acentos)
+   Paleta nocturna basada en los colores del usuario (cyan/teal):
+     #121925  fondo principal (azul muy oscuro)
+     #1a2a3d  cards, paneles (derivado intermedio)
+     #123d50  highlight/hover, headers
+     #146d86  bordes y muted decorativo
+     #5d8a99  texto secundario (derivado para contraste)
+     #d4eef2  texto principal (derivado near-white con tinte cyan)
+     #1da7c8  accent (links, botones, encabezados)
+     #20dad8  highlight text (raro, sólo donde hace falta brillo)
 
-   Approach: targeting de estilos inline más comunes via attribute
-   selectors. No usa filter — los emojis y fotos se ven naturales.
-   Los inline styles ganan por specificity, así que necesitamos !important.
+   Approach mixto: clases/elementos directos donde es posible, attribute
+   selectors como fallback. Los emojis se ven naturales (sin filter).
    ──────────────────────────────────────────────────────────────────────── */
 html[data-theme="dark"] {
-  background-color: #120909;
+  background-color: #121925;
   color-scheme: dark;
 }
 
 html[data-theme="dark"] body {
-  background-color: #120909 !important;
-  color: #f8daed !important;
+  background-color: #121925 !important;
+  color: #d4eef2 !important;
 }
 
-/* Body container con bg cream → bg oscuro */
+/* Default: cualquier párrafo, span, label, h1-h4 dentro del tree
+   recibe color claro por default. Esto asegura que TODOS los nombres
+   de personas, etiquetas, etc. sean legibles aunque tengan color
+   inline propio (los selectores por inline-style refinan el matiz). */
+html[data-theme="dark"] p,
+html[data-theme="dark"] span,
+html[data-theme="dark"] label,
+html[data-theme="dark"] li,
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] h3,
+html[data-theme="dark"] h4 {
+  color: inherit;
+}
+
+/* Nombres debajo de los nodos del árbol — fix crítico de legibilidad.
+   PersonNode renderiza el nombre con color: #3a3a3a hardcoded; en
+   dark esto es invisible. Forzamos un color claro vía selector de
+   elemento (más confiable que matching de inline-style). */
+html[data-theme="dark"] .person-node p,
+html[data-theme="dark"] .person-node span {
+  color: #d4eef2 !important;
+}
+html[data-theme="dark"] .person-node p span {
+  color: #5d8a99 !important;  /* año bajo el nombre */
+}
+
+/* Body / página principal con bg cream → fondo oscuro */
 html[data-theme="dark"] [style*="background: #F5F0E8"],
 html[data-theme="dark"] [style*="background:#F5F0E8"],
 html[data-theme="dark"] [style*="background-color: #F5F0E8"],
 html[data-theme="dark"] .tree-viewport {
-  background-color: #120909 !important;
+  background-color: #121925 !important;
 }
 
-/* Cards / paneles (fondo blanco o casi blanco) */
+/* Cards / paneles blancos o casi blancos */
 html[data-theme="dark"] [style*="background: #fff"],
 html[data-theme="dark"] [style*="background:#fff"],
 html[data-theme="dark"] [style*="background: #FFF"],
@@ -72,12 +99,15 @@ html[data-theme="dark"] [style*="background:#FFFCF8"],
 html[data-theme="dark"] [style*="background: #FFFDF9"],
 html[data-theme="dark"] [style*="background:#FFFDF9"],
 html[data-theme="dark"] [style*="background: #FAF7F0"],
-html[data-theme="dark"] [style*="background:#FAF7F0"] {
-  background-color: #1c1c2e !important;
-  color: #f8daed !important;
+html[data-theme="dark"] [style*="background:#FAF7F0"],
+html[data-theme="dark"] [style*="background: #FDFAF5"],
+html[data-theme="dark"] [style*="background:#FDFAF5"],
+html[data-theme="dark"] [style*="background-color: #FDFAF5"] {
+  background-color: #1a2a3d !important;
+  color: #d4eef2 !important;
 }
 
-/* Cards "calientes" / con highlight (cream-tinted) */
+/* Cards con highlight (cream-tinted) → tono medio */
 html[data-theme="dark"] [style*="background: #F8F5EE"],
 html[data-theme="dark"] [style*="background:#F8F5EE"],
 html[data-theme="dark"] [style*="background: #EAF0ED"],
@@ -89,75 +119,77 @@ html[data-theme="dark"] [style*="background:#F0EDE5"],
 html[data-theme="dark"] [style*="background: #EAE5DB"],
 html[data-theme="dark"] [style*="background:#EAE5DB"],
 html[data-theme="dark"] [style*="background: #F0EBE2"],
-html[data-theme="dark"] [style*="background:#F0EBE2"] {
-  background-color: #2d2c43 !important;
-  color: #f8daed !important;
+html[data-theme="dark"] [style*="background:#F0EBE2"],
+html[data-theme="dark"] [style*="background: #F4F1EC"],
+html[data-theme="dark"] [style*="background:#F4F1EC"] {
+  background-color: #123d50 !important;
+  color: #d4eef2 !important;
 }
 
-/* Cards de "atención" amarillas → púrpura sutil */
+/* Cards de "atención" amarillas → tono ámbar adaptado */
 html[data-theme="dark"] [style*="background: #FFF8E6"],
 html[data-theme="dark"] [style*="background:#FFF8E6"],
 html[data-theme="dark"] [style*="background: #FFFCEF"],
 html[data-theme="dark"] [style*="background:#FFFCEF"],
 html[data-theme="dark"] [style*="background: #FFF9EC"],
 html[data-theme="dark"] [style*="background:#FFF9EC"] {
-  background-color: #3a3856 !important;
-  color: #f8daed !important;
+  background-color: #2d3a2c !important;
+  color: #d4eef2 !important;
 }
 
-/* Cards de error / rojas → mantener tinte rojizo pero adaptado */
+/* Cards de error rojas → granate oscuro */
 html[data-theme="dark"] [style*="background: #FFF1F1"],
 html[data-theme="dark"] [style*="background:#FFF1F1"],
 html[data-theme="dark"] [style*="background: #FAEBEB"],
 html[data-theme="dark"] [style*="background:#FAEBEB"],
 html[data-theme="dark"] [style*="background: #fdf0ee"] {
-  background-color: #3a1f2a !important;
-  color: #f8daed !important;
+  background-color: #3d1f2a !important;
+  color: #f0c4cc !important;
 }
 
-/* Botón primario verde oscuro → púrpura medio en dark mode */
+/* Botón primario verde oscuro → cyan medio */
 html[data-theme="dark"] [style*="background: #2D4A3E"],
 html[data-theme="dark"] [style*="background:#2D4A3E"],
 html[data-theme="dark"] [style*="background-color: #2D4A3E"] {
-  background-color: #6b648c !important;
-  color: #f8daed !important;
+  background-color: #146d86 !important;
+  color: #d4eef2 !important;
 }
 
 /* Tree node colors — círculos de personas */
 html[data-theme="dark"] [style*="background: #EAF0ED"],
 html[data-theme="dark"] [style*="background:#EAF0ED"] {
-  background-color: #2d2c43 !important;
+  background-color: #1a2a3d !important;
 }
 html[data-theme="dark"] [style*="background: #FFF3D6"],
 html[data-theme="dark"] [style*="background:#FFF3D6"] {
-  background-color: #3a3856 !important;
+  background-color: #3a4a2e !important;  /* current user — un poco verde-cyan */
 }
 html[data-theme="dark"] [style*="background: #C8D9D2"],
 html[data-theme="dark"] [style*="background:#C8D9D2"] {
-  background-color: #4a4870 !important;
+  background-color: #146d86 !important;  /* highlighted */
 }
 html[data-theme="dark"] [style*="background: #EDE8E0"],
 html[data-theme="dark"] [style*="background:#EDE8E0"] {
-  background-color: #25242f !important;
+  background-color: #1a2535 !important;  /* fallecido */
 }
 
-/* Color del texto verde oscuro (encabezados) → púrpura claro */
+/* Headings y enlaces con color verde oscuro #2D4A3E → cyan brillante */
 html[data-theme="dark"] [style*="color: #2D4A3E"],
 html[data-theme="dark"] [style*="color:#2D4A3E"] {
-  color: #b5a0e2 !important;
+  color: #1da7c8 !important;
 }
 
-/* Texto oscuro normal → claro */
+/* Texto oscuro / cuerpo principal → claro con tinte cyan */
 html[data-theme="dark"] [style*="color: #2C2C2C"],
 html[data-theme="dark"] [style*="color:#2C2C2C"],
 html[data-theme="dark"] [style*="color: #3a3a3a"],
 html[data-theme="dark"] [style*="color:#3a3a3a"],
 html[data-theme="dark"] [style*="color: #4a4a4a"],
 html[data-theme="dark"] [style*="color:#4a4a4a"] {
-  color: #f8daed !important;
+  color: #d4eef2 !important;
 }
 
-/* Texto secundario gris → púrpura medio */
+/* Texto secundario gris → cyan-gris suave */
 html[data-theme="dark"] [style*="color: #6B6B6B"],
 html[data-theme="dark"] [style*="color:#6B6B6B"],
 html[data-theme="dark"] [style*="color: #8B9E94"],
@@ -167,11 +199,13 @@ html[data-theme="dark"] [style*="color:#9B9690"],
 html[data-theme="dark"] [style*="color: #5A615C"],
 html[data-theme="dark"] [style*="color:#5A615C"],
 html[data-theme="dark"] [style*="color: #6B7B70"],
-html[data-theme="dark"] [style*="color:#6B7B70"] {
-  color: #6b648c !important;
+html[data-theme="dark"] [style*="color:#6B7B70"],
+html[data-theme="dark"] [style*="color: #B0BAB4"],
+html[data-theme="dark"] [style*="color:#B0BAB4"] {
+  color: #5d8a99 !important;
 }
 
-/* Bordes claros → bordes oscuros sutiles */
+/* Bordes claros → cyan oscuro sutil */
 html[data-theme="dark"] [style*="border: 1px solid #D8D3CA"],
 html[data-theme="dark"] [style*="border:1px solid #D8D3CA"],
 html[data-theme="dark"] [style*="border: 1px solid #E0DAD0"],
@@ -181,76 +215,67 @@ html[data-theme="dark"] [style*="border:1px solid #C8D4CE"],
 html[data-theme="dark"] [style*="border: 1px solid #E7E1D8"],
 html[data-theme="dark"] [style*="border:1px solid #E7E1D8"],
 html[data-theme="dark"] [style*="border: 1px solid #EAE5DB"],
-html[data-theme="dark"] [style*="border:1px solid #EAE5DB"] {
-  border-color: #3a3856 !important;
-}
-
-/* Headers verde oscuro → fondo elevado oscuro */
-html[data-theme="dark"] header[style*="#2D4A3E"],
-html[data-theme="dark"] [style*="background:#2D4A3E"] header {
-  background-color: #2d2c43 !important;
-  color: #f8daed !important;
-}
-
-/* Inputs */
-html[data-theme="dark"] input,
-html[data-theme="dark"] textarea,
-html[data-theme="dark"] select {
-  background-color: #1c1c2e !important;
-  color: #f8daed !important;
-  border-color: #3a3856 !important;
-}
-html[data-theme="dark"] input::placeholder,
-html[data-theme="dark"] textarea::placeholder {
-  color: #6b648c !important;
-}
-
-/* Scrollbar */
-html[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
-html[data-theme="dark"] ::-webkit-scrollbar-track { background: #120909; }
-html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #3a3856; border-radius: 5px; }
-html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #6b648c; }
-
-/* AppHeader / topbar — color cream FDFAF5 */
-html[data-theme="dark"] [style*="background: #FDFAF5"],
-html[data-theme="dark"] [style*="background:#FDFAF5"],
-html[data-theme="dark"] [style*="background-color: #FDFAF5"] {
-  background-color: #1c1c2e !important;
-}
-
-/* Bordes / pills laterales */
+html[data-theme="dark"] [style*="border:1px solid #EAE5DB"],
 html[data-theme="dark"] [style*="border: 1px solid #C5B99A"],
 html[data-theme="dark"] [style*="border:1px solid #C5B99A"],
 html[data-theme="dark"] [style*="border: 1px solid #E8E4DC"],
 html[data-theme="dark"] [style*="border:1px solid #E8E4DC"],
 html[data-theme="dark"] [style*="border: 1px solid #D8D2C7"],
 html[data-theme="dark"] [style*="border:1px solid #D8D2C7"],
-html[data-theme="dark"] [style*="borderColor: \"#D8D3CA\""] {
-  border-color: #3a3856 !important;
+html[data-theme="dark"] [style*="border: 1px solid #C8D0CA"],
+html[data-theme="dark"] [style*="border:1px solid #C8D0CA"] {
+  border-color: #146d86 !important;
 }
+
+/* Inputs / textareas / selects */
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: #1a2a3d !important;
+  color: #d4eef2 !important;
+  border-color: #146d86 !important;
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #5d8a99 !important;
+}
+
+/* Scrollbar */
+html[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+html[data-theme="dark"] ::-webkit-scrollbar-track { background: #121925; }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #146d86; border-radius: 5px; }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #1da7c8; }
 
 /* Drawer lateral */
 html[data-theme="dark"] aside[style*="#F5F0E8"] {
-  background-color: #1c1c2e !important;
+  background-color: #1a2a3d !important;
 }
 
-/* Indicador "Admin" rojo en topbar — mantener pero ajustar */
-html[data-theme="dark"] [style*="color: #C5973A"] {
-  color: #b5a0e2 !important;
+/* Indicador "Admin" pill — color dorado original → cyan brillante */
+html[data-theme="dark"] [style*="color: #C5973A"],
+html[data-theme="dark"] [style*="color: #8B5E1A"] {
+  color: #20dad8 !important;
 }
 
-/* Hovers comunes en menús */
-html[data-theme="dark"] [style*="background: #F4F1EC"],
-html[data-theme="dark"] [style*="background:#F4F1EC"] {
-  background-color: #2d2c43 !important;
-}
-
-/* "Bajo revisión" pill amarillo */
+/* "Bajo revisión" pill amarillo → ambar */
 html[data-theme="dark"] [style*="color: #8B6914"],
 html[data-theme="dark"] [style*="color:#8B6914"],
 html[data-theme="dark"] [style*="color: #8B6411"],
-html[data-theme="dark"] [style*="color:#8B6411"] {
-  color: #e8d68a !important;
+html[data-theme="dark"] [style*="color:#8B6411"],
+html[data-theme="dark"] [style*="color: #7A5C1A"],
+html[data-theme="dark"] [style*="color: #6B5A35"] {
+  color: #e8c068 !important;
+}
+
+/* Mensajes de error rojos */
+html[data-theme="dark"] [style*="color: #8B4444"],
+html[data-theme="dark"] [style*="color: #c0392b"] {
+  color: #e89090 !important;
+}
+
+/* Subtítulo "Cargando..." y similares en cyan oscuro */
+html[data-theme="dark"] [style*="color: #9BA89F"] {
+  color: #5d8a99 !important;
 }
 
 /* ── Tree canvas ──────────────────────────────────────────────────────────── */
