@@ -23,9 +23,29 @@ interface PersonNodeProps {
       el detector de long-press. */
   longPressEnabled?: boolean
   animDelay: number
+  /** Score 0..100 de riqueza de contenido — cuando se pasa, el nodo
+      se ve con un halo coloreado (rojo→verde) que indica cuánta
+      documentación tiene. Si null, se renderiza normal. */
+  heatmapScore?: number | null
 }
 
-export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelect, onLongPress, longPressEnabled, animDelay }: PersonNodeProps) {
+/**
+ * Genera un color HSL interpolando rojo → amarillo → verde según el score
+ * 0..100. Devuelve un par (color base, color para el halo translúcido).
+ */
+function heatmapColor(score: number): { color: string; halo: string } {
+  // 0   → rojo (hue=0)
+  // 50  → amarillo (hue=60)
+  // 100 → verde (hue=130)
+  const clamped = Math.max(0, Math.min(100, score))
+  const hue = (clamped / 100) * 130
+  return {
+    color: `hsl(${hue}, 70%, 45%)`,
+    halo:  `hsla(${hue}, 70%, 50%, 0.35)`,
+  }
+}
+
+export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelect, onLongPress, longPressEnabled, animDelay, heatmapScore }: PersonNodeProps) {
   if (node.nodeKind === 'PET') {
     return (
       <PetNode
@@ -109,6 +129,20 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
       className="person-node absolute cursor-pointer select-none flex flex-col items-center"
       style={{ left: node.x, top: node.y, width: NODE_W, animationDelay: `${animDelay}ms` }}
     >
+      {/* Halo de heatmap — efecto "nube" suave alrededor del nodo cuando
+          el modo heatmap está activo. Color va de rojo (sin contenido) a
+          verde (rico en contenido). Pintado por debajo del círculo. */}
+      {heatmapScore !== undefined && heatmapScore !== null && (
+        <div style={{
+          position: 'absolute',
+          left:   -18, top:    -18,
+          width:  NODE_W + 36, height: NODE_H + 36,
+          borderRadius: '50%',
+          background: `radial-gradient(circle, ${heatmapColor(heatmapScore).halo} 0%, transparent 70%)`,
+          pointerEvents: 'none',
+          zIndex: -1,
+        }} />
+      )}
       <div
         className={selected ? 'person-circle person-circle--selected' : 'person-circle'}
         style={{
@@ -128,7 +162,9 @@ export function PersonNode({ node, selected, highlighted, isCurrentUser, onSelec
                 : isCurrentUser ? '2px solid #C5973A'
                 : highlighted   ? '2px solid #7aad95'
                 : isDead        ? '1.5px dashed #9B9690'
-                : '1.5px solid #B5C4BC',
+                : (heatmapScore !== undefined && heatmapScore !== null)
+                                  ? `2px solid ${heatmapColor(heatmapScore).color}`
+                                  : '1.5px solid #B5C4BC',
           boxShadow: selected      ? '0 0 0 5px rgba(45,74,62,0.18)'
                    : isCurrentUser ? '0 0 0 4px rgba(197,151,58,0.28)'
                    : highlighted   ? '0 0 0 3px rgba(122,173,149,0.22)'
