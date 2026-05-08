@@ -138,7 +138,7 @@ export async function proposePeopleUpdate(input: {
       type:     'PROPOSAL_SUBMITTED',
       title:    'Nueva propuesta de cambio',
       body:     `en ${getPersonDisplayName(person)}`,
-      href:     `/${session.familySlug}/admin`,
+      href:     `/${session.familySlug}/settings/proposals`,
     })
 
     return { ok: true, data: { proposalId: proposal.id } }
@@ -217,6 +217,7 @@ export async function approveProposal(
 
     revalidatePath(`/${session.familySlug}/person/${proposal.personId}`)
     revalidatePath(`/${session.familySlug}/admin`)
+    revalidatePath(`/${session.familySlug}/settings/proposals`)
 
     return { ok: true, data: undefined }
   } catch (error: unknown) {
@@ -488,7 +489,7 @@ export async function proposeNewPerson(input: {
       type:     'PROPOSAL_SUBMITTED',
       title:    'Propuesta de nueva persona',
       body:     `${firstName}${input.lastName ? ' ' + input.lastName : ''}`,
-      href:     `/${session.familySlug}/admin`,
+      href:     `/${session.familySlug}/settings/proposals`,
     })
 
     return { ok: true, data: { proposalId: proposal.id } }
