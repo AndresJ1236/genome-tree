@@ -2,6 +2,84 @@
 
 > Major changes timeline. Detail-level changelog lives in `Version X.Y/RELEASE_NOTES.md`.
 
+## v3.2.0 — May 8, 2026
+
+The "speed of capture + genealogical depth" release. Full notes at `Version 3.2/RELEASE_NOTES.md`.
+
+### Quick-action radial menu on tree nodes
+
+- Hover-still 1s on any person node opens a circular radial menu of 5–6 small action bubbles (sibling, father, mother, partner, child, invite-link).
+- Disables individual bubbles when the relationship already exists (e.g., father bubble greys out if person has fatherId).
+- Bubbles render in tree-coords inside the transformed container — scale with the tree zoom, always anchored just outside the node border.
+- Clicking a bubble navigates to `/person/new` with prefilled URL params (`childOf`, `parentOf`, `siblingOf`, `partnerOf`, `asParent`) that the editor reads to pre-populate the form.
+- Invite bubble (admin only) generates a link directly without redirect, copies to clipboard, shows inline confirmation.
+
+Anti-falsos-positivos: 8px movement tolerance during the 1s hover (resets timer), auto-close when cursor exits the bubble cluster radius, ESC close.
+
+Source: `src/components/tree/QuickActionMenu.tsx`, hover detection in `PersonNode.tsx`.
+
+### Genealogical depth
+
+- **Adoption / step-parent flag.** New enum `RelationKind` (BIOLOGICAL / ADOPTIVE / STEP), columns `Person.fatherKind` and `Person.motherKind`. UI dropdown next to each parent assignment in PersonEditor. Legacy data interpreted as BIOLOGICAL (null = legacy).
+- **Real marriage date.** New `Relationship.startDate` column. Timeline omits the MARRIAGE event when startDate is null (better than showing wrong date — the previous bug rendered marriages on the date the relationship was *registered* in the system, not when the actual marriage happened).
+- **Half-siblings (UX hint).** Schema already supported them (fatherId/motherId independent). Added a hint in the sibling-of editor flow explaining how to remove the non-shared parent.
+
+### GEDCOM export
+
+- `GET /api/gedcom/export` (admin only) returns a GEDCOM 5.5.1 file with INDI per person, FAM constructed from shared fatherId/motherId, MARR/DIV events with real dates, PEDI adopted/foster when fatherKind/motherKind is ADOPTIVE/STEP, NOTE with the bio.
+- Open in Ancestry, MyHeritage, FamilySearch.
+- No content (stories, recipes) or media — those are extensions outside GEDCOM standard.
+- GEDCOM **import** deferred to a future release (open design questions: duplicates, photo files, uncertain dates).
+
+### Editor UX
+
+- **Invite link button** in PersonEditor (admin, edit mode, non-PET) — generates a MEMBER+FAMILY-scope invite for that specific person, copies to clipboard, shows "✓ Link copiado" feedback for 4 seconds.
+- **Images in stories/diary/interviews** — previously only recipes and objects. New gallery render in PersonPage shows the images below the body. Cap raised to **1920px (HD)** vs 3840px (4K) for person photos — saves ~75% storage with no quality loss for thumbnails.
+- **Redirect to edit after creating content** — was returning to the profile, where the upload UI is invisible. Now lands on the edit page where users see the upload zone immediately.
+- **@mentions in comments** with autocomplete dropdown, Unicode-safe regex, MENTION_IN_COMMENT notifications. New `Comment.mentionedUserIds: String[]` column.
+
+### Tree visual tools
+
+- **Dark mode** via custom CSS overrides (no filter trick — emojis stay natural). Cyan palette: bg `#121925`, surface `#1a2a3d`, accent `#1da7c8`, text `#d4eef2`. Toggle in side drawer, persisted in localStorage, inline `<head>` script applies before first paint to avoid flash.
+- **Heatmap dashboard** (admin/representative) — toggle in side drawer paints each node with a halo coloured by content richness. Score 0–100 from weighted sum (audio/video × 10, stories × 8, recipes × 7, etc., photos capped at 10). Gradient red → orange → yellow → lime → green via 2-segment HSL interpolation.
+- **Drag-drop reorder** for the photo gallery. Persists via existing `reorderMedia` action.
+- **Keyboard shortcuts**: `/` focuses search, `?` opens shortcut overlay, `Esc` closes panels.
+- **Side drawer** with ☰ button — consolidates Tiempo/Mapa/JSON/GEDCOM/Configuración that previously cluttered the top bar. Slides in from right with 220ms cubic-bezier transition.
+
+### OCR for old documents
+
+- Button "📄 Extraer texto" in photo lightbox (admin/representative) calls Claude Vision (`claude-sonnet-4-5`) with the image and a prompt oriented to old documents (acts, letters, certificates).
+- Returns extracted text preserving structure, shows in panel with copy-to-clipboard button.
+- New runtime dep: `@anthropic-ai/sdk` (loaded dynamically to keep cold path light).
+- **Requires `ANTHROPIC_API_KEY` in `.env.production`** — if missing, returns user-friendly error.
+
+### Bug fixes
+
+- **Pending proposals visible in `/settings/proposals`** — that page only showed user's own proposals. Now also shows "Por revisar" section for admins/representatives with inline Approve/Reject. Notification href changed from `/admin` to `/settings/proposals`.
+- **Featured-photo toggle ★ working again** — `export const REACTION_TYPES` in a `'use server'` file broke SSR module loading in Next.js 16, cascading to break unrelated server actions. Constants moved to `src/lib/reactions-types.ts`.
+- **Radial menu bubbles clickable again** — pan handler's `setPointerCapture` was stealing the pointer before button.onClick fired. Fix: exempt `.quick-action-bubble` from drag-initiation.
+- **Half-marriage display fixed** — see "Real marriage date" above.
+
+### Schema changes
+
+- `Person`: + `fatherKind`, `motherKind` (RelationKind?)
+- `Relationship`: + `startDate`
+- `Comment`: + `mentionedUserIds: String[]`
+- New enum: `RelationKind { BIOLOGICAL, ADOPTIVE, STEP }`
+- `NotificationType`: + `MENTION_IN_COMMENT`
+
+### New runtime dependencies
+
+- `@anthropic-ai/sdk` — for OCR (dynamic import)
+
+---
+
+## v3.1.0 — May 6, 2026
+
+The "engagement, exploration and operational resilience" release. Full notes at `Version 3.1/RELEASE_NOTES.md`. Highlights: reactions on stories/photos, kinship calculator badge, "hace X años" panel, audio/video module activation, Sentry + Vitest integration.
+
+---
+
 ## v3.0.0 — May 6, 2026
 
 The "ready for the family" release. Full notes at `Version 3.0/RELEASE_NOTES.md`.

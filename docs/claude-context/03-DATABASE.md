@@ -40,7 +40,11 @@ enum ClaimedRelation { SIBLING HALF_SIBLING UNCLE_AUNT GREAT_UNCLE_AUNT
                        COUSIN NEPHEW_NIECE ANCESTOR EXTENDED_FAMILY }
 enum NotificationType { PROPOSAL_SUBMITTED PROPOSAL_APPROVED PROPOSAL_REJECTED
                         NEW_PERSON_ADDED NEW_CONTENT_ADDED PERSON_UPDATED
-                        SECURITY_ALERT }   // added May 2026 — login block alerts
+                        SECURITY_ALERT             // v3.0 — login block alerts
+                        NEW_COMMENT NEW_REACTION   // v3.0 / v3.1
+                        MENTION_IN_COMMENT }       // v3.2 — @user in comment
+
+enum RelationKind { BIOLOGICAL ADOPTIVE STEP }     // v3.2 — parent-child link type
 ```
 
 ## Person — the central model
@@ -67,6 +71,13 @@ model Person {
   fatherId      String?       // self-referential
   motherId      String?       // self-referential
 
+  // v3.2 — kind of parent-child relationship. null = legacy (read as
+  // BIOLOGICAL). Sync rule in actions: clearing fatherId clears
+  // fatherKind; assigning fatherId without specifying kind defaults to
+  // BIOLOGICAL.
+  fatherKind    RelationKind?
+  motherKind    RelationKind?
+
   isCore        Boolean    @default(false)   // protect founders from accidental delete
 
   // Affiliation when parents are unknown
@@ -92,15 +103,21 @@ model Relationship {
   person1Id String
   person2Id String
   type      RelationshipType  // SPOUSE | PARTNER | SIBLING
-  endDate   DateTime?         // for SPOUSE: divorce/end. SIBLING ignores this.
+  startDate DateTime?         // v3.2 — real marriage/union date (NOT the
+                              // date the relationship was registered).
+                              // SIBLING ignores this.
+  endDate   DateTime?         // for SPOUSE: divorce/end. SIBLING ignores.
+  createdAt DateTime          @default(now())   // when registered in system
 
   @@unique([person1Id, person2Id, type])
 }
 ```
 
-- For SPOUSE/PARTNER: `endDate` non-null means "ex-couple" — affects the tree visualization (the couple arc is hidden for ex-couples).
-- For SIBLING: `endDate` is unused. SIBLING rows let you mark people as siblings even when their shared parents aren't recorded yet (typical for the topmost row of a tree).
+- For SPOUSE/PARTNER: `endDate` non-null AND in the past means "ex-couple" — affects tree visualization (couple arc hidden for ex-couples).
+- For SPOUSE/PARTNER: `startDate` is the **real** marriage/union date. Used by `getTimelineEvents` for MARRIAGE events. If null, the marriage event is omitted from the timeline (better than showing a wrong date — a common bug before v3.2 was using `createdAt` which represented the day the row was registered, not when the actual marriage happened).
+- For SIBLING: both `startDate` and `endDate` unused. SIBLING rows let you mark people as siblings even when their shared parents aren't recorded yet (typical for the topmost row of a tree).
 - `(person1Id, person2Id, type)` is unique. By convention IDs are stored sorted ascending so `(A, B, SPOUSE)` and `(B, A, SPOUSE)` collapse to the same row.
+- "Active partner" check (used by quick-action menu disabled state): `type IN (SPOUSE, PARTNER) AND (endDate IS NULL OR endDate > today)`.
 
 ## User & permissions
 

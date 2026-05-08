@@ -177,4 +177,181 @@ Per-family flags and limits in `FamilyConfig`:
 
 Editable in the admin dashboard, "Configuración" tab.
 
+## Quick-action radial menu (v3.2)
+
+Hover-still 1 second on any person node opens a small circular menu around the node with up to 6 actions:
+
+| Bubble | Icon | Action | Disabled when |
+|---|---|---|---|
+| Sibling | 🧑‍🤝‍🧑 | Open editor with this person's parents pre-filled | — |
+| Father | 👨 | Open editor with this person as the new person's child | Person already has fatherId |
+| Mother | 👩 | Idem mother | Person already has motherId |
+| Partner | 💕 | Open editor; on save, creates SPOUSE/PARTNER Relationship | Person has active partner (no endDate or future endDate) |
+| Child | 👶 | Open editor with this person pre-set as parent | — |
+| Invite | ✉️ | Generate invite link → copy to clipboard → close (no redirect) | Non-admin viewer |
+
+**Trigger:** mouse stays still on a node for 1000ms (`HOVER_STILL_MS`). Movement > 8px resets the timer. Touch uses the same timing.
+
+**Layout:** bubbles distributed in 180° upper arc (W → N → E) avoiding the south where the name renders. The angle distribution is algorithmic — `distributeAngles(n)` gives even spacing for any count.
+
+**Positioning:** `RADIUS = NODE_W/2 + GAP + BUBBLE/2` in tree-coords. Rendered inside the same transformed container as PersonNodes, so they scale and translate with the tree zoom/pan automatically. Always anchored just outside the node border.
+
+**Auto-close:** mousemove window listener checks if cursor exits a circle of `RADIUS + bubble/2 + 36px` from the cluster center. ESC also closes.
+
+**Permissions:** the long-hover detector only activates when `canCreatePerson` (admin or representative). The invite bubble only shows when `isAdmin`.
+
+Source: `src/components/tree/QuickActionMenu.tsx`, hover detector in `src/components/tree/PersonNode.tsx`, integration in `src/components/tree/FamilyTree.tsx`.
+
+**Critical detail:** the `.quick-action-bubble` className is exempted from the tree's pan-handler drag check — without it, `setPointerCapture` steals the pointer and the button's onClick never fires.
+
+## Adoption / step relations (v3.2)
+
+`Person` has a `RelationKind` enum on each parent edge:
+
+| Kind | Meaning |
+|---|---|
+| `BIOLOGICAL` | Blood (default) |
+| `ADOPTIVE` | Legal adoption |
+| `STEP` | Step-parent (current spouse of biological parent, no formal adoption) |
+
+Columns `Person.fatherKind` / `Person.motherKind` are nullable — null is interpreted as legacy = BIOLOGICAL. UI dropdown appears in PersonEditor only when there's an actual fatherId/motherId assigned.
+
+Sync rules: clearing the parent ID clears the kind. Assigning a parent without choosing kind defaults to BIOLOGICAL.
+
+GEDCOM export emits `PEDI adopted` or `PEDI foster` automatically.
+
+Half-siblings are NOT a separate model — they emerge naturally when two people share only one parent (different fatherId or motherId for each). The PersonEditor sibling-of flow has a hint reminding users to clear the non-shared parent.
+
+## Invite link from person editor (v3.2)
+
+In PersonEditor (admin, edit mode, non-PET), a section "Invitar a esta persona" with:
+
+- Button "📨 Generar link de invitación" → `createInviteLink({ role: MEMBER, scope: FAMILY, personId })` → copy URL to clipboard automatically.
+- Inline confirmation "✓ Link copiado al portapapeles" for 4 seconds.
+- Read-only input with the URL + manual "Copiar" button as fallback.
+
+The radial menu (§ Quick-action) also exposes this for fast multi-person inviting.
+
+## @ Mentions in comments (v3.2)
+
+Typing `@` in a comment opens a dropdown with family members. Selecting one inserts a styled mention link. On save:
+
+- Server parses `@palabra` against family users (regex `@([\p{L}\p{N}_]+)` Unicode-safe)
+- Match strategy: case-insensitive against `username` first (unique), then first name
+- Stores matched user IDs in `Comment.mentionedUserIds: String[]`
+- Creates `Notification.MENTION_IN_COMMENT` for each, excluding self-mentions
+
+Render: each mention becomes a `<Link>` to the user's `Person` profile (if linked), styled with green text + light background.
+
+Source: `src/lib/mentions.ts` (parser), `src/app/actions/comments.ts`, `src/components/ui/CommentsThread.tsx`.
+
+## GEDCOM export (v3.2)
+
+`GET /api/gedcom/export` (admin only) returns the family tree as a GEDCOM 5.5.1 file:
+
+- INDI per Person — name (with `birthSurname1` as primary surname for genealogy), sex, BIRT (date + place), DEAT (date), NOTE with bio
+- FAM constructed from shared (fatherId, motherId) — agglutinates children of same parents
+- Additional FAM rows for SPOUSE/PARTNER Relationship without shared children
+- MARR / DIV events with real dates from `Relationship.startDate` / `endDate`
+- PEDI adopted/foster when `fatherKind`/`motherKind` is ADOPTIVE/STEP
+- HEADER with software identifier + UTF-8 charset
+
+Open in Ancestry, MyHeritage, FamilySearch.
+
+NOT exported: content (stories, recipes, diary, interviews, sources), media, comments, reactions — those are extensions outside the GEDCOM spec.
+
+GEDCOM **import** is intentionally not implemented yet. Open design questions: how to merge with existing tree, how to handle photo files referenced in the .ged, how to interpret approximate dates ("ABT 1940", "BEF 1900").
+
+Source: `src/lib/gedcom-export.ts`, `src/app/api/gedcom/export/route.ts`. Button in TreeToolsMenu side drawer.
+
+## Heatmap of content richness (v3.2)
+
+Admin/representative can toggle a "Mapa de calor" mode in the side drawer. Each tree node receives a colored halo based on a richness score:
+
+```
+score = min(100, raw / 60 × 100)
+
+raw = min(photos, 10) × 2
+    + audioVideo × 10
+    + stories × 8
+    + interviews × 8
+    + recipes × 7
+    + sources × 6
+    + objects × 5
+    + diary × 5
+    + links × 3
+```
+
+Calibration target: a "well-documented" person (1 audio + 2 stories + 1 recipe + 1 interview + 5 photos + 1 source ≈ 57) reaches near-full green.
+
+**Color gradient (HSL, 2 segments):**
+
+- 0–50: hue 0° → 50° (red → orange → yellow)
+- 50–100: hue 50° → 120° (yellow → lime → green)
+
+Render: `radial-gradient` halo behind each node + matching border color. Selector by `.person-circle` class for reliability across modes.
+
+Server action: `getFamilyContentRichness()` in `src/app/actions/heatmap.ts`. Permissions: `canCreatePerson` (admin or representative).
+
+## OCR for old documents (v3.2)
+
+Photo lightbox shows a "📄 Extraer texto" button (admin/representative). Click → server action `extractTextFromImage(mediaId)`:
+
+1. Verify caller can manage the person's content
+2. Fetch image bytes from MinIO (uses `largeUrl` 1600px when available — sufficient for OCR, cheaper)
+3. Call Claude Vision (`claude-sonnet-4-5`) with the image as base64 + prompt oriented to family documents
+4. Return text preserving line breaks and structure
+
+Result panel shows the extracted text with a "Copiar texto" button. Audit log entry `OCR_IMAGE`.
+
+Requires `ANTHROPIC_API_KEY` in `.env.production`. If missing, returns user-friendly error string. The `@anthropic-ai/sdk` is loaded via dynamic import to keep the cold path light.
+
+Source: `src/app/actions/ocr.ts`, UI in `src/components/profile/PersonPage.tsx` lightbox.
+
+## Drag-drop reorder photos (v3.2)
+
+Photo gallery in PersonPage now supports HTML5 native drag-drop. Drag a thumbnail over another → drops there → calls `reorderMedia(personId, orderedIds)` (already existed). Optimistic update with optional rollback via `router.refresh()` on server error.
+
+Visual feedback: dragged card at 40% opacity, drop target outlined with 2px green outline.
+
+## Keyboard shortcuts (v3.2)
+
+Global keydown listener in the tree page:
+
+- `/` — focus the search input
+- `?` — toggle help overlay listing all shortcuts
+- `Esc` — close active panel/menu (radial menu first, then person panel)
+
+Filtered when typing in input/textarea/contenteditable except Esc.
+
+Source: `src/components/tree/KeyboardShortcuts.tsx`.
+
+## Dark mode (v3.2)
+
+Toggle in the side drawer (☰). Persisted in `localStorage` under key `genome-tree-theme`. Inline `<head>` script applies the theme before first paint to avoid the FOUC.
+
+Implementation: `data-theme="dark"` on `<html>` triggers a comprehensive set of CSS overrides in `globals.css` targeting common inline-style patterns via attribute selectors and specific element classes.
+
+Cyan palette:
+
+| Variable | Color | Use |
+|---|---|---|
+| `--night-bg` | `#121925` | Page background |
+| `--night-surface` | `#1a2a3d` | Cards, panels |
+| `--night-elevated` | `#123d50` | Highlight, hover |
+| `--night-border` | `#146d86` | Borders, primary buttons |
+| `--night-accent` | `#1da7c8` | Headings, links |
+| `--night-text` | `#d4eef2` | Primary text (near-white with cyan tint) |
+| `--night-muted` | `#5d8a99` | Secondary text |
+
+**Important exceptions:**
+
+- Tree person circles keep a light "pastille" look (light bg `#d4eef2`, dark text `#121925`) — same visual language as light mode, just over a dark page bg.
+- Pet circles keep their sepia tint (`#ebe0c8`) with dark brown text — distinguishes them from person nodes.
+- TreeSearch bar (`.tree-search-root`) keeps light colors — stands out as a luminous control element.
+
+NO CSS filter trick — emojis (🔔, 🎂, etc.) render with their natural OS colors.
+
+Source: `src/app/globals.css` (`html[data-theme="dark"]` rules), toggle in `src/components/tree/TreeToolsMenu.tsx`.
+
 `getFamilyModules(familyId)` returns the booleans for use in route guards and menu rendering.

@@ -22,7 +22,7 @@
 | Question | Answer |
 |----------|--------|
 | What is this? | Self-hosted genealogy app for a single extended family |
-| Current version | v3.1.0 (May 6, 2026) |
+| Current version | v3.2.0 (May 8, 2026) |
 | Production URL | https://arbol.example.com |
 | Production host | TrueNAS SCALE NAS_HOST (private LAN, exposed via Cloudflare Tunnel) |
 | Deploy target | `NAS_DEPLOY_PATH` on the NAS |
@@ -47,7 +47,7 @@
 
 ## Project version & changelog
 
-See [`Version 3.0/RELEASE_NOTES.md`](../../Version%203.0/RELEASE_NOTES.md) at the repo root for the latest changelog. Older versions in their own `Version X.Y/` folders. Future versions go in new `Version X.Y/` siblings (no `Final/` prefix — that's been retired).
+See [`Version 3.2/RELEASE_NOTES.md`](../../Version%203.2/RELEASE_NOTES.md) at the repo root for the latest changelog. Older versions in their own `Version X.Y/` folders (3.1, 3.0, 2.0, 1.0). Future versions go in new `Version X.Y/` siblings (no `Final/` prefix — that's been retired).
 
 ## When in doubt
 

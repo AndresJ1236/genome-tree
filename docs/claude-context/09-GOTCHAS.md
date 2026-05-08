@@ -227,3 +227,81 @@ Internal code comments and docs (like this file) are in English so any Claude ag
 ### The user is also the focus
 
 In screenshots, `AJ` is the focus person (Persona Owner). When the user says "mi papá" they mean Persona Padre (the registered father of AJ). When they say "mi mamá" they mean Persona Madre. The Apellido2 branch has many more relatives recorded than the Apellido1 branch — that asymmetry is a property of the data, not a bug to fix.
+
+---
+
+## Lessons learned in v3.2
+
+### Server actions: `'use server'` files can ONLY export async functions
+
+In Next.js 16, a file with `'use server'` at the top can ONLY export async functions. Any other export (constants, types, interfaces, classes) will:
+
+1. Cause the SSR module evaluation to fail with `Error: A "use server" file can only export async functions, found object.`
+2. Cascade to break unrelated server actions in the same chunk — `Error: Failed to find Server Action <hash>`.
+
+**This bit us in v3.1** — `export const REACTION_TYPES = [...]` in `src/app/actions/reactions.ts` broke the featured-photo toggle and other unrelated actions.
+
+**Rule:** runtime constants and TS type/interface definitions go in plain `.ts` files (e.g. `src/lib/<feature>-types.ts`). Server actions import them.
+
+Also: `export type { X }` from a `'use server'` file is also problematic — Turbopack sometimes treats it as a runtime export. Re-export from a separate `.ts` module instead.
+
+### Pointer capture vs button clicks
+
+The tree page's pan handler does `setPointerCapture` on `pointerdown` to enable smooth dragging. If you add a clickable element INSIDE the tree's transformed container (like the radial menu bubbles in v3.2), clicks on that element get hijacked:
+
+```ts
+const onPointerDown = useCallback((e: React.PointerEvent) => {
+  if ((e.target as HTMLElement).closest('.person-node')) return  // exempt
+  // ...
+  e.currentTarget.setPointerCapture(e.pointerId)   // captures all subsequent events
+}, [])
+```
+
+When the bubble is clicked: pointerdown bubbles up → tree captures pointer → button.onClick never fires.
+
+**Fix:** add a stable className to the new clickable element AND add an exemption in the pan handler:
+
+```ts
+if (target.closest('.person-node')) return
+if (target.closest('.quick-action-bubble')) return  // also exempt
+```
+
+### Tree-coords vs screen-coords for overlays
+
+The tree's nodes are rendered inside a div with `transform: translate(...) scale(...)`. Two ways to render an overlay anchored to a node:
+
+1. **Screen-space (`position: fixed`)** — calculate node's screen position with `getBoundingClientRect()` each time. Pro: simpler stacking context. Con: requires manual sync with zoom/pan.
+2. **Tree-space (`position: absolute` inside the transformed div)** — render at the node's tree-coords (`node.x`, `node.y`). Pro: scales/translates automatically with the tree. Con: must be careful about pointer events (the parent has pan handlers).
+
+The radial menu uses **option 2** since v3.2 because it gives perfectly consistent visual proportions at any zoom. See "Pointer capture vs button clicks" above for the tradeoff.
+
+### CSS dark mode without a build-time refactor
+
+The project has hundreds of inline styles with hardcoded hex colors. Doing dark mode "properly" would require refactoring all of them to CSS variables — too risky.
+
+The v3.2 dark mode uses **attribute selectors** to target inline-style patterns, plus targeted class selectors for common elements:
+
+```css
+html[data-theme="dark"] [style*="background: #F5F0E8"] { background-color: #121925 !important; }
+html[data-theme="dark"] .person-circle { background: #d4eef2 !important; }
+```
+
+**Pitfall:** attribute selectors only match if the inline style string contains the exact substring. React preserves the format you wrote (`'#F5F0E8'`), so consistency in code matters. If someone writes `background: #f5f0e8` (lowercase) the rule won't match.
+
+**Pitfall avoided:** the original v3.2 attempt used a CSS `filter: invert + hue-rotate` on `<html>`. It produces a brown/sepia bg from the cream original AND descolors emojis (the bell turns blue, the cake changes). Rejected — current approach is more code but predictable.
+
+### MarriageDate vs createdAt
+
+`Relationship.createdAt` is the date the row was inserted, NOT the marriage date. Using it for the timeline gives absurd results (couples that separated in 2018 appearing to "marry" in 2026 because that's when someone added them to the system).
+
+v3.2 introduced `Relationship.startDate` for the real date. `getTimelineEvents` skips the MARRIAGE event when `startDate` is null — better than fabricating a date.
+
+When working with marriage events, ALWAYS use `startDate`. `createdAt` is only for audit/insertion order.
+
+### OCR cost & permission
+
+The OCR action calls Claude Vision — every call costs API credits. To prevent abuse:
+
+- Permission gate: `assertCanManagePerson(media.personId, session, 'content')` — only admins or the person's representative can OCR.
+- Uses `largeUrl` (1600px) when available instead of original 4K — sufficient for OCR, ~16x less data sent to API.
+- `ANTHROPIC_API_KEY` must be in `.env.production`. If absent, returns user-friendly error string (no crash).

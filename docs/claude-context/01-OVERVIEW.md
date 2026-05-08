@@ -12,7 +12,25 @@ The product fits a niche between commercial genealogy SaaS (Ancestry, MyHeritage
 - **Visual tree** — custom layout engine, not a generic graph library
 - **Per-user perspective** — each logged-in user sees the tree from THEIR position (their dad's side on the left, mom's side on the right)
 
-## Current version: v3.0.0
+## Current version: v3.2.0
+
+Released May 8, 2026. Major changes vs v3.1:
+
+- **Quick-action radial menu** — hover-still 1s on a tree node opens 5–6 small action bubbles (sibling, father, mother, partner, child, invite). Pre-fills the new-person editor with relationship context.
+- **Genealogical depth** — adoption / step-parent flag (`RelationKind`), real marriage date (`Relationship.startDate`), half-siblings UX hint, GEDCOM 5.5.1 export.
+- **Editor speed** — invite link button (auto-copies to clipboard), images in stories/diary/interviews (capped at 1920px HD), redirect-to-edit after creating content.
+- **@ mentions in comments** with autocomplete and notifications.
+- **Tree visualization tools** — dark mode (cyan palette, no filter trick), heatmap of content richness (red→yellow→green gradient), drag-drop reorder photos, keyboard shortcuts (`/`, `?`, `Esc`).
+- **OCR for old documents** — Claude Vision integration for actas, cartas, certificados.
+- **Bug fixes** — pending proposals visible in `/settings/proposals`, featured-photo toggle restored (use-server file regression), radial bubble clickability fixed (pointer capture trap).
+
+Full changelog: `Version 3.2/RELEASE_NOTES.md`.
+
+## Previous: v3.1.0
+
+Released May 6, 2026. Reactions on stories/photos, kinship calculator, "hace X años" panel, audio/video module activation, Sentry + Vitest. Full notes at `Version 3.1/RELEASE_NOTES.md`.
+
+## v3.0.0
 
 Released May 6, 2026. Major changes vs v2.0:
 

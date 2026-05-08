@@ -7,7 +7,7 @@ Before making changes to this project, read **[docs/claude-context/README.md](./
 Quick context:
 
 - **Production**: `https://arbol.example.com` (TrueNAS at `NAS_HOST`, exposed via Cloudflare Tunnel)
-- **Current version**: v3.1.0 (May 6, 2026) — see `Version 3.1/RELEASE_NOTES.md`
+- **Current version**: v3.2.0 (May 8, 2026) — see `Version 3.2/RELEASE_NOTES.md`
 - **Stack**: Next.js 16 + React 19 + Prisma 7 + PostgreSQL 16 + MinIO + Docker
 - **Most complex file**: `src/lib/tree-layout.ts` — read `docs/claude-context/04-TREE-ALGORITHM.md` before touching it
 
@@ -18,3 +18,4 @@ Quick context:
 3. Hard refresh after every deploy (Cloudflare/browser cache).
 4. Never commit `DEPLOY.md`, `deploy-server.sh`, or `.env*` — they're gitignored for a reason.
 5. If a deploy breaks something, **revert immediately** (`git revert HEAD && deploy`), then diagnose offline.
+6. **`'use server'` files can ONLY export async functions** — no consts, no types, no interfaces. Otherwise SSR module loading breaks unrelated server actions. See `docs/claude-context/09-GOTCHAS.md` § "Server actions: 'use server' files can ONLY export async functions".
