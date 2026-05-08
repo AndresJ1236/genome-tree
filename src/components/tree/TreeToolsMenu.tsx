@@ -6,6 +6,8 @@ import Link from 'next/link'
 interface TreeToolsMenuProps {
   familySlug: string
   isAdmin: boolean
+  /** Si el viewer puede ver el heatmap (admin o representante de unidad) */
+  canSeeHeatmap?: boolean
 }
 
 const ANIM_MS = 220
@@ -17,9 +19,39 @@ const ANIM_MS = 220
  *   • mounted=true, open=false — DOM renderizado, animando salida
  *   • mounted=true, open=true  — drawer visible, animación entrada
  */
-export function TreeToolsMenu({ familySlug, isAdmin }: TreeToolsMenuProps) {
+export function TreeToolsMenu({ familySlug, isAdmin, canSeeHeatmap }: TreeToolsMenuProps) {
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false)
+  const [darkMode, setDarkMode] = useState(false)
+
+  // Inicializar dark mode desde localStorage al montar
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const saved = localStorage.getItem('genome-tree-theme')
+    if (saved === 'dark') {
+      document.documentElement.dataset.theme = 'dark'
+      setDarkMode(true)
+    }
+  }, [])
+
+  function toggleDarkMode() {
+    const next = !darkMode
+    setDarkMode(next)
+    if (next) {
+      document.documentElement.dataset.theme = 'dark'
+      localStorage.setItem('genome-tree-theme', 'dark')
+    } else {
+      delete document.documentElement.dataset.theme
+      localStorage.setItem('genome-tree-theme', 'light')
+    }
+  }
+
+  function toggleHeatmap() {
+    // Disparar evento que FamilyTree escucha. Evitamos prop-drilling
+    // a través de la tree page.
+    window.dispatchEvent(new CustomEvent('toggle-heatmap'))
+    closeDrawer()
+  }
 
   function openDrawer() {
     setMounted(true)
@@ -141,6 +173,58 @@ export function TreeToolsMenu({ familySlug, isAdmin }: TreeToolsMenuProps) {
                   />
                 </>
               )}
+
+              {canSeeHeatmap && (
+                <>
+                  <Divider label="Vista" />
+                  <button
+                    type="button"
+                    onClick={toggleHeatmap}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '12px 20px', background: 'transparent', border: 'none',
+                      width: '100%', textAlign: 'left', cursor: 'pointer',
+                      color: '#2C2C2C',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#EAE5DB' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <span style={{ fontSize: 22, flexShrink: 0 }}>🌡️</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 14, color: '#2D4A3E', fontWeight: 500 }}>
+                        Mapa de calor
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#8B9E94' }}>
+                        Rojo = poco contenido · Verde = bien documentado
+                      </p>
+                    </div>
+                  </button>
+                </>
+              )}
+
+              <Divider label="Apariencia" />
+              <button
+                type="button"
+                onClick={toggleDarkMode}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '12px 20px', background: 'transparent', border: 'none',
+                  width: '100%', textAlign: 'left', cursor: 'pointer',
+                  color: '#2C2C2C',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#EAE5DB' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{ fontSize: 22, flexShrink: 0 }}>{darkMode ? '☀️' : '🌙'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 14, color: '#2D4A3E', fontWeight: 500 }}>
+                    {darkMode ? 'Modo claro' : 'Modo oscuro'}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: '#8B9E94' }}>
+                    {darkMode ? 'Volver al fondo crema' : 'Para leer de noche'}
+                  </p>
+                </div>
+              </button>
 
               <Divider label="Mi cuenta" />
               <MenuItem

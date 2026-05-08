@@ -162,7 +162,7 @@ export default async function TreePage({
               <span className="sm:hidden">+</span>
             </Link>
           )}
-          <TreeToolsMenu familySlug={familySlug} isAdmin={session?.role === 'ADMIN'} />
+          <TreeToolsMenu familySlug={familySlug} isAdmin={session?.role === 'ADMIN'} canSeeHeatmap={userCanCreatePerson} />
         </div>
       </div>
       <div className="flex-1 min-h-0">

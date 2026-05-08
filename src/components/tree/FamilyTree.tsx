@@ -9,6 +9,8 @@ import { PersonPanel } from './PersonPanel'
 import { TreeSearch } from './TreeSearch'
 import { OnboardingOverlay } from './OnboardingOverlay'
 import { QuickActionMenu, type QuickActionTarget } from './QuickActionMenu'
+import { KeyboardShortcuts } from './KeyboardShortcuts'
+import { getFamilyContentRichness, type PersonRichness } from '@/app/actions/heatmap'
 
 const CANVAS_PAD = 120
 const CENTER_SCALE = 1.2
@@ -35,6 +37,27 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [quickAction, setQuickAction] = useState<QuickActionTarget | null>(null)
+  const [heatmapOn, setHeatmapOn] = useState(false)
+  const [richnessByPerson, setRichnessByPerson] = useState<Map<string, PersonRichness> | null>(null)
+
+  // Carga lazy del heatmap — solo cuando el admin lo activa por primera vez.
+  useEffect(() => {
+    if (!heatmapOn || richnessByPerson !== null) return
+    void getFamilyContentRichness().then(r => {
+      if (!r.ok) return
+      const m = new Map<string, PersonRichness>()
+      for (const item of r.data) m.set(item.personId, item)
+      setRichnessByPerson(m)
+    })
+  }, [heatmapOn, richnessByPerson])
+
+  // Listener para que el botón en TreeToolsMenu pueda activarlo. Usamos
+  // un evento custom en window para evitar prop-drilling.
+  useEffect(() => {
+    function onToggle() { setHeatmapOn(v => !v) }
+    window.addEventListener('toggle-heatmap', onToggle)
+    return () => window.removeEventListener('toggle-heatmap', onToggle)
+  }, [])
 
   // Index rápido de persons para resolver hasFather/hasMother en long-press
   const personById = useMemo(() => {
@@ -411,6 +434,7 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
                   isCurrentUser={focusPersonId === node.id}
                   onSelect={id => setSelectedId(prev => (prev === id ? null : id))}
                   longPressEnabled={!!canCreatePerson}
+                  heatmapScore={heatmapOn && richnessByPerson ? (richnessByPerson.get(node.id)?.score ?? 0) : null}
                   onLongPress={(id) => {
                     const p = personById.get(id)
                     const layoutNode = nodes.find(n => n.id === id)
@@ -447,6 +471,13 @@ export function FamilyTree({ persons, relationships, familySlug, searchEnabled, 
       </div>
 
       <OnboardingOverlay />
+
+      <KeyboardShortcuts
+        onEscape={() => {
+          if (quickAction) setQuickAction(null)
+          else if (selectedId) setSelectedId(null)
+        }}
+      />
 
       <PersonPanel
         personId={selectedId}
