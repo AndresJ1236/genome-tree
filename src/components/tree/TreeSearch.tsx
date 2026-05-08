@@ -121,10 +121,11 @@ export function TreeSearch({ enabled, onSelectPerson }: TreeSearchProps) {
       >
         <span style={{ fontSize: 12, color: '#6B7B70' }}>Buscar</span>
         <input
+          id="tree-search-input"
           value={query}
           onFocus={() => setOpen(true)}
           onChange={event => setQuery(event.target.value)}
-          placeholder={enabled ? 'Personas, historias, relaciones...' : 'Activa la búsqueda en Administración'}
+          placeholder={enabled ? 'Personas, historias, relaciones... (presiona /)' : 'Activa la búsqueda en Administración'}
           disabled={!enabled}
           style={{
             flex: 1,
