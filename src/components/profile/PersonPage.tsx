@@ -10,7 +10,8 @@ import type {
   MediaItem, ConfidenceLevel, AudioVideoItem,
 } from '@/lib/content-types'
 import { CLAIMED_RELATION_LABELS, CONFIDENCE_LABELS, pickMediaUrl } from '@/lib/content-types'
-import { uploadMedia, deleteMedia, toggleFeaturedMedia, uploadAudioVideo } from '@/app/actions/media'
+import { uploadMedia, deleteMedia, toggleFeaturedMedia, uploadAudioVideo, reorderMedia } from '@/app/actions/media'
+import { extractTextFromImage } from '@/app/actions/ocr'
 import { getPersonDisplayName } from '@/lib/person-name'
 import { CommentsThread } from '@/components/ui/CommentsThread'
 import { ReactionBar } from '@/components/ui/ReactionBar'
@@ -35,6 +36,24 @@ interface TabDef {
 export function PersonPage({ person, familySlug }: { person: PersonFull; familySlug: string }) {
   const [activeTab, setActiveTab] = useState<Tab>('fotos')
   const [lightbox, setLightbox] = useState<MediaItem | null>(null)
+  // OCR state — solo activo cuando se hace click en "Extraer texto" en lightbox
+  const [ocrText, setOcrText] = useState<string | null>(null)
+  const [ocrLoading, setOcrLoading] = useState(false)
+  const [ocrError, setOcrError] = useState<string | null>(null)
+
+  // Reset OCR cuando se cambia o cierra el lightbox
+  useEffect(() => {
+    setOcrText(null); setOcrError(null); setOcrLoading(false)
+  }, [lightbox?.id])
+
+  async function handleOcr() {
+    if (!lightbox) return
+    setOcrLoading(true); setOcrError(null); setOcrText(null)
+    const r = await extractTextFromImage(lightbox.id)
+    setOcrLoading(false)
+    if (!r.ok) setOcrError(r.error)
+    else       setOcrText(r.data.text)
+  }
   const [mediaCount, setMediaCount] = useState(person.counts.media)
   const [isMobile, setIsMobile] = useState(false)
   const modules = person.modules
@@ -117,6 +136,68 @@ export function PersonPage({ person, familySlug }: { person: PersonFull; familyS
               cursor: 'pointer', fontSize: 14,
             }}
           >✕</button>
+
+          {/* Botón OCR — solo visible para quien puede gestionar contenido.
+              Útil para fotos de actas, cartas, certificados antiguos. */}
+          {person.canAddContent && (
+            <button
+              onClick={e => { e.stopPropagation(); handleOcr() }}
+              disabled={ocrLoading}
+              title="Extraer texto del documento"
+              style={{
+                position: 'absolute', top: 16, right: 64,
+                background: 'rgba(255,255,255,0.12)',
+                border: '1.5px solid rgba(255,255,255,0.4)',
+                color: '#fff', borderRadius: 18, padding: '6px 14px',
+                cursor: ocrLoading ? 'wait' : 'pointer', fontSize: 12,
+                letterSpacing: '0.04em',
+              }}
+            >
+              {ocrLoading ? 'Leyendo…' : '📄 Extraer texto'}
+            </button>
+          )}
+
+          {/* Resultado del OCR — panel abajo del lightbox */}
+          {(ocrText !== null || ocrError) && (
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                position: 'absolute', bottom: 24, left: '50%',
+                transform: 'translateX(-50%)',
+                maxWidth: '90vw', width: 'min(560px, 90vw)',
+                background: '#FFFDF9', color: '#2C2C2C',
+                padding: '14px 18px', borderRadius: 4,
+                fontSize: 13, lineHeight: 1.55, maxHeight: '40vh', overflowY: 'auto',
+                boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {ocrError && (
+                <p style={{ margin: 0, color: '#8B4444' }}>Error: {ocrError}</p>
+              )}
+              {ocrText && (
+                <>
+                  <p style={{ margin: '0 0 8px', fontSize: 11, color: '#8B9E94', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    Texto extraído
+                  </p>
+                  <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{ocrText}</p>
+                  <button
+                    onClick={async () => {
+                      try { await navigator.clipboard.writeText(ocrText) } catch {}
+                    }}
+                    style={{
+                      marginTop: 10, background: 'transparent', border: '1px solid #D8D3CA',
+                      borderRadius: 2, padding: '4px 10px', fontSize: 11, color: '#2D4A3E',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Copiar texto
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -556,6 +637,40 @@ function PhotosTab({
     setMedia(prev => prev.map(m => m.id === id ? { ...m, featured: !current } : m))
   }, [])
 
+  // ── Drag-drop reorder ──────────────────────────────────────────────────────
+  // Estado del arrastre: dragId es lo que se está arrastrando, dragOverId
+  // es la posición destino (para preview visual). Al soltar, calculamos
+  // el nuevo orden y disparamos reorderMedia. La actualización es
+  // optimistic — UI reordena al instante, server async.
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+
+  const handleDrop = useCallback((targetId: string) => {
+    if (!dragId || dragId === targetId) {
+      setDragId(null); setDragOverId(null)
+      return
+    }
+    setMedia(prev => {
+      const items = [...prev]
+      const fromIdx = items.findIndex(m => m.id === dragId)
+      const toIdx   = items.findIndex(m => m.id === targetId)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      const [moved] = items.splice(fromIdx, 1)
+      items.splice(toIdx, 0, moved)
+      // Disparar reorder en background — sin esperar
+      void reorderMedia(personId, items.map(i => i.id)).then(res => {
+        if (!res.ok) {
+          setError(res.error)
+          // Si falla, podríamos revertir, pero la UI ya se reordenó.
+          // Un router.refresh trae el orden persistido del server.
+          router.refresh()
+        }
+      })
+      return items
+    })
+    setDragId(null); setDragOverId(null)
+  }, [dragId, personId, router])
+
   return (
     <div>
       {/* Zona de upload */}
@@ -613,7 +728,19 @@ function PhotosTab({
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
           {media.map(m => (
-            <PhotoCard key={m.id} item={m} onOpen={onOpen} onDelete={handleDelete} onToggle={handleToggle} />
+            <PhotoCard
+              key={m.id}
+              item={m}
+              onOpen={onOpen}
+              onDelete={handleDelete}
+              onToggle={handleToggle}
+              onDragStart={() => setDragId(m.id)}
+              onDragOver={() => setDragOverId(m.id)}
+              onDrop={() => handleDrop(m.id)}
+              onDragEnd={() => { setDragId(null); setDragOverId(null) }}
+              isDragging={dragId === m.id}
+              isDragOver={dragOverId === m.id && dragId !== m.id}
+            />
           ))}
         </div>
       )}
@@ -623,18 +750,38 @@ function PhotosTab({
 
 function PhotoCard({
   item, onOpen, onDelete, onToggle,
+  onDragStart, onDragOver, onDrop, onDragEnd,
+  isDragging, isDragOver,
 }: {
   item:     MediaItem
   onOpen:   (m: MediaItem) => void
   onDelete: (id: string) => void
   onToggle: (id: string, current: boolean) => void
+  onDragStart?: () => void
+  onDragOver?:  () => void
+  onDrop?:      () => void
+  onDragEnd?:   () => void
+  isDragging?:  boolean
+  isDragOver?:  boolean
 }) {
   const [hover, setHover] = useState(false)
   return (
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ position: 'relative', borderRadius: 4, overflow: 'hidden', aspectRatio: '1', background: '#E4E0D8', cursor: 'pointer' }}
+      draggable={!!onDragStart}
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.() }}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver?.() }}
+      onDrop={e => { e.preventDefault(); onDrop?.() }}
+      onDragEnd={() => onDragEnd?.()}
+      style={{
+        position: 'relative', borderRadius: 4, overflow: 'hidden',
+        aspectRatio: '1', background: '#E4E0D8', cursor: 'pointer',
+        opacity: isDragging ? 0.4 : 1,
+        outline: isDragOver ? '2px solid #2D4A3E' : 'none',
+        outlineOffset: isDragOver ? '-2px' : 0,
+        transition: 'opacity 0.15s, outline 0.1s',
+      }}
     >
       <img
         src={pickMediaUrl(item, 'medium')}
