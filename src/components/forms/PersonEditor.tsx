@@ -665,10 +665,14 @@ export function PersonEditor({
                   />
                 </Field>
                 {quickTargetId && (
-                  <p style={{ margin: 0, fontSize: 12, color: '#6B6B6B' }}>
-                    Se usarán los mismos padres que {parentOptions.find(p => p.id === quickTargetId)?.label}.
-                    Puedes ajustarlos en la sección de parentesco abajo.
-                  </p>
+                  <div style={{ margin: 0, fontSize: 12, color: '#6B6B6B', lineHeight: 1.5 }}>
+                    <p style={{ margin: '0 0 6px' }}>
+                      Por defecto se usan los mismos padres que {parentOptions.find(p => p.id === quickTargetId)?.label}.
+                    </p>
+                    <p style={{ margin: 0, fontSize: 11, color: '#8B7B5A', background: '#FFF8E6', padding: '6px 10px', borderLeft: '2px solid #E8D68A', borderRadius: 2 }}>
+                      💡 Si es un <strong>hermanastro/a</strong> (medio hermano), borra el padre o madre que NO comparten en los selectores de parentesco abajo.
+                    </p>
+                  </div>
                 )}
               </div>
             )}
