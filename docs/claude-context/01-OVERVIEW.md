@@ -2,7 +2,7 @@
 
 ## What this is
 
-**Genome Tree** is a self-hosted family genealogy web application. One PostgreSQL database, one Docker stack, one extended family using it. Currently deployed for the Apellido1–Apellido2 family (the user, Persona Owner, is the primary admin and developer).
+**Genome Tree** is a self-hosted family genealogy web application. One PostgreSQL database, one Docker stack, one extended family using it. The reference deployment runs on a private LAN exposed via Cloudflare Tunnel.
 
 The product fits a niche between commercial genealogy SaaS (Ancestry, MyHeritage) and open-source desktop tools (GRAMPS, etc.):
 
@@ -48,8 +48,8 @@ See [`Version 3.0/RELEASE_NOTES.md`](../../Version%203.0/RELEASE_NOTES.md) for t
 | | |
 |---|---|
 | Status | Live, single family in production |
-| URL | https://arbol.example.com |
-| Host | TrueNAS SCALE Electric Eel 24.10+ at `NAS_HOST` |
+| URL | `https://arbol.<REDACTED>.com` (private deployment) |
+| Host | TrueNAS SCALE Electric Eel 24.10+ on private LAN |
 | Public exposure | Cloudflare Tunnel (no port forwarding) |
 | Storage | PostgreSQL 16 + MinIO (both Docker volumes on the NAS) |
 | Auth | Stateless JWT cookies (no Redis, no session table) |
@@ -112,9 +112,9 @@ Things specifically NOT in git (gitignored):
 
 ## The user
 
-The primary user/developer is **Persona Owner** (`AJ` in tree screenshots). When the user says "mi papá", they mean Persona Padre. "Mi mamá" = Persona Madre. The tree they see is centered on themselves (focus = AJ).
+The primary user/developer is the project owner ("Persona X" in this doc), and is also the focus person in tree screenshots. The tree they see is centered on themselves.
 
-When working on layout/visibility issues, this matters because:
-- The Apellido1 side has fewer recorded relatives (~7 people)
-- The Apellido2 side has many more (~35-40 people)
+When working on layout/visibility issues, the asymmetric branch sizes matter — in the live data:
+- The paternal branch has fewer recorded relatives (~7 people)
+- The maternal branch has many more (~35-40 people)
 - Visual imbalance is a feature of the data, not always a bug

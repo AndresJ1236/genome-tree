@@ -103,8 +103,8 @@ describe('computeTreeLayout', () => {
 
   it('REGRESSION: siblings of the focus parent share his/her generation', () => {
     // Los hermanos del padre deben estar en la misma fila (mismo gen) que él,
-    // no una fila arriba ni abajo. Este es el bug que reportó Andrés con
-    // Persona Padre y sus hermanos.
+    // no una fila arriba ni abajo. Este fue un bug reportado en producción
+    // donde el padre del usuario aparecía una generación abajo de sus hermanos.
     //   gpa - gpm
     //   /  |   \
     //  uncle dad  aunt

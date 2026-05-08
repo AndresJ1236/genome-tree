@@ -88,7 +88,7 @@
      FROM \"Person\" a
      LEFT JOIN \"Person\" f ON a.\"fatherId\" = f.id
      LEFT JOIN \"Person\" m ON a.\"motherId\" = m.id
-     WHERE a.\"firstName\" = '\''PersonaPadre'\'';
+     WHERE a.\"firstName\" = '\''<FIRST_NAME>'\'';
    "'
    ```
 4. **Add tracing** locally — edit `tree-layout.ts` to `console.log` intermediate values for the affected person, run the dev server, reproduce
@@ -232,14 +232,14 @@ If the schema was changed and the rollback also requires schema changes:
 
 2. **Update `.env.production`** on the server:
    ```bash
-   ssh -i USER_HOME/.ssh/SSH_KEY root@NAS_HOST
-   nano "NAS_DEPLOY_PATH/.env.production"
+   ssh -i <SSH_KEY_PATH> root@<NAS_HOST>
+   nano "<NAS_DEPLOY_PATH>/.env.production"
    # Change SESSION_SECRET="..." to the new value
    ```
 
 3. **Restart the app container** (no rebuild needed):
    ```bash
-   cd "NAS_DEPLOY_PATH"
+   cd <NAS_DEPLOY_PATH>
    docker compose up -d --force-recreate app
    ```
 

@@ -8,12 +8,12 @@
 |---|---|
 | Host OS | TrueNAS SCALE (Electric Eel 24.10+) |
 | Hostname | `<TRUENAS_HOST>` (private LAN, not a public DNS name) |
-| Public URL | `https://arbol.example.com` |
+| Public URL | `https://<APP_HOSTNAME>` |
 | Public exposure | Cloudflare Tunnel (no port forwarding) |
-| Deploy path on host | `NAS_DEPLOY_PATH` (vault is a symlink to `NAS_PATH`) |
-| File transfer | SMB share `\\<TRUENAS_HOST>\Tresure\Genome\` accessible from Windows |
+| Deploy path on host | `<NAS_DEPLOY_PATH>` (NAS-side path with optional symlink for spaces) |
+| File transfer | SMB share `\\<TRUENAS_HOST>\<SHARE>\` accessible from Windows |
 | SSH user | `root` |
-| SSH key | `<USER_LOCAL_PATH>\.ssh\SSH_KEY` (passphrase-less, on the dev machine only) |
+| SSH key | `<USER_LOCAL_PATH>\.ssh\<SSH_KEY_NAME>` (passphrase-less, on the dev machine only) |
 
 ## Stack: 5 services in `docker-compose.yml`
 
@@ -33,7 +33,7 @@ For changes that DO NOT modify `prisma/schema.prisma`:
 
 ### 1. Edit code locally on Windows
 
-Make changes in the source tree at `LOCAL_REPO_PATH`.
+Make changes in the source tree at `<LOCAL_REPO_PATH>`.
 
 ### 2. Commit (don't push yet if you want to test first)
 
@@ -45,7 +45,7 @@ git commit -m "<message>"
 ### 3. Sync to the NAS via SMB
 
 ```powershell
-robocopy "LOCAL_REPO_PATH" `
+robocopy "<LOCAL_REPO_PATH>" `
          "\\<TRUENAS_HOST>\Tresure\Genome" `
          /MIR /XD node_modules .next .git Final /XF .env *.log
 ```
@@ -55,7 +55,7 @@ robocopy "LOCAL_REPO_PATH" `
 For a single file:
 
 ```powershell
-robocopy "LOCAL_REPO_PATH\src\lib" `
+robocopy "<LOCAL_REPO_PATH>\src\lib" `
          "\\<TRUENAS_HOST>\Tresure\Genome\src\lib" tree-layout.ts
 ```
 
@@ -63,7 +63,7 @@ robocopy "LOCAL_REPO_PATH\src\lib" `
 
 ```bash
 ssh -i <SSH_KEY_PATH> root@<TRUENAS_HOST> \
-  "cd NAS_DEPLOY_PATH && docker compose up -d --build"
+  "cd <NAS_DEPLOY_PATH> && docker compose up -d --build"
 ```
 
 The build takes 1–2 minutes (cache hits make it faster on small changes). The `--build` flag rebuilds the image; `up -d` recreates affected containers in detached mode.
@@ -78,7 +78,7 @@ Look for `✓ Ready in 0ms` from Next.js. The known harmless `Cannot find module
 
 ### 6. Browser test
 
-Hard refresh (`Ctrl+Shift+R`) on `https://arbol.example.com`. Cloudflare aggressively caches the JS bundle.
+Hard refresh (`Ctrl+Shift+R`) on `https://<APP_HOSTNAME>`. Cloudflare aggressively caches the JS bundle.
 
 ### 7. Push to GitHub (optional but recommended)
 
@@ -94,9 +94,9 @@ After steps 1–4 above, run `prisma db push` against the production database fr
 
 ```bash
 ssh -i <SSH_KEY_PATH> root@<TRUENAS_HOST> \
-  'DB_URL=$(grep DATABASE_URL NAS_DEPLOY_PATH/.env.production | cut -d= -f2- | tr -d "\"")
+  'DB_URL=$(grep DATABASE_URL <NAS_DEPLOY_PATH>/.env.production | cut -d= -f2- | tr -d "\"")
    docker run --rm --network genome_genome_net \
-     -v NAS_DEPLOY_PATH/prisma:/app/prisma \
+     -v <NAS_DEPLOY_PATH>/prisma:/app/prisma \
      -e DB_URL="$DB_URL" \
      node:20-alpine sh -c "
        npm install -g prisma@7.8.0 2>&1 | tail -1 &&
@@ -119,7 +119,7 @@ Already done in production. If reproducing on a new host:
 2. Save the token in `.env.production` as `CLOUDFLARE_TUNNEL_TOKEN`
 3. Public Hostnames tab → Add hostname:
    - Subdomain: `arbol`
-   - Domain: `example.com`
+   - Domain: `<YOUR_DOMAIN>`
    - Service: `http://nginx:80` ← service name, not localhost!
 
 The tunnel runs in the `cloudflared` Docker container and connects to the nginx service over the internal Docker network.
@@ -133,7 +133,7 @@ The tunnel runs in the `cloudflared` Docker container and connects to the nginx 
 | Cloudflare 502 after app restart | nginx hasn't picked up the new app container | `docker exec genome-nginx-1 nginx -s reload` |
 | Prisma `MODULE_NOT_FOUND` for `postgres-array` etc. | Standalone tracing missed pg deps | Already handled in Dockerfile: explicit `COPY` of those modules |
 | Setup page redirects to login | `/setup` not in `PUBLIC_PATHS` | Already in `proxy.ts` |
-| SMB path with spaces fails | `NAS_PATH` has a space | Already handled — symlink `NAS_PATH → NAS_PATH` exists on the NAS |
+| SMB path with spaces fails | NAS path contains a space | Use a symlink without spaces (e.g. `NAS_PATH → NAS_PATH`) |
 | TypeScript errors locally about `SIBLING` or `PERSON_UPDATED` | Local Prisma client out of date | Run `npx prisma generate` locally, OR ignore — production rebuild fixes it |
 | User reports "I see no people" after deploy | Algorithm bug in tree-layout produced off-screen y values | **Revert immediately** with `git revert HEAD && deploy`. Diagnose offline. |
 
@@ -167,13 +167,13 @@ TrueNAS itself does dataset-level snapshots — that covers the underlying volum
 If deploying to a NEW machine:
 
 1. Install Docker (TrueNAS SCALE 24.10+ has native Docker)
-2. Create the directory `NAS_DEPLOY_PATH`
+2. Create the directory `<NAS_DEPLOY_PATH>`
 3. Robocopy the entire repo
 4. Copy `.env.example` → `.env.production`, fill in real values:
    - `POSTGRES_PASSWORD` (random)
    - `SESSION_SECRET` (`openssl rand -base64 32`)
    - `MINIO_ROOT_PASSWORD` (random)
-   - `APP_HOSTNAME` (e.g. `arbol.example.com`)
+   - `APP_HOSTNAME` (e.g. `<APP_HOSTNAME>`)
    - `CLOUDFLARE_TUNNEL_TOKEN` (from Cloudflare dashboard)
 5. `docker compose up -d --build`
 6. Apply the schema: `prisma db push` via temp container (above)

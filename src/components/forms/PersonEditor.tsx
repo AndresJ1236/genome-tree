@@ -747,7 +747,7 @@ export function PersonEditor({
                   value={form.birthSurname1}
                   onChange={e => { setBirthSurname1Touched(true); updateField('birthSurname1', e.target.value) }}
                   style={{ ...inputStyle, background: autoSurname1 && !birthSurname1Touched ? '#F3F7F4' : '#FFFCF8' }}
-                  placeholder={autoSurname1 || 'Ej: Apellido1'}
+                  placeholder={autoSurname1 || 'Ej: Martínez'}
                 />
               </Field>
             )}
@@ -760,7 +760,7 @@ export function PersonEditor({
                   value={form.birthSurname2}
                   onChange={e => { setBirthSurname2Touched(true); updateField('birthSurname2', e.target.value) }}
                   style={{ ...inputStyle, background: autoSurname2 && !birthSurname2Touched ? '#F3F7F4' : '#FFFCF8' }}
-                  placeholder={autoSurname2 || 'Ej: Apellido2'}
+                  placeholder={autoSurname2 || 'Ej: Santos'}
                 />
               </Field>
             )}
@@ -775,7 +775,7 @@ export function PersonEditor({
                   value={form.lastName}
                   onChange={e => { setLastNameTouched(true); updateField('lastName', e.target.value) }}
                   style={{ ...inputStyle, background: autoLastName && !lastNameTouched ? '#F3F7F4' : '#FFFCF8' }}
-                  placeholder={autoLastName || 'Ej: Apellido1 Apellido2'}
+                  placeholder={autoLastName || 'Ej: Martínez Santos'}
                 />
               </Field>
             )}

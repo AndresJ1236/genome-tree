@@ -80,7 +80,7 @@ After every deploy, the JS bundle hash changes, but Cloudflare and the browser m
 If the user reports "I see no changes" right after a successful deploy:
 
 1. Ask them to hard-refresh
-2. Verify on the server: `ssh -i <KEY> root@<HOST> "grep -c '<unique string from your change>' NAS_DEPLOY_PATH/src/...`
+2. Verify on the server: `ssh -i <KEY> root@<HOST> "grep -c '<unique string from your change>' <NAS_DEPLOY_PATH>/src/...`
 3. Check the container created-at: `docker inspect genome-app-1 --format '{{.Created}}'`
 4. If both confirm the new code is deployed, it's a browser cache issue
 
@@ -220,13 +220,13 @@ The early v1.0 release sat at `Final/Version 1.0/`. In v2.0 the `Final/` prefix 
 
 ### Spanish vs English
 
-The user (Andrés) speaks Spanish primarily. UI strings, validation messages, and audit action names are mostly Spanish (e.g. `'No autenticado'`, `'Solo administradores...'`). Keep new strings in Spanish for consistency.
+The user speaks Spanish primarily. UI strings, validation messages, and audit action names are mostly Spanish (e.g. `'No autenticado'`, `'Solo administradores...'`). Keep new strings in Spanish for consistency.
 
 Internal code comments and docs (like this file) are in English so any Claude agent can read them.
 
 ### The user is also the focus
 
-In screenshots, `AJ` is the focus person (Persona Owner). When the user says "mi papá" they mean Persona Padre (the registered father of AJ). When they say "mi mamá" they mean Persona Madre. The Apellido2 branch has many more relatives recorded than the Apellido1 branch — that asymmetry is a property of the data, not a bug to fix.
+In screenshots, the focus person is the project owner ("Persona X"). When they say "mi papá" / "mi mamá" they mean their registered parents in the tree (placeholder: "Persona Y" / "Persona Z"). The maternal branch has many more relatives recorded than the paternal branch in the live data — that asymmetry is a property of the family, not a bug to fix.
 
 ---
 

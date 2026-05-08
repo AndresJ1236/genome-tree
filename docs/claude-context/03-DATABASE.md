@@ -297,8 +297,8 @@ See [06-DEPLOYMENT.md](./06-DEPLOYMENT.md#applying-schema-changes) for the full 
 # 1. Edit prisma/schema.prisma locally
 # 2. Commit + deploy code
 # 3. SSH into TrueNAS and run prisma db push from a TEMP node container:
-ssh root@NAS_HOST 'docker run --rm --network genome_genome_net \
-  -v NAS_DEPLOY_PATH/prisma:/app/prisma \
+ssh root@<NAS_HOST> 'docker run --rm --network genome_genome_net \
+  -v <NAS_DEPLOY_PATH>/prisma:/app/prisma \
   node:20-alpine sh -c "
     npm install -g prisma@7.8.0 &&
     npx prisma db push --schema /app/prisma/schema.prisma --url \"$DB_URL\"

@@ -21,7 +21,7 @@ Earlier versions placed everyone by depth-from-root, which produced messy mixed 
 - The user and their parents sit at the center as the natural boundary
 - A 500 px valley separates each cluster from the center, making the split obvious at a glance
 
-The view is per-user — when a Apellido1 Apellido2 logs in, they see Apellido1 on the left and Apellido2 on the right; a Rubio Apellido2 logged in sees Rubio on the left and Apellido2 on the right.
+The view is per-user — paternal lineage on the left, maternal on the right. Two users from the same extended family see different orientations of the same tree depending on their own surnames.
 
 ### Generation alignment fixes
 

@@ -70,7 +70,7 @@ A delegation layer mapping nuclear families to a representative user.
 - Each unit has flags: `canInviteUsers`, `canEditPeople`, `canManageContent`, `canViewAudit`
 - Affiliated persons (those whose parents aren't in the tree but who claim this unit) link via `Person.unitAffiliationId`
 
-Label format: `"Familia <padre> <madre>"` (e.g. "Familia Apellido1 Apellido2") with male first, female second.
+Label format: `"Familia <padre> <madre>"` (e.g. "Familia Martínez Santos") with male first, female second.
 
 Source: `src/lib/managed-family-unit.ts`, `src/components/admin/AdminDashboard.tsx`.
 
@@ -151,7 +151,7 @@ Admins click "Invitar usuario" in the admin dashboard:
 
 1. Enter username + name + role/scope
 2. Server creates a User row WITHOUT password, generates an invitation JWT
-3. Admin copies the link `https://arbol.example.com/invite/<token>` and sends it to the invitee out-of-band (email, Whatsapp, etc.) — there's no email delivery built in
+3. Admin copies the link `https://<APP_HOSTNAME>/invite/<token>` and sends it to the invitee out-of-band (email, Whatsapp, etc.) — there's no email delivery built in
 4. Invitee opens the link, sees the acceptance form, sets their password
 5. Token is single-use; after acceptance, login works normally
 

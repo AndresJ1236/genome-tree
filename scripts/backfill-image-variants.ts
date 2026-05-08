@@ -13,9 +13,9 @@
  *
  * Uso recomendado (extrae las env vars del .env.production):
  *
- *   set -a && . NAS_DEPLOY_PATH/.env.production && set +a
+ *   set -a && . <NAS_DEPLOY_PATH>/.env.production && set +a
  *   docker run --rm --network genome_genome_net \
- *     -v NAS_DEPLOY_PATH:/app -w /app \
+ *     -v <NAS_DEPLOY_PATH>:/app -w /app \
  *     -e DATABASE_URL="$DATABASE_URL" \
  *     -e MINIO_ENDPOINT=minio -e MINIO_PORT=9000 \
  *     -e MINIO_ROOT_USER="$MINIO_ROOT_USER" \

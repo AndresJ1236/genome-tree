@@ -58,7 +58,7 @@ GEDCOM exporta `PEDI adopted` o `PEDI foster` automáticamente cuando correspond
 
 ### 💍 Fecha real de matrimonio
 
-Bug corregido: la timeline mostraba el matrimonio de Sofía y PersonaPadre en mayo 2026 (la fecha en que se registró su `Relationship` en el sistema), AUNQUE su separación era de 2018. Imposible.
+Bug corregido: la timeline mostraba el matrimonio de una pareja en mayo 2026 (la fecha en que se registró su `Relationship` en el sistema), AUNQUE su separación era de 2018. Imposible.
 
 - Schema: nueva columna `Relationship.startDate` (nullable)
 - `getTimelineEvents` omite el evento MARRIAGE si no hay `startDate` — mejor no mostrar nada que mostrar una fecha incorrecta

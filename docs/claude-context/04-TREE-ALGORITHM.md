@@ -92,7 +92,7 @@ The 60-year tolerance lets data-entry errors and unusual age gaps through. Was 3
 
 ## 2. Generation assignment — BFS from focus (NEW v2.0)
 
-The historical bug this fixes: previously, `gen` was computed as **depth from roots** (max distance to any childless ancestor + 1). When one branch had more recorded generations than the other (e.g. Apellido2 family has 4 generations recorded, Apellido1 family only 2), the parent and their siblings ended up on different rows. Pass 2 alignment dragged the parent down, but their siblings stayed shallow.
+The historical bug this fixes: previously, `gen` was computed as **depth from roots** (max distance to any childless ancestor + 1). When one branch had more recorded generations than the other (e.g. maternal branch has 4 generations recorded, paternal branch only 2), the parent and their siblings ended up on different rows. Pass 2 alignment dragged the parent down, but their siblings stayed shallow.
 
 The v2.0 algorithm uses **distance from the focus person** through the relationship graph:
 

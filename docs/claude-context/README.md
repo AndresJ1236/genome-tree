@@ -23,17 +23,17 @@
 |----------|--------|
 | What is this? | Self-hosted genealogy app for a single extended family |
 | Current version | v3.2.0 (May 8, 2026) |
-| Production URL | https://arbol.example.com |
-| Production host | TrueNAS SCALE NAS_HOST (private LAN, exposed via Cloudflare Tunnel) |
-| Deploy target | `NAS_DEPLOY_PATH` on the NAS |
-| Repo | https://github.com/AndresJ1236/genome-tree |
-| Owner | Persona Owner (`AJ`) — also the focus user in screenshots |
+| Production URL | `https://arbol.<REDACTED>.com` (private — owner-managed) |
+| Production host | TrueNAS SCALE on private LAN, exposed via Cloudflare Tunnel |
+| Deploy target | `<NAS_DEPLOY_PATH>` (see local-only `DEPLOY.md`) |
+| Repo | `https://github.com/<owner>/genome-tree` |
+| Owner | Project owner ("Persona X" in docs) — also the focus user in tree screenshots |
 
 ## Critical reminders for Claude agents
 
 1. **This is NOT the Next.js you know** — it's Next.js 16 with breaking changes. Read [09-GOTCHAS.md](./09-GOTCHAS.md#nextjs-16-breaking-changes) before writing routing or middleware code.
 
-2. **Don't expose secrets in git.** `DEPLOY.md` and `deploy-server.sh` are in `.gitignore` — they live only on Andrés's local machine. Never commit anything containing the SSH key path, server IP, or production passwords.
+2. **Don't expose secrets in git.** `DEPLOY.md` and `deploy-server.sh` are in `.gitignore` — they live only on the owner's local machine. Never commit anything containing the SSH key path, server IP, or production passwords.
 
 3. **The tree layout algorithm is the heart of the app.** It's been rewritten three times. Before changing `src/lib/tree-layout.ts`, read [04-TREE-ALGORITHM.md](./04-TREE-ALGORITHM.md) end-to-end.
 
@@ -51,7 +51,7 @@ See [`Version 3.2/RELEASE_NOTES.md`](../../Version%203.2/RELEASE_NOTES.md) at th
 
 ## When in doubt
 
-- The user (Andrés) speaks Spanish primarily but is comfortable with English technical terms.
+- The user speaks Spanish primarily but is comfortable with English technical terms.
 - Prefer concise responses with clear next steps. Don't repeat back what the user just said.
 - Verify your assumptions before large changes — query the DB directly via `docker exec genome-db-1 psql -U genome_tree -d genome_tree`.
 - If a deploy seems to do nothing, the bundle may be cached. If it broke something, **revert immediately** (`git revert HEAD && deploy`), then diagnose offline.

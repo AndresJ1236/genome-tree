@@ -28,8 +28,8 @@ function slugify(s: string) {
 /**
  * Derive the default family name from the administrator's full name.
  * Spanish names end with two last names, so we take the last 2 words.
- * "Persona Owner" → "Familia Apellido1 Apellido2"
- * "Juan García"           → "Familia García"
+ * "Carlos Martínez Santos" → "Familia Martínez Santos"
+ * "Juan García"            → "Familia García"
  */
 function deriveFamilyName(adminName: string): string {
   const words = adminName.trim().split(/\s+/).filter(Boolean)
@@ -65,14 +65,14 @@ export function SetupForm() {
         <div style={field}>
           <label style={label}>Nombre de la familia</label>
           <input
-            name="familyName" style={input} placeholder="Ej: Familia Apellido1 Apellido2" required
+            name="familyName" style={input} placeholder="Ej: Familia Martínez Santos" required
             onInput={e => { (e.currentTarget as HTMLInputElement).dataset.edited = '1' }}
           />
         </div>
         <div style={field}>
           <label style={label}>Slug (URL)</label>
           <input
-            name="familySlug" style={input} placeholder="familia-apellido1-apellido2" required
+            name="familySlug" style={input} placeholder="familia-martinez-santos" required
             pattern="[a-z0-9-]+"
             onInput={e => { (e.currentTarget as HTMLInputElement).dataset.edited = '1' }}
           />
@@ -87,7 +87,7 @@ export function SetupForm() {
         <div style={field}>
           <label style={label}>Nombre completo</label>
           <input
-            name="adminName" style={input} placeholder="Ej: Persona Owner" required
+            name="adminName" style={input} placeholder="Ej: Carlos Martínez Santos" required
             onChange={handleAdminNameChange}
           />
           <span style={{ fontSize: 11, color: '#9B9B9B' }}>Nombre y apellidos — se usarán para generar el nombre de la familia.</span>

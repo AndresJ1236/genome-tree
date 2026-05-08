@@ -7,7 +7,7 @@ import { buildWeeklyDigest, renderDigestHtml } from '@/lib/digest'
  * FAMILY/ADMIN de cada familia.
  *
  * Autenticación: Bearer token via header Authorization.
- *   curl -H "Authorization: Bearer $CRON_SECRET" https://arbol.example.com/api/cron/weekly-digest
+ *   curl -H "Authorization: Bearer $CRON_SECRET" https://<APP_HOSTNAME>/api/cron/weekly-digest
  *
  * Este endpoint NO requiere session (corre desde cron, sin browser).
  *
@@ -16,7 +16,7 @@ import { buildWeeklyDigest, renderDigestHtml } from '@/lib/digest'
  *   2. Define RESEND_API_KEY en .env.production cuando configures Resend
  *   3. En TrueNAS / cualquier host con cron:
  *      0 9 * * 1 curl -fsSL -H "Authorization: Bearer $SECRET" \
- *        https://arbol.example.com/api/cron/weekly-digest > /dev/null
+ *        https://<APP_HOSTNAME>/api/cron/weekly-digest > /dev/null
  *      → cada lunes a las 9 AM
  *
  * Si RESEND_API_KEY no está set, el endpoint devuelve los HTMLs renderizados

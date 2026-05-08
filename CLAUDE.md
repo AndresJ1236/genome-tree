@@ -6,7 +6,7 @@ Before making changes to this project, read **[docs/claude-context/README.md](./
 
 Quick context:
 
-- **Production**: `https://arbol.example.com` (TrueNAS at `NAS_HOST`, exposed via Cloudflare Tunnel)
+- **Production**: private TrueNAS deployment exposed via Cloudflare Tunnel (host details in local-only `DEPLOY.md`)
 - **Current version**: v3.2.0 (May 8, 2026) — see `Version 3.2/RELEASE_NOTES.md`
 - **Stack**: Next.js 16 + React 19 + Prisma 7 + PostgreSQL 16 + MinIO + Docker
 - **Most complex file**: `src/lib/tree-layout.ts` — read `docs/claude-context/04-TREE-ALGORITHM.md` before touching it

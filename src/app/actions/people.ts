@@ -1208,7 +1208,7 @@ export interface TimelineEvent {
   date:     string         // ISO 8601 (yyyy-mm-dd)
   year:     number
   personIds: string[]      // [persona] para birth/death, [a, b] para marriage/separation
-  label:    string         // texto descriptivo: "Nació Persona Padre"
+  label:    string         // texto descriptivo: "Nació <nombre completo>"
   decade:   number         // year - (year % 10) — para agrupar visualmente
 }
 

@@ -26,7 +26,7 @@ function getConfig() {
     password:  process.env.MINIO_ROOT_PASSWORD ?? '',
     bucket:    process.env.MINIO_BUCKET ?? 'genome-tree',
     useMinIO:  !!process.env.MINIO_ENDPOINT,
-    // Public base URL for browser access (e.g. https://arbol.example.com/media)
+    // Public base URL for browser access (e.g. https://your-domain.com/media)
     // Falls back to direct MinIO URL if not set
     publicUrl: process.env.MINIO_PUBLIC_URL?.replace(/\/$/, '') ?? '',
   }
