@@ -24,6 +24,18 @@ import { ConfirmButton } from '@/components/ui/ConfirmButton'
 
 const visibilityOptions: ContentVisibility[] = ['BRANCH', 'FAMILY', 'ADMIN']
 
+const VISIBILITY_LABEL: Record<ContentVisibility, string> = {
+  FAMILY: 'Toda la familia',
+  BRANCH: 'Solo mi rama',
+  ADMIN:  'Solo administradores',
+}
+
+const VISIBILITY_HELP: Record<ContentVisibility, string> = {
+  FAMILY: 'Cualquier miembro de la familia puede verlo. Recomendado para la mayoría del contenido.',
+  BRANCH: 'Solo los miembros de tu rama (descendientes y ancestros directos) pueden verlo. Útil para contenido personal o sensible que no es para toda la familia extensa.',
+  ADMIN:  'Solo administradores pueden verlo. Útil para información sensible que requiere supervisión.',
+}
+
 export function ContentEditor({
   initialData,
   familySlug,
@@ -490,15 +502,16 @@ function renderFields(
         </>
       )}
 
-      {isAdmin && (
-        <Field label="Visibilidad">
-          <select value={form.visibility} onChange={e => update('visibility', e.target.value as ContentVisibility)} style={inputStyle}>
-            {visibilityOptions.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </Field>
-      )}
+      <Field label="Quién puede ver esto">
+        <select value={form.visibility} onChange={e => update('visibility', e.target.value as ContentVisibility)} style={inputStyle}>
+          {visibilityOptions.map(option => (
+            <option key={option} value={option}>{VISIBILITY_LABEL[option]}</option>
+          ))}
+        </select>
+        <p style={{ margin: '6px 0 0', fontSize: 11, color: '#8B9E94', lineHeight: 1.5 }}>
+          {VISIBILITY_HELP[form.visibility]}
+        </p>
+      </Field>
     </div>
   )
 }
