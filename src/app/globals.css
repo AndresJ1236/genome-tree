@@ -28,6 +28,32 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Dark mode ──────────────────────────────────────────────────────────────
+   Approach: CSS filter on html que invierte colores y aplica hue-rotate
+   para preservar matices. Imágenes y videos llevan filter inverso para
+   que se vean tal como son. Pragmático con inline-styles del proyecto.
+   ──────────────────────────────────────────────────────────────────────── */
+html[data-theme="dark"] {
+  background-color: #0d0d0d;
+  filter: invert(0.92) hue-rotate(180deg);
+}
+
+/* Restablecer el color original en imágenes y videos. Sin esto los
+   rostros se ven como un negativo fotográfico horrible. */
+html[data-theme="dark"] img,
+html[data-theme="dark"] video,
+html[data-theme="dark"] svg image {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Preservar también iconos PNG embebidos como background-image y emojis
+   inline. La mayoría del proyecto usa SVG/text — los emojis dentro de
+   spans heredan el filter del body así que se ven invertidos. Re-aplicar
+   filter inverso a contenedores marcados como .preserve-color. */
+html[data-theme="dark"] .preserve-color {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* ── Tree canvas ──────────────────────────────────────────────────────────── */
 .tree-viewport {
   width: 100%;

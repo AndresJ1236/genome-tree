@@ -18,8 +18,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // scripts. Reading it here also makes it available for any custom <script> tags.
   const nonce = (await headers()).get('x-nonce') ?? ''
 
+  // Inline script para aplicar el tema ANTES del primer render. Evita
+  // el "flash de luz" al cargar para usuarios con dark mode activado.
+  // Se ejecuta tan pronto el browser parsea el head — antes de que React
+  // hidrate y antes de que CSS pinte el body.
+  const themeScript = `(function(){try{var t=localStorage.getItem('genome-tree-theme');if(t==='dark')document.documentElement.dataset.theme='dark';}catch(e){}})();`
+
   return (
     <html lang="es" className="h-full">
+      <head>
+        <script nonce={nonce || undefined} dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="h-full" {...(nonce ? { 'data-nonce': nonce } : {})}>{children}</body>
     </html>
   )
