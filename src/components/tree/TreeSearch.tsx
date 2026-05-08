@@ -98,6 +98,7 @@ export function TreeSearch({ enabled, onSelectPerson }: TreeSearchProps) {
   return (
     <div
       ref={rootRef}
+      className="tree-search-root"
       onPointerDown={event => event.stopPropagation()}
       style={{
         position: 'absolute',

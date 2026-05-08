@@ -155,22 +155,27 @@ html[data-theme="dark"] [style*="background-color: #2D4A3E"] {
   color: #d4eef2 !important;
 }
 
-/* Tree node colors — círculos de personas */
-html[data-theme="dark"] [style*="background: #EAF0ED"],
-html[data-theme="dark"] [style*="background:#EAF0ED"] {
-  background-color: #1a2a3d !important;
+/* Tree node circles — mantenemos el look "pastilla luminosa" del modo
+   claro (bg claro con letras oscuras adentro). Selector por clase
+   directa, mucho más confiable que matching de inline-style. Las
+   iniciales heredan el color oscuro del background contrastante. */
+html[data-theme="dark"] .person-circle {
+  background: #d4eef2 !important;       /* bg claro con tinte cyan */
+  border-color: #146d86 !important;
 }
-html[data-theme="dark"] [style*="background: #FFF3D6"],
-html[data-theme="dark"] [style*="background:#FFF3D6"] {
-  background-color: #3a4a2e !important;  /* current user — un poco verde-cyan */
+/* Estados especiales del nodo */
+html[data-theme="dark"] .person-circle--selected {
+  background: #146d86 !important;       /* seleccionado: cyan medio */
+  border-color: #1da7c8 !important;
 }
-html[data-theme="dark"] [style*="background: #C8D9D2"],
-html[data-theme="dark"] [style*="background:#C8D9D2"] {
-  background-color: #146d86 !important;  /* highlighted */
+/* Las iniciales adentro del círculo: oscuras sobre claro, claras sobre
+   seleccionado. Selector cubre el span con las iniciales (no el nombre
+   debajo, que tiene su propia regla por .person-node p). */
+html[data-theme="dark"] .person-circle > span {
+  color: #121925 !important;
 }
-html[data-theme="dark"] [style*="background: #EDE8E0"],
-html[data-theme="dark"] [style*="background:#EDE8E0"] {
-  background-color: #1a2535 !important;  /* fallecido */
+html[data-theme="dark"] .person-circle--selected > span {
+  color: #d4eef2 !important;
 }
 
 /* Headings y enlaces con color verde oscuro #2D4A3E → cyan brillante */
@@ -276,6 +281,34 @@ html[data-theme="dark"] [style*="color: #c0392b"] {
 /* Subtítulo "Cargando..." y similares en cyan oscuro */
 html[data-theme="dark"] [style*="color: #9BA89F"] {
   color: #5d8a99 !important;
+}
+
+/* ─── Excepciones: elementos que conservan los colores del modo claro ───
+   La barra de búsqueda flotante (.tree-search-root) tenía mal contraste
+   en dark mode. La dejamos con el look claro original — destaca como
+   un elemento "luminoso" sobre el fondo oscuro, similar al efecto que
+   hacen los círculos del árbol. */
+html[data-theme="dark"] .tree-search-root,
+html[data-theme="dark"] .tree-search-root > div,
+html[data-theme="dark"] .tree-search-root [style*="background"] {
+  background: #FFFCF8 !important;
+  border-color: #D8D3CA !important;
+  color: #2C2C2C !important;
+}
+html[data-theme="dark"] .tree-search-root input {
+  background: #FFFCF8 !important;
+  color: #2C2C2C !important;
+  border-color: #D8D3CA !important;
+}
+html[data-theme="dark"] .tree-search-root input::placeholder {
+  color: #8B9E94 !important;
+}
+html[data-theme="dark"] .tree-search-root span {
+  color: #6B7B70 !important;
+}
+html[data-theme="dark"] .tree-search-root p,
+html[data-theme="dark"] .tree-search-root a {
+  color: #2C2C2C !important;
 }
 
 /* ── Tree canvas ──────────────────────────────────────────────────────────── */
